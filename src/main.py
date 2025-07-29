@@ -483,10 +483,11 @@ async def api_request(session, url, headers, params=None, max_retries=3):
 
 async def fetch_all_torrents(token):
     """
-    Récupère tous les torrents depuis l'API Real-Debrid
+    Récupère tous les torrents depuis l'API Real-Debrid avec temporisation adaptative
     
-    Utilise la pagination pour récupérer tous les torrents par batches de 1000.
+    Utilise la pagination pour récupérer tous les torrents par batches de 2500.
     Sauvegarde directement en base pour éviter la surcharge mémoire.
+    Temporisation adaptative selon les erreurs détectées.
     
     Args:
         token (str): Token d'authentification Real-Debrid
@@ -495,9 +496,13 @@ async def fetch_all_torrents(token):
         int: Nombre total de torrents récupérés
     """
     headers = {"Authorization": f"Bearer {token}"}
-    limit = 1000
+    limit = 2500
     page = 1
     total = 0
+    
+    # Variables pour la temporisation adaptative
+    page_wait = PAGE_WAIT_TIME  # Utilise la constante définie
+    consecutive_errors = 0
     
     async with aiohttp.ClientSession() as session:
         while True:
@@ -506,19 +511,51 @@ async def fetch_all_torrents(token):
                 break
                 
             params = {"page": page, "limit": limit}
-            torrents = await api_request(session, RD_API_URL, headers, params)
             
-            if not torrents:
-                break
+            try:
+                # Appel API avec gestion d'erreurs
+                torrents = await api_request(session, RD_API_URL, headers, params)
                 
-            # Sauvegarde immédiate en base
-            for t in torrents:
-                upsert_torrent(t)
+                if not torrents:
+                    break
                 
-            total += len(torrents)
-            logging.info(f"Page {page}: {len(torrents)} torrents (total: {total})")
-            page += 1
-            
+                # ✅ Succès - Reset du compteur d'erreurs
+                consecutive_errors = 0
+                
+                # Sauvegarde immédiate en base
+                for t in torrents:
+                    upsert_torrent(t)
+                    
+                total += len(torrents)
+                logging.info(f"📄 Page {page}: {len(torrents)} torrents ({total} total)")
+                page += 1
+                
+                # 🎯 TEMPORISATION ADAPTATIVE
+                if len(torrents) == limit:  # S'il y a encore des pages
+                    if consecutive_errors > 0:
+                        # Pause plus longue si des erreurs ont été détectées récemment
+                        adaptive_wait = page_wait * (1 + consecutive_errors * 0.5)
+                        logging.info(f"⏸️ Pause adaptative {adaptive_wait:.1f}s (après {consecutive_errors} erreurs)")
+                        await asyncio.sleep(adaptive_wait)
+                        consecutive_errors = 0  # Reset après pause adaptative
+                    else:
+                        # Pause normale
+                        await asyncio.sleep(page_wait)
+                        logging.info(f"⏸️ Pause normale {page_wait}s")
+                
+            except Exception as e:
+                # ❌ Erreur détectée - Incrémenter le compteur
+                consecutive_errors += 1
+                logging.warning(f"⚠️ Erreur page {page} (tentative {consecutive_errors}): {e}")
+                
+                # Pause immédiate adaptative en cas d'erreur
+                error_wait = page_wait * (1 + consecutive_errors * 0.5)
+                logging.info(f"⏸️ Pause d'erreur {error_wait:.1f}s...")
+                await asyncio.sleep(error_wait)
+                
+                # Ne pas incrémenter page - retry la même page
+                continue
+                
     return total
 
 async def fetch_torrent_detail(session, token, torrent_id):
@@ -919,47 +956,121 @@ def get_torrents_needing_update():
 
 def sync_smart(token):
     """
-    Synchronisation intelligente - Mode recommandé pour usage quotidien
+    Synchronisation intelligente optimisée - Mode recommandé pour usage quotidien
+    
+    Logique en 3 phases optimisées :
+    1. 🚀 PHASE 1 : Mise à jour ultra-rapide des statuts via torrents_only (10-30s)
+    2. 🎯 PHASE 2 : Analyse intelligente des changements détectés
+    3. 🔍 PHASE 3 : Récupération ciblée des détails par IDs (seulement les modifiés)
     
     Fonctionnalités:
-    - ✅ Détecte uniquement les changements nécessaires
-    - ✅ Retry automatique des torrents en erreur  
-    - ✅ Analyse pré-sync avec résumé détaillé
+    - ✅ Statuts à jour en 30s maximum (phase 1)
+    - ✅ Détection précise des changements (phase 2)
+    - ✅ Récupération ciblée par IDs (phase 3)
     - ✅ Performance optimisée (15-50 torrents/s)
     - ✅ Résumé post-sync avec recommandations
     
     Usage: python src/main.py --sync-smart
     Temps typique: 30s - 2 minutes
     """
-    logging.info("🧠 Synchronisation intelligente démarrée...")
+    logging.info("🧠 Synchronisation intelligente optimisée démarrée...")
     
-    # Analyser les changements avant de commencer
-    summary = get_smart_update_summary()
+    # ==========================================
+    # 🚀 PHASE 1 : Mise à jour rapide des statuts
+    # ==========================================
+    logging.info("🚀 [PHASE 1] Mise à jour ultra-rapide des statuts...")
     
-    # Afficher le résumé des changements détectés
-    logging.info("📊 Analyse des changements :")
-    if summary['new_torrents'] > 0:
-        logging.info(f"   🆕 Nouveaux torrents sans détails : {summary['new_torrents']}")
-    if summary['active_downloads'] > 0:
-        logging.info(f"   ⬇️  Téléchargements actifs : {summary['active_downloads']}")
-    if summary['error_retry'] > 0:
-        logging.info(f"   🔄 Torrents en erreur (retry) : {summary['error_retry']}")
-    if summary['old_updates'] > 0:
-        logging.info(f"   📅 Torrents anciens (>7j) : {summary['old_updates']}")
+    # Sauvegarder les anciens statuts pour comparaison
+    old_statuses = {}
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, status FROM torrents")
+        old_statuses = dict(c.fetchall())
     
-    # Obtenir la liste des torrents à mettre à jour
-    torrent_ids = get_torrents_needing_update()
+    # Utiliser torrents_only() pour mise à jour rapide des statuts
+    total_torrents = asyncio.run(fetch_all_torrents(token))
     
-    if not torrent_ids:
-        logging.info("✅ Rien à synchroniser, tout est à jour !")
+    if total_torrents > 0:
+        logging.info(f"✅ Statuts mis à jour : {total_torrents} torrents (phase 1 terminée)")
+    else:
+        logging.info("❌ Aucun torrent récupéré, arrêt de la synchronisation")
         return
     
-    total_changes = len(torrent_ids)
-    logging.info(f"🎯 Total : {total_changes} torrents nécessitent une mise à jour")
+    # ==========================================
+    # 🎯 PHASE 2 : Analyse des changements
+    # ==========================================
+    logging.info("🎯 [PHASE 2] Analyse intelligente des changements...")
+    
+    # Récupérer les nouveaux statuts après torrents_only()
+    new_statuses = {}
+    torrents_needing_details = set()
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        
+        # Récupérer les nouveaux statuts
+        c.execute("SELECT id, status FROM torrents")
+        new_statuses = dict(c.fetchall())
+        
+        # 1. Nouveaux torrents (pas dans torrent_details)
+        c.execute("""
+            SELECT t.id FROM torrents t 
+            LEFT JOIN torrent_details td ON t.id = td.id 
+            WHERE td.id IS NULL
+        """)
+        new_torrents = [row[0] for row in c.fetchall()]
+        
+        # 2. Torrents avec changement de statut
+        status_changed = []
+        for torrent_id, new_status in new_statuses.items():
+            old_status = old_statuses.get(torrent_id)
+            if old_status != new_status:
+                status_changed.append(torrent_id)
+        
+        # 3. Téléchargements actifs (toujours à jour)
+        c.execute("""
+            SELECT id FROM torrents 
+            WHERE status IN ('downloading', 'queued', 'magnet_conversion')
+        """)
+        active_downloads = [row[0] for row in c.fetchall()]
+        
+        # 4. Torrents en erreur (retry)
+        c.execute("""
+            SELECT id FROM torrent_details 
+            WHERE status = 'error'
+        """)
+        error_torrents = [row[0] for row in c.fetchall()]
+        
+        # Fusionner toutes les listes (éviter doublons)
+        torrents_needing_details.update(new_torrents)
+        torrents_needing_details.update(status_changed)
+        torrents_needing_details.update(active_downloads)
+        torrents_needing_details.update(error_torrents)
+    
+    # Affichage du résumé des changements détectés
+    logging.info("📊 Changements détectés :")
+    logging.info(f"   🆕 Nouveaux torrents sans détails : {len(new_torrents)}")
+    logging.info(f"   🔄 Changements de statut : {len(status_changed)}")
+    logging.info(f"   ⬇️  Téléchargements actifs : {len(active_downloads)}")
+    logging.info(f"   ❌ Torrents en erreur (retry) : {len(error_torrents)}")
+    
+    torrent_ids_list = list(torrents_needing_details)
+    
+    if not torrent_ids_list:
+        logging.info("✅ Aucun changement détecté, tous les détails sont à jour !")
+        return
+    
+    total_changes = len(torrent_ids_list)
+    logging.info(f"🎯 Total : {total_changes} torrents nécessitent une mise à jour des détails")
+    
+    # ==========================================
+    # 🔍 PHASE 3 : Récupération ciblée des détails par IDs
+    # ==========================================
+    logging.info("🔍 [PHASE 3] Récupération ciblée des détails par IDs...")
     
     # Traiter les mises à jour avec mesure du temps
     start_time = time.time()
-    processed = asyncio.run(fetch_all_torrent_details_v2(token, torrent_ids))
+    processed = asyncio.run(fetch_all_torrent_details_v2(token, torrent_ids_list))
     end_time = time.time()
     
     # Statistiques finales
@@ -967,7 +1078,8 @@ def sync_smart(token):
     rate = processed / duration if duration > 0 else 0
     
     logging.info(f"✅ Synchronisation intelligente terminée !")
-    logging.info(f"   📊 {processed} détails mis à jour en {duration:.1f}s ({rate:.1f}/s)")
+    logging.info(f"   📊 Phase 1 : {total_torrents} statuts mis à jour")
+    logging.info(f"   📊 Phase 3 : {processed} détails mis à jour en {duration:.1f}s ({rate:.1f}/s)")
     
     # Afficher un résumé final
     display_final_summary()
