@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Torrents - Redriva Web{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>📋 Liste des torrents</h2>
+        <div>
+            <a href="/sync/torrents" class="btn btn-primary">🔄 Actualiser</a>
+        </div>
+    </div>
+    
+    <!-- Filtres -->
+    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+        <select id="status-filter" onchange="filterTorrents()">
+            <option value="">Tous les statuts</option>
+            {% for status, count in available_statuses %}
+            <option value="{{ status }}" {% if status == status_filter %}selected{% endif %}>
+                {{ status }} ({{ count }})
+            </option>
+            {% endfor %}
+        </select>
+        
+        <input type="text" id="search-filter" placeholder="Rechercher..." value="{{ search }}" onkeyup="filterTorrents()" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        
+        <button onclick="clearFilters()" class="btn btn-secondary">🗑️ Effacer</button>
+    </div>
+</div>
+
+<!-- Stats en haut -->
+<div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
+    <div class="stat-card">
+        <h4>Total</h4>
+        <h2 id="total-count">{{ torrents|length }}</h2>
+    </div>
+    <div class="stat-card">
+        <h4>Visibles</h4>
+        <h2 id="visible-count">{{ torrents|length }}</h2>
+    </div>
+</div>
+
+<!-- Table des torrents -->
+<div class="card">
+    <table class="table" id="torrents-table">
+        <thead>
+            <tr>
+                <th style="width: 40%;">Nom</th>
+                <th style="width: 15%;">Statut</th>
+                <th style="width: 15%;">Taille</th>
+                <th style="width: 15%;">Date ajout</th>
+                <th style="width: 15%;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for torrent in torrents %}
+            <tr class="torrent-row" 
+                data-status="{{ (torrent[6] or torrent[2])|default('unknown') }}"
+                data-name="{{ (torrent[5] or torrent[1])|default('') }}">
+                
+                <td style="max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                    title="{{ (torrent[5] or torrent[1])|default('N/A') }}">
+                    <strong>{{ (torrent[5] or torrent[1])|default('N/A') }}</strong>
+                </td>
+                
+                <td>
+                    {% set status = (torrent[6] or torrent[2])|default('unknown') %}
+                    {% if status == 'downloaded' %}
+                        <span class="badge badge-success">✅ Downloaded</span>
+                    {% elif status == 'downloading' %}
+                        <span class="badge badge-warning">⬇️ Downloading</span>
+                    {% elif status == 'error' %}
+                        <span class="badge badge-danger">❌ Error</span>
+                    {% elif status == 'magnet_error' %}
+                        <span class="badge badge-danger">🧲 Magnet Error</span>
+                    {% elif status == 'waiting_files_selection' %}
+                        <span class="badge badge-info">⏳ Waiting</span>
+                    {% else %}
+                        <span class="badge badge-secondary">❓ {{ status }}</span>
+                    {% endif %}
+                </td>
+                
+                <td>
+                    {% if torrent[3] %}
+                        {{ "%.1f"|format(torrent[3] / 1024 / 1024 / 1024) }} GB
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                
+                <td>
+                    {% if torrent[4] %}
+                        {{ torrent[4][:10] }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                
+                <td>
+                    <a href="/torrent/{{ torrent[0] }}" class="btn btn-sm btn-primary">👁️ Voir</a>
+                    {% if (torrent[6] or torrent[2]) == 'error' %}
+                        <button onclick="retryTorrent('{{ torrent[0] }}')" class="btn btn-sm btn-warning">🔄 Retry</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    {% if not torrents %}
+    <div style="text-align: center; padding: 40px; color: #666;">
+        <h3>📭 Aucun torrent trouvé</h3>
+        <p>Lancez une synchronisation pour récupérer vos torrents Real-Debrid</p>
+        <a href="/sync/smart" class="btn btn-primary">🔄 Synchroniser maintenant</a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<div class="card">
+    <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
+        {% if pagination.has_prev %}
+            <a href="?page={{ pagination.page - 1 }}&status={{ status_filter }}&search={{ search }}" class="btn btn-secondary">← Précédent</a>
+        {% endif %}
+        
+        <span>Page {{ pagination.page }} sur {{ pagination.pages }} ({{ pagination.total }} torrents)</span>
+        
+        {% if pagination.has_next %}
+            <a href="?page={{ pagination.page + 1 }}&status={{ status_filter }}&search={{ search }}" class="btn btn-secondary">Suivant →</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+function filterTorrents() {
+    const statusFilter = document.getElementById('status-filter').value.toLowerCase();
+    const searchFilter = document.getElementById('search-filter').value.toLowerCase();
+    const rows = document.querySelectorAll('.torrent-row');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        const status = row.dataset.status.toLowerCase();
+        const name = row.dataset.name.toLowerCase();
+        
+        const statusMatch = !statusFilter || status.includes(statusFilter);
+        const nameMatch = !searchFilter || name.includes(searchFilter);
+        
+        if (statusMatch && nameMatch) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('visible-count').textContent = visibleCount;
+}
+
+function clearFilters() {
+    document.getElementById('status-filter').value = '';
+    document.getElementById('search-filter').value = '';
+    filterTorrents();
+}
+
+function retryTorrent(torrentId) {
+    if (confirm('Relancer ce torrent ?')) {
+        fetch(`/api/retry/${torrentId}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Torrent relancé avec succès', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast('Erreur: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Erreur réseau', 'error');
+            });
+    }
+}
+
+function showToast(message, type) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 1000;
+        padding: 12px 20px; border-radius: 4px; color: white;
+        background: ${type === 'success' ? '#28a745' : '#dc3545'};
+        animation: slideIn 0.3s ease;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Style pour les animations
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+.badge-success { background: #28a745; color: white; }
+.badge-warning { background: #ffc107; color: black; }
+.badge-danger { background: #dc3545; color: white; }
+.badge-info { background: #17a2b8; color: white; }
+.badge-secondary { background: #6c757d; color: white; }
+</style>
+`);
+</script>
+{% endblock %}

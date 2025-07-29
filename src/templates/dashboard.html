@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Redriva Web{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+    <div class="stat-card primary">
+        <h3>📁 Torrents</h3>
+        <h1>{{ stats.total_torrents|default(0) }}</h1>
+        <p>Total dans la base</p>
+    </div>
+    
+    <div class="stat-card success">
+        <h3>📋 Détails</h3>
+        <h1>{{ "%.1f"|format(stats.coverage|default(0)) }}%</h1>
+        <p>{{ stats.total_details|default(0) }} avec détails</p>
+    </div>
+    
+    <div class="stat-card warning">
+        <h3>⬇️ Actifs</h3>
+        <h1>{{ stats.downloading_count|default(0) }}</h1>
+        <p>Téléchargements en cours</p>
+    </div>
+    
+    <div class="stat-card danger">
+        <h3>❌ Erreurs</h3>
+        <h1>{{ stats.error_count|default(0) }}</h1>
+        <p>Torrents en erreur</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🔄 Actions de synchronisation</h2>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+        <a href="/sync/smart" class="btn btn-primary">🧠 Sync intelligent</a>
+        <a href="/sync/fast" class="btn btn-success">🚀 Sync rapide</a>
+        <a href="/sync/torrents" class="btn btn-warning">📋 Torrents uniquement</a>
+        <a href="/sync/errors" class="btn btn-danger">🔄 Retry erreurs</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🔍 Navigation rapide</h2>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+        <a href="/torrents" class="btn btn-primary">📁 Tous les torrents</a>
+        <a href="/torrents?status=error" class="btn btn-danger">❌ Torrents en erreur ({{ stats.error_count|default(0) }})</a>
+        <a href="/torrents?status=downloading" class="btn btn-warning">⬇️ En téléchargement ({{ stats.downloading_count|default(0) }})</a>
+        <a href="/torrents?status=downloaded" class="btn btn-success">✅ Téléchargés</a>
+    </div>
+</div>
+
+{% if stats.status_data %}
+<div class="card">
+    <h2>📈 Répartition par statut</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Statut</th>
+                <th>Nombre</th>
+                <th>Pourcentage</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for status, count in stats.status_data %}
+            <tr>
+                <td>{{ status }}</td>
+                <td>{{ count }}</td>
+                <td>{{ "%.1f"|format((count / stats.total_details * 100) if stats.total_details > 0 else 0) }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>ℹ️ Informations générales</h2>
+    <ul>
+        <li><strong>🆕 Torrents récents (24h):</strong> {{ stats.recent_24h|default(0) }}</li>
+        <li><strong>💾 Taille totale:</strong> {{ stats.total_size|default("N/A") }}</li>
+        <li><strong>🕒 Statut tâches:</strong> 
+            {% if task_status.running %}
+                <span style="color: orange;">En cours</span>
+            {% else %}
+                <span style="color: green;">Prêt</span>
+            {% endif %}
+        </li>
+    </ul>
+</div>
+
+<div class="card">
+    <h2>📋 Logs des actions</h2>
+    <div id="logsContainer" style="background: #f8f9fa; border-radius: 4px; padding: 15px; min-height: 200px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 14px; line-height: 1.4;">
+        <div id="logsContent">
+            <div style="color: #6c757d; text-align: center; padding: 50px 0;">
+                Aucune action exécutée pour le moment.<br>
+                Cliquez sur un bouton d'action pour voir les logs ici.
+            </div>
+        </div>
+    </div>
+    <div style="margin-top: 10px; text-align: right;">
+        <button onclick="clearLogs()" class="btn" style="background: #6c757d; color: white; font-size: 12px; padding: 5px 10px;">🗑️ Effacer les logs</button>
+    </div>
+</div>
+{% endblock %}

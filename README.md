@@ -15,7 +15,7 @@ cd Redriva
 # Installation des dépendances
 pip install -r requirements.txt
 # ou
-pip install aiohttp
+pip install aiohttp flask
 
 # Configuration automatique (recommandé)
 ./setup.sh
@@ -256,6 +256,48 @@ Supprime toutes les données de la base (demande confirmation).
 - ✅ **Statistiques enrichies** : Analyse complète avec recommandations automatiques
 - ✅ **Sauvegarde progressive** : Protection contre les interruptions lors des gros sync
 - ✅ **Pool de connexions optimisé** : Performance maximale avec gestion des timeouts
+
+## 🌐 Interface Web
+
+Redriva dispose d'une interface web moderne et intuitive pour visualiser vos données et lancer des actions facilement.
+
+### Lancement de l'interface web
+
+```bash
+# Démarrer le serveur web
+cd src
+python web.py
+
+# L'interface sera accessible sur : http://127.0.0.1:5000
+```
+
+### Fonctionnalités de l'interface web
+
+- 📊 **Dashboard** : Vue d'ensemble avec statistiques en temps réel
+- 📋 **Liste des torrents** : Navigation et filtrage avancé par statut/nom  
+- 🔍 **Détails torrent** : Informations complètes et liens de téléchargement
+- 🔄 **Actions de sync** : Lancement des synchronisations depuis l'interface
+- ⚡ **Temps réel** : Mise à jour automatique du statut des tâches
+- 📱 **Responsive** : Interface adaptée mobile et desktop
+- 🎯 **Retry intelligent** : Relance des torrents en erreur en un clic
+
+### Pages disponibles
+
+- `/` : Dashboard principal avec statistiques
+- `/torrents` : Liste complète des torrents avec filtres
+- `/torrent/<id>` : Détails d'un torrent spécifique
+- `/sync/<mode>` : Actions de synchronisation (smart, fast, torrents, errors)
+
+### Captures d'écran
+
+L'interface propose :
+- **Cartes de statistiques** colorées avec icônes
+- **Tableau filtrable** avec badges de statut
+- **Actions rapides** pour chaque torrent  
+- **Progress bars** pour les téléchargements
+- **Notifications toast** pour le feedback utilisateur
+
+> 💡 **Conseil** : L'interface web utilise les mêmes fonctions que la CLI, garantissant une cohérence parfaite des données.
 
 ## ⚡ Performances
 
