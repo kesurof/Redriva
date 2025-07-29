@@ -41,6 +41,7 @@ import time
 import signal
 import logging
 import json
+import re
 from pathlib import Path
 
 def load_env_file():
@@ -1793,30 +1794,23 @@ def show_quick_guide():
 
 def get_token():
     """
-    Récupère le token avec vérification et messages d'aide
+    Récupère le token avec vérification et messages d'aide - Version sécurisée
     
     Returns:
         str/None: Token valide ou None si non trouvé
+    
+    Note: Utilise load_token() qui inclut la sécurisation contre Header Injection
     """
-    load_env_file()  # Charger les variables d'environnement
-    
-    # Essayer de récupérer le token
-    token = os.getenv('RD_TOKEN')
-    if not token:
-        try:
-            with open('config/rd_token.conf', 'r') as f:
-                token = f.read().strip()
-        except FileNotFoundError:
-            pass
-    
-    if not token:
+    try:
+        return load_token()  # Utilise la version sécurisée de la section API
+    except SystemExit:
+        # load_token() fait un sys.exit() si pas de token
         print("\n❌ ERREUR : Token Real-Debrid non trouvé !")
         print("🔧 Veuillez configurer votre token :")
         print("   • Variable d'environnement : export RD_TOKEN='votre_token'")
         print("   • Fichier config : cp config/rd_token.conf.example config/rd_token.conf")
         print("   • Fichier .env : cp .env.example .env")
-    
-    return token
+        return None
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                        SECTION 9: POINT D'ENTRÉE PRINCIPAL                ║
