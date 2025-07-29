@@ -27,7 +27,7 @@ app.secret_key = os.urandom(24)
 # Configuration
 app.config['HOST'] = '127.0.0.1'
 app.config['PORT'] = 5000
-app.config['DEBUG'] = False
+app.config['DEBUG'] = False  # Production mode pour interface stable
 
 # Variable globale pour les tâches en cours
 current_task = None
@@ -327,10 +327,30 @@ def torrent_detail(torrent_id):
                          format_size=format_size)
 
 if __name__ == '__main__':
+    import signal
+    import sys
+    
+    def signal_handler(sig, frame):
+        print("\n🛑 Interruption reçue, arrêt du serveur...")
+        sys.exit(0)
+    
+    # Gestionnaire de signal pour arrêt propre
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     print("🌐 Démarrage de l'interface web Redriva...")
     print(f"📱 URL: http://{app.config['HOST']}:{app.config['PORT']}")
     print("🛑 Utilisez Ctrl+C pour arrêter")
     
-    app.run(host=app.config['HOST'], 
-            port=app.config['PORT'], 
-            debug=app.config['DEBUG'])
+    try:
+        app.run(host=app.config['HOST'], 
+                port=app.config['PORT'], 
+                debug=app.config['DEBUG'],
+                threaded=True,
+                use_reloader=False)
+    except KeyboardInterrupt:
+        print("\n🛑 Arrêt demandé par l'utilisateur")
+    except Exception as e:
+        print(f"❌ Erreur du serveur: {e}")
+    finally:
+        print("🔄 Serveur web arrêté")

@@ -256,48 +256,164 @@ Supprime toutes les données de la base (demande confirmation).
 - ✅ **Statistiques enrichies** : Analyse complète avec recommandations automatiques
 - ✅ **Sauvegarde progressive** : Protection contre les interruptions lors des gros sync
 - ✅ **Pool de connexions optimisé** : Performance maximale avec gestion des timeouts
+- ✅ **Interface web complète** : Dashboard, navigation, logs temps réel, actions de sync
 
 ## 🌐 Interface Web
 
-Redriva dispose d'une interface web moderne et intuitive pour visualiser vos données et lancer des actions facilement.
+Redriva dispose d'une **interface web moderne et complètement fonctionnelle** pour visualiser vos données et lancer des actions facilement.
 
-### Lancement de l'interface web
+### 🚀 Lancement de l'interface web
 
 ```bash
 # Démarrer le serveur web
-cd src
-python web.py
+python src/web.py
 
 # L'interface sera accessible sur : http://127.0.0.1:5000
+# Arrêt propre avec : Ctrl+C
 ```
 
-### Fonctionnalités de l'interface web
+### ✨ Fonctionnalités complètes
 
-- 📊 **Dashboard** : Vue d'ensemble avec statistiques en temps réel
-- 📋 **Liste des torrents** : Navigation et filtrage avancé par statut/nom  
-- 🔍 **Détails torrent** : Informations complètes et liens de téléchargement
-- 🔄 **Actions de sync** : Lancement des synchronisations depuis l'interface
-- ⚡ **Temps réel** : Mise à jour automatique du statut des tâches
-- 📱 **Responsive** : Interface adaptée mobile et desktop
-- 🎯 **Retry intelligent** : Relance des torrents en erreur en un clic
+#### 📊 **Dashboard principal**
+- **Statistiques en temps réel** : Compteurs de torrents, détails, erreurs
+- **Navigation rapide** : Boutons directs vers les catégories (erreurs, téléchargements, etc.)
+- **Zone de logs temps réel** : Suivi des actions de synchronisation en direct
+- **Cartes colorées** : Vue d'ensemble visuelle de votre collection
 
-### Pages disponibles
+#### 📋 **Liste des torrents**
+- **Pagination intelligente** : Navigation fluide (50 torrents par page)
+- **Filtres dynamiques** : Par statut avec compteurs automatiques
+- **Recherche textuelle** : Dans noms de fichiers et descriptions
+- **Badges colorés** : Identification rapide des statuts (✅ Downloaded, ⬇️ Downloading, ❌ Error, etc.)
+- **Actions rapides** : Retry des torrents en erreur directement
 
-- `/` : Dashboard principal avec statistiques
-- `/torrents` : Liste complète des torrents avec filtres
-- `/torrent/<id>` : Détails d'un torrent spécifique
-- `/sync/<mode>` : Actions de synchronisation (smart, fast, torrents, errors)
+#### 🔍 **Détails torrent**
+- **Informations complètes** : ID, Hash, Taille, Statut, Progression
+- **Liens de téléchargement** : Liste de tous les fichiers disponibles
+- **Historique des erreurs** : Détails complets des problèmes rencontrés
+- **Actions avancées** : Retry, copie d'infos, téléchargement groupé
 
-### Captures d'écran
+#### 🔄 **Synchronisation avancée**
+- **4 modes de sync** : Smart, Rapide, Torrents seuls, Retry erreurs
+- **Logs en temps réel** : Capture et affichage des opérations
+- **Auto-scroll** : Suivi automatique des nouveaux logs
+- **Horodatage précis** : Chaque action avec timestamp
 
-L'interface propose :
-- **Cartes de statistiques** colorées avec icônes
-- **Tableau filtrable** avec badges de statut
-- **Actions rapides** pour chaque torrent  
-- **Progress bars** pour les téléchargements
-- **Notifications toast** pour le feedback utilisateur
+### 🌟 **Pages disponibles**
 
-> 💡 **Conseil** : L'interface web utilise les mêmes fonctions que la CLI, garantissant une cohérence parfaite des données.
+| Route | Description | Fonctionnalités |
+|-------|-------------|-----------------|
+| `/` | Dashboard principal | Statistiques, navigation, logs temps réel |
+| `/torrents` | Liste complète paginée | Filtres, recherche, pagination |
+| `/torrents?status=error` | Torrents en erreur | Filtrage automatique, actions de retry |
+| `/torrent/<id>` | Détail spécifique | Infos complètes, liens, actions |
+| `/sync/<mode>` | Actions de sync | smart, fast, torrents, errors |
+
+### 🎯 **Exemple d'utilisation**
+
+```bash
+# 1. Lancer l'interface
+python src/web.py
+
+# 2. Ouvrir http://127.0.0.1:5000 dans votre navigateur
+
+# 3. Utiliser l'interface :
+# - Voir vos statistiques sur le dashboard
+# - Cliquer sur "Torrents en erreur (X)" pour les consulter
+# - Lancer une synchronisation et voir les logs en temps réel
+# - Naviguer dans vos torrents avec filtres et recherche
+# - Consulter les détails d'un torrent spécifique
+```
+
+### 🛑 **Arrêt et gestion**
+
+```bash
+# Arrêt normal (recommandé)
+Ctrl+C
+
+# Arrêt forcé si bloqué
+./stop_web.sh
+
+# Vérification du statut
+lsof -i:5000
+```
+
+### 📈 **Exemple de collection réelle**
+
+L'interface web de Redriva gère efficacement des collections importantes :
+
+```
+📊 Collection de test en production :
+   🗂️  Torrents totaux     : 4,245
+   📋 Avec détails         : 4,232 (99.7% de couverture)
+   💾 Taille totale        : 15.3 TB
+   🆕 Ajouts récents (24h) : 42 torrents
+   ❌ Erreurs              : 2 seulement (0.05%)
+   ✅ Téléchargements OK   : 4,230
+```
+
+> 💡 **Performance** : L'interface reste fluide même avec des milliers de torrents grâce à la pagination intelligente et aux requêtes SQL optimisées.
+
+### 🎨 **Interface moderne**
+
+- **Design responsive** : S'adapte automatiquement mobile/desktop
+- **Badges colorés** : Identification visuelle rapide des statuts
+- **Mise à jour temps réel** : Toutes les 2 secondes sans rechargement
+- **Navigation intuitive** : Breadcrumbs et liens contextuels
+- **Feedback utilisateur** : Notifications toast pour toutes les actions
+
+### 🖼️ **Captures d'écran conceptuelles**
+
+L'interface web comprend :
+
+```
+🏠 Dashboard Principal
+├── 📊 4 cartes statistiques colorées (Total, Détails, Actifs, Erreurs)
+├── 🔄 Boutons d'actions de sync (Smart, Rapide, Torrents, Retry)
+├── 🔍 Navigation rapide (Tous, Erreurs, Téléchargements, Terminés)
+└── 📋 Zone de logs temps réel avec auto-scroll
+
+📋 Page Torrents
+├── 🔢 Pagination (50 par page)
+├── 🎛️ Filtres par statut avec compteurs
+├── 🔍 Recherche textuelle
+└── 📊 Tableau avec badges colorés et actions
+
+🔍 Détail Torrent
+├── ℹ️ Informations complètes (ID, Hash, Taille, etc.)
+├── 📊 Barre de progression visuelle
+├── 🔗 Liste des liens de téléchargement
+└── 🛠️ Actions (Retry, Copie, Télécharger tout)
+```
+
+### 🚨 **Dépannage**
+
+#### Erreur 403 Forbidden
+```bash
+# Vérifier les permissions de la base
+chmod 664 data/redriva.db
+
+# Relancer le serveur
+python src/web.py
+```
+
+#### Port 5000 déjà utilisé
+```bash
+# Nettoyer les processus
+./stop_web.sh
+
+# Ou manuellement
+lsof -ti:5000 | xargs kill -9
+```
+
+#### Serveur bloqué après Ctrl+C
+```bash
+# Script d'arrêt d'urgence
+./stop_web.sh
+
+# Vérification
+ps aux | grep "python.*web.py"
+```
 
 ## ⚡ Performances
 
@@ -325,10 +441,14 @@ python src/main.py --stats --compact
 # 3. Mises à jour intelligentes - 30s-2 minutes  
 python src/main.py --sync-smart
 
-# 4. Analyse détaillée si nécessaire
+# 4. Interface web pour monitoring - Instantané
+python src/web.py
+# Puis http://127.0.0.1:5000
+
+# 5. Analyse détaillée si nécessaire
 python src/main.py --stats
 
-# 5. Vue d'ensemble rapide - 10-30 secondes
+# 6. Vue d'ensemble rapide - 10-30 seconds
 python src/main.py --torrents-only
 
 # 6. Si interruption pendant un gros sync
