@@ -3,103 +3,795 @@
 {% block title %}Dashboard - Redriva Web{% endblock %}
 
 {% block content %}
+<!-- Messages de notification -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Modal de confirmation -->
+<div id="confirmModal" class="modal">
+    <div class="modal-content">
+        <h3 id="confirmTitle">Confirmer l'action</h3>
+        <p id="confirmMessage">Êtes-vous sûr de vouloir effectuer cette action ?</p>
+        <div class="modal-actions">
+            <button id="confirmBtn" class="btn btn-primary">Confirmer</button>
+            <button id="cancelBtn" class="btn">Annuler</button>
+        </div>
+    </div>
+</div>
+
+<!-- Cartes statistiques interactives -->
 <div class="stats-grid">
-    <div class="stat-card primary">
-        <h3>📁 Torrents</h3>
-        <h1>{{ stats.total_torrents|default(0) }}</h1>
-        <p>Total dans la base</p>
+    <div class="stat-card primary interactive" onclick="navigateToTorrents('')" title="Voir tous les torrents">
+        <div class="stat-icon">📁</div>
+        <div class="stat-content">
+            <h3>Torrents</h3>
+            <h1>{{ stats.total_torrents|default(0) }}</h1>
+            <p>Total dans la base</p>
+        </div>
+        <div class="stat-arrow">→</div>
     </div>
     
-    <div class="stat-card success">
-        <h3>📋 Détails</h3>
-        <h1>{{ "%.1f"|format(stats.coverage|default(0)) }}%</h1>
-        <p>{{ stats.total_details|default(0) }} avec détails</p>
+    <div class="stat-card success interactive" onclick="showDetailsModal()" title="Voir les détails de couverture">
+        <div class="stat-icon">📋</div>
+        <div class="stat-content">
+            <h3>Détails</h3>
+            <h1>{{ "%.1f"|format(stats.coverage|default(0)) }}%</h1>
+            <p>{{ stats.total_details|default(0) }} avec détails</p>
+        </div>
+        <div class="stat-arrow">→</div>
     </div>
     
-    <div class="stat-card warning">
-        <h3>⬇️ Actifs</h3>
-        <h1>{{ stats.downloading_count|default(0) }}</h1>
-        <p>Téléchargements en cours</p>
+    <div class="stat-card warning interactive" onclick="navigateToTorrents('downloading')" title="Voir les torrents actifs">
+        <div class="stat-icon">⬇️</div>
+        <div class="stat-content">
+            <h3>Actifs</h3>
+            <h1>{{ stats.active_count|default(0) }}</h1>
+            <p>En cours de traitement</p>
+        </div>
+        <div class="stat-arrow">→</div>
     </div>
     
-    <div class="stat-card danger">
-        <h3>❌ Erreurs</h3>
-        <h1>{{ stats.error_count|default(0) }}</h1>
-        <p>Torrents en erreur</p>
+    <div class="stat-card danger interactive" onclick="navigateToTorrents('error')" title="Voir les torrents en erreur">
+        <div class="stat-icon">❌</div>
+        <div class="stat-content">
+            <h3>Erreurs</h3>
+            <h1>{{ stats.error_count|default(0) }}</h1>
+            <p>Torrents en erreur</p>
+        </div>
+        <div class="stat-arrow">→</div>
     </div>
 </div>
 
-<div class="card">
+<!-- Actions de synchronisation -->
+<div class="card action-card">
     <h2>🔄 Actions de synchronisation</h2>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
-        <a href="/sync/smart" class="btn btn-primary">🧠 Sync intelligent</a>
-        <a href="/sync/fast" class="btn btn-success">🚀 Sync rapide</a>
-        <a href="/sync/torrents" class="btn btn-warning">📋 Torrents uniquement</a>
-        <a href="/sync/errors" class="btn btn-danger">🔄 Retry erreurs</a>
+    <div class="actions-grid">
+        <button onclick="executeSyncAction('/sync/smart', '🧠 Synchronisation intelligente')" class="action-btn primary">
+            <div class="action-icon">🧠</div>
+            <div class="action-content">
+                <strong>Sync intelligent</strong>
+                <span>Analyse et traite selon les priorités</span>
+            </div>
+        </button>
+        
+        <button onclick="executeSyncAction('/sync/fast', '🚀 Synchronisation rapide')" class="action-btn success">
+            <div class="action-icon">🚀</div>
+            <div class="action-content">
+                <strong>Sync rapide</strong>
+                <span>Traitement accéléré des nouveautés</span>
+            </div>
+        </button>
+        
+        <button onclick="executeSyncAction('/sync/torrents', '📋 Synchronisation torrents')" class="action-btn warning">
+            <div class="action-icon">📋</div>
+            <div class="action-content">
+                <strong>Torrents uniquement</strong>
+                <span>Met à jour la liste des torrents</span>
+            </div>
+        </button>
+        
+        <button onclick="executeSyncAction('/sync/errors', '🔄 Nouvelle tentative erreurs')" class="action-btn danger">
+            <div class="action-icon">🔄</div>
+            <div class="action-content">
+                <strong>Retry erreurs</strong>
+                <span>Retente les torrents en échec</span>
+            </div>
+        </button>
     </div>
 </div>
 
+<!-- Navigation rapide -->
 <div class="card">
     <h2>🔍 Navigation rapide</h2>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
-        <a href="/torrents" class="btn btn-primary">📁 Tous les torrents</a>
-        <a href="/torrents?status=error" class="btn btn-danger">❌ Torrents en erreur ({{ stats.error_count|default(0) }})</a>
-        <a href="/torrents?status=downloading" class="btn btn-warning">⬇️ En téléchargement ({{ stats.downloading_count|default(0) }})</a>
-        <a href="/torrents?status=downloaded" class="btn btn-success">✅ Téléchargés</a>
+    <div class="quick-nav-grid">
+        <a href="/torrents" class="quick-nav-item primary">
+            <span class="nav-icon">📁</span>
+            <span class="nav-text">Tous les torrents</span>
+            <span class="nav-count">{{ stats.total_torrents|default(0) }}</span>
+        </a>
+        <a href="/torrents?status=error" class="quick-nav-item danger">
+            <span class="nav-icon">❌</span>
+            <span class="nav-text">En erreur</span>
+            <span class="nav-count">{{ stats.error_count|default(0) }}</span>
+        </a>
+        <a href="/torrents?status=downloading" class="quick-nav-item warning">
+            <span class="nav-icon">⬇️</span>
+            <span class="nav-text">En cours</span>
+            <span class="nav-count">{{ stats.active_count|default(0) }}</span>
+        </a>
+        <a href="/torrents?status=downloaded" class="quick-nav-item success">
+            <span class="nav-icon">✅</span>
+            <span class="nav-text">Téléchargés</span>
+        </a>
     </div>
 </div>
 
 {% if stats.status_data %}
 <div class="card">
     <h2>📈 Répartition par statut</h2>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Statut</th>
-                <th>Nombre</th>
-                <th>Pourcentage</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for status, count in stats.status_data %}
-            <tr>
-                <td>{{ status }}</td>
-                <td>{{ count }}</td>
-                <td>{{ "%.1f"|format((count / stats.total_details * 100) if stats.total_details > 0 else 0) }}%</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="status-distribution">
+        <table class="table modern-table">
+            <thead>
+                <tr>
+                    <th>Statut</th>
+                    <th>Nombre</th>
+                    <th>Pourcentage</th>
+                    <th>Visualisation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for status, count in stats.status_data %}
+                <tr>
+                    <td class="status-cell">
+                        <span class="status-badge">{{ status }}</span>
+                    </td>
+                    <td class="count-cell">{{ count }}</td>
+                    <td class="percent-cell">{{ "%.1f"|format((count / stats.total_details * 100) if stats.total_details > 0 else 0) }}%</td>
+                    <td class="progress-cell">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {{ (count / stats.total_details * 100) if stats.total_details > 0 else 0 }}%"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endif %}
 
-<div class="card">
-    <h2>ℹ️ Informations générales</h2>
-    <ul>
-        <li><strong>🆕 Torrents récents (24h):</strong> {{ stats.recent_24h|default(0) }}</li>
-        <li><strong>💾 Taille totale:</strong> {{ stats.total_size|default("N/A") }}</li>
-        <li><strong>🕒 Statut tâches:</strong> 
-            {% if task_status.running %}
-                <span style="color: orange;">En cours</span>
-            {% else %}
-                <span style="color: green;">Prêt</span>
-            {% endif %}
-        </li>
-    </ul>
-</div>
-
-<div class="card">
-    <h2>📋 Logs des actions</h2>
-    <div id="logsContainer" style="background: #f8f9fa; border-radius: 4px; padding: 15px; min-height: 200px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 14px; line-height: 1.4;">
-        <div id="logsContent">
-            <div style="color: #6c757d; text-align: center; padding: 50px 0;">
-                Aucune action exécutée pour le moment.<br>
-                Cliquez sur un bouton d'action pour voir les logs ici.
+<!-- Informations système -->
+<div class="card system-info">
+    <h2>ℹ️ Informations système</h2>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-icon">🆕</div>
+            <div class="info-content">
+                <strong>Torrents récents (24h)</strong>
+                <span>{{ stats.recent_24h|default(0) }}</span>
+            </div>
+        </div>
+        <div class="info-item">
+            <div class="info-icon">💾</div>
+            <div class="info-content">
+                <strong>Taille totale</strong>
+                <span>{{ stats.total_size|default("N/A") }}</span>
+            </div>
+        </div>
+        <div class="info-item">
+            <div class="info-icon">🕒</div>
+            <div class="info-content">
+                <strong>Statut des tâches</strong>
+                <span class="status-indicator {{ 'running' if task_status.running else 'ready' }}">
+                    {{ 'En cours' if task_status.running else 'Prêt' }}
+                </span>
             </div>
         </div>
     </div>
-    <div style="margin-top: 10px; text-align: right;">
-        <button onclick="clearLogs()" class="btn" style="background: #6c757d; color: white; font-size: 12px; padding: 5px 10px;">🗑️ Effacer les logs</button>
+</div>
+
+<!-- Console de logs améliorée -->
+<div class="card logs-card">
+    <div class="logs-header">
+        <h2>📋 Console d'activité</h2>
+        <div class="logs-controls">
+            <button onclick="toggleAutoScroll()" id="autoScrollBtn" class="btn btn-small">📌 Auto-scroll</button>
+            <button onclick="clearLogs()" class="btn btn-small danger">🗑️ Effacer</button>
+        </div>
+    </div>
+    
+    <div id="logsContainer" class="logs-container">
+        <div id="logsContent" class="logs-content">
+            <div class="logs-placeholder">
+                <div class="placeholder-icon">📝</div>
+                <div class="placeholder-text">
+                    <strong>Console prête</strong><br>
+                    Les logs d'activité apparaîtront ici lors de l'exécution des actions.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="logs-footer">
+        <div class="logs-status">
+            <span id="logsCount">0 entrées</span>
+            <span id="logsTime">Dernière mise à jour : jamais</span>
+        </div>
     </div>
 </div>
+
+<style>
+/* Styles pour le dashboard interactif */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.toast {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 16px;
+    margin-bottom: 10px;
+    border-left: 4px solid;
+    min-width: 300px;
+    animation: slideIn 0.3s ease;
+}
+
+.toast.success { border-left-color: #28a745; }
+.toast.error { border-left-color: #dc3545; }
+.toast.info { border-left-color: #17a2b8; }
+.toast.warning { border-left-color: #ffc107; }
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1001;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 400px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.stats-grid .stat-card.interactive {
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.stats-grid .stat-card.interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    gap: 15px;
+}
+
+.stat-icon {
+    font-size: 2.5em;
+    opacity: 0.8;
+}
+
+.stat-content {
+    flex: 1;
+}
+
+.stat-content h3 {
+    margin: 0 0 5px 0;
+    font-size: 1em;
+    opacity: 0.8;
+}
+
+.stat-content h1 {
+    margin: 0 0 5px 0;
+    font-size: 2.2em;
+    font-weight: 700;
+}
+
+.stat-content p {
+    margin: 0;
+    font-size: 0.9em;
+    opacity: 0.7;
+}
+
+.stat-arrow {
+    font-size: 1.5em;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+
+.stat-card.interactive:hover .stat-arrow {
+    opacity: 1;
+    transform: translateX(5px);
+}
+
+.action-card .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    border: none;
+    border-radius: 8px;
+    background: white;
+    border: 2px solid #e9ecef;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.action-btn.primary:hover { border-color: #007bff; }
+.action-btn.success:hover { border-color: #28a745; }
+.action-btn.warning:hover { border-color: #ffc107; }
+.action-btn.danger:hover { border-color: #dc3545; }
+
+.action-icon {
+    font-size: 2em;
+}
+
+.action-content strong {
+    display: block;
+    font-size: 1.1em;
+    margin-bottom: 4px;
+}
+
+.action-content span {
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+.quick-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.quick-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: white;
+    transition: all 0.2s ease;
+}
+
+.quick-nav-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    text-decoration: none;
+    color: white;
+}
+
+.nav-icon {
+    font-size: 1.5em;
+}
+
+.nav-text {
+    flex: 1;
+    font-weight: 500;
+}
+
+.nav-count {
+    background: rgba(255,255,255,0.2);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.modern-table th,
+.modern-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.status-badge {
+    background: #f8f9fa;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.progress-bar {
+    width: 100px;
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #28a745);
+    transition: width 0.3s ease;
+}
+
+.system-info .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.info-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.info-icon {
+    font-size: 1.8em;
+}
+
+.info-content strong {
+    display: block;
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 4px;
+}
+
+.info-content span {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.status-indicator {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.status-indicator.running {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-indicator.ready {
+    background: #d4edda;
+    color: #155724;
+}
+
+.logs-card {
+    margin-top: 20px;
+}
+
+.logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.logs-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.9em;
+}
+
+.logs-container {
+    background: #1e1e1e;
+    border-radius: 8px;
+    min-height: 300px;
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+}
+
+.logs-content {
+    padding: 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #f8f9fa;
+}
+
+.logs-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 250px;
+    color: #6c757d;
+    text-align: center;
+}
+
+.placeholder-icon {
+    font-size: 3em;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.logs-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+.log-entry {
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 3px solid;
+}
+
+.log-entry.info { border-left-color: #17a2b8; background: rgba(23, 162, 184, 0.1); }
+.log-entry.success { border-left-color: #28a745; background: rgba(40, 167, 69, 0.1); }
+.log-entry.warning { border-left-color: #ffc107; background: rgba(255, 193, 7, 0.1); }
+.log-entry.error { border-left-color: #dc3545; background: rgba(220, 53, 69, 0.1); }
+
+.log-timestamp {
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .actions-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .quick-nav-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+// Variables globales
+let autoScroll = true;
+let logsCount = 0;
+
+// Fonctions de navigation
+function navigateToTorrents(status) {
+    if (status) {
+        window.location.href = `/torrents?status=${status}`;
+    } else {
+        window.location.href = '/torrents';
+    }
+}
+
+function showDetailsModal() {
+    showToast('info', 'Informations détaillées', 'Cette section affiche le pourcentage de torrents avec des détails complets.');
+}
+
+// Fonction d'exécution des actions de synchronisation
+function executeSyncAction(url, actionName) {
+    showConfirmModal(
+        'Confirmer la synchronisation',
+        `Voulez-vous vraiment lancer : ${actionName} ?`,
+        () => {
+            addLogEntry('info', `Démarrage de ${actionName}...`);
+            showToast('info', 'Action lancée', `${actionName} en cours d'exécution...`);
+            
+            fetch(url)
+                .then(response => {
+                    if (response.ok) {
+                        addLogEntry('success', `${actionName} terminée avec succès`);
+                        showToast('success', 'Succès', `${actionName} terminée`);
+                        // Recharger la page après 2 secondes pour voir les nouveaux stats
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        throw new Error(`Erreur HTTP: ${response.status}`);
+                    }
+                })
+                .catch(error => {
+                    addLogEntry('error', `Erreur lors de ${actionName}: ${error.message}`);
+                    showToast('error', 'Erreur', `Échec de ${actionName}`);
+                });
+        }
+    );
+}
+
+// Système de notifications toast
+function showToast(type, title, message) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <strong>${title}</strong><br>
+        <span>${message}</span>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Supprimer automatiquement après 5 secondes
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 5000);
+}
+
+// Système de modal de confirmation
+function showConfirmModal(title, message, onConfirm) {
+    const modal = document.getElementById('confirmModal');
+    const titleEl = document.getElementById('confirmTitle');
+    const messageEl = document.getElementById('confirmMessage');
+    const confirmBtn = document.getElementById('confirmBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    
+    modal.style.display = 'block';
+    
+    const handleConfirm = () => {
+        modal.style.display = 'none';
+        onConfirm();
+        cleanup();
+    };
+    
+    const handleCancel = () => {
+        modal.style.display = 'none';
+        cleanup();
+    };
+    
+    const cleanup = () => {
+        confirmBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+    };
+    
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    
+    // Fermer avec Escape
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            handleCancel();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Gestion des logs
+function addLogEntry(type, message) {
+    const logsContent = document.getElementById('logsContent');
+    const placeholder = logsContent.querySelector('.logs-placeholder');
+    
+    // Supprimer le placeholder si c'est la première entrée
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    entry.innerHTML = `
+        <span class="log-timestamp">[${timestamp}]</span> ${message}
+    `;
+    
+    logsContent.appendChild(entry);
+    logsCount++;
+    
+    // Auto-scroll si activé
+    if (autoScroll) {
+        const container = document.getElementById('logsContainer');
+        container.scrollTop = container.scrollHeight;
+    }
+    
+    // Mettre à jour les statistiques
+    updateLogsStats();
+}
+
+function clearLogs() {
+    const logsContent = document.getElementById('logsContent');
+    logsContent.innerHTML = `
+        <div class="logs-placeholder">
+            <div class="placeholder-icon">📝</div>
+            <div class="placeholder-text">
+                <strong>Console effacée</strong><br>
+                Prêt pour de nouvelles activités.
+            </div>
+        </div>
+    `;
+    logsCount = 0;
+    updateLogsStats();
+}
+
+function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    const btn = document.getElementById('autoScrollBtn');
+    btn.textContent = autoScroll ? '📌 Auto-scroll' : '📌 Manuel';
+    btn.style.opacity = autoScroll ? '1' : '0.6';
+}
+
+function updateLogsStats() {
+    document.getElementById('logsCount').textContent = `${logsCount} entrées`;
+    document.getElementById('logsTime').textContent = `Dernière mise à jour : ${new Date().toLocaleTimeString()}`;
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    // Ajouter un message de bienvenue
+    setTimeout(() => {
+        addLogEntry('info', 'Dashboard interactif chargé et prêt à l\'utilisation');
+    }, 500);
+});
+
+// Styles CSS pour les animations de sortie
+const style = document.createElement('style');
+style.textContent = `
+@keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+`;
+document.head.appendChild(style);
+</script>
 {% endblock %}

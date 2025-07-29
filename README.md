@@ -274,18 +274,17 @@ python src/web.py
 
 ### ✨ Fonctionnalités complètes
 
-#### 📊 **Dashboard principal**
-- **Statistiques en temps réel** : Compteurs de torrents, détails, erreurs
-- **Navigation rapide** : Boutons directs vers les catégories (erreurs, téléchargements, etc.)
-- **Zone de logs temps réel** : Suivi des actions de synchronisation en direct
-- **Cartes colorées** : Vue d'ensemble visuelle de votre collection
+#### 📊 **Dashboard interactif**
+- **Cartes statistiques cliquables** : Navigation directe vers les sections (erreurs, téléchargements, etc.)
+- **Actions de synchronisation** : 4 modes disponibles avec confirmations et logs temps réel
+- **Console d'activité** : Logs en temps réel avec auto-scroll et contrôles
+- **Design moderne** : Interface responsive avec animations et notifications
 
 #### 📋 **Liste des torrents**
 - **Pagination intelligente** : Navigation fluide (50 torrents par page)
 - **Filtres dynamiques** : Par statut avec compteurs automatiques
 - **Recherche textuelle** : Dans noms de fichiers et descriptions
 - **Badges colorés** : Identification rapide des statuts (✅ Downloaded, ⬇️ Downloading, ❌ Error, etc.)
-- **Actions rapides** : Retry des torrents en erreur directement
 
 #### 🔍 **Détails torrent**
 - **Informations complètes** : ID, Hash, Taille, Statut, Progression
@@ -293,17 +292,40 @@ python src/web.py
 - **Historique des erreurs** : Détails complets des problèmes rencontrés
 - **Actions avancées** : Retry, copie d'infos, téléchargement groupé
 
-#### 🔄 **Synchronisation avancée**
-- **4 modes de sync** : Smart, Rapide, Torrents seuls, Retry erreurs
-- **Logs en temps réel** : Capture et affichage des opérations
-- **Auto-scroll** : Suivi automatique des nouveaux logs
-- **Horodatage précis** : Chaque action avec timestamp
+### � **Documentation Web Complète**
+
+#### 🔹 **Guide Utilisateur**
+📖 **[WEBAPP_GUIDE.md](WEBAPP_GUIDE.md)** - Guide complet de l'interface web
+```
+- 🎯 Introduction et démarrage rapide
+- 📊 Dashboard principal et cartes interactives  
+- 🔄 Actions de synchronisation avec logs temps réel
+- 🔍 Navigation et filtres avancés
+- 📱 Interface utilisateur et design responsive
+- 🛠️ Troubleshooting et configuration
+- 📈 Métriques et analytics
+```
+
+#### 🔹 **Documentation Technique**
+🏗️ **[WEBAPP_TECHNICAL.md](WEBAPP_TECHNICAL.md)** - Architecture et développement
+```
+- 🏛️ Architecture générale (MVC, Stack technologique)
+- 📁 Structure des fichiers et responsabilités
+- 🐍 Backend Flask avec routes et contrôleurs
+- 🎨 Frontend et templates Jinja2
+- 💾 Base de données et requêtes optimisées
+- 🔌 API REST et endpoints JSON
+- 📊 Système de logs et monitoring
+- ⚡ Performance et optimisation
+- 🧪 Tests et debugging
+- 🚀 Déploiement en production
+```
 
 ### 🌟 **Pages disponibles**
 
 | Route | Description | Fonctionnalités |
 |-------|-------------|-----------------|
-| `/` | Dashboard principal | Statistiques, navigation, logs temps réel |
+| `/` | Dashboard principal | **Cartes cliquables**, statistiques, logs temps réel |
 | `/torrents` | Liste complète paginée | Filtres, recherche, pagination |
 | `/torrents?status=error` | Torrents en erreur | Filtrage automatique, actions de retry |
 | `/torrent/<id>` | Détail spécifique | Infos complètes, liens, actions |
@@ -318,24 +340,10 @@ python src/web.py
 # 2. Ouvrir http://127.0.0.1:5000 dans votre navigateur
 
 # 3. Utiliser l'interface :
-# - Voir vos statistiques sur le dashboard
-# - Cliquer sur "Torrents en erreur (X)" pour les consulter
+# - Cliquer sur les cartes statistiques pour naviguer
 # - Lancer une synchronisation et voir les logs en temps réel
-# - Naviguer dans vos torrents avec filtres et recherche
+# - Filtrer vos torrents par statut (erreurs, téléchargements)
 # - Consulter les détails d'un torrent spécifique
-```
-
-### 🛑 **Arrêt et gestion**
-
-```bash
-# Arrêt normal (recommandé)
-Ctrl+C
-
-# Arrêt forcé si bloqué
-./stop_web.sh
-
-# Vérification du statut
-lsof -i:5000
 ```
 
 ### 📈 **Exemple de collection réelle**
@@ -354,65 +362,17 @@ L'interface web de Redriva gère efficacement des collections importantes :
 
 > 💡 **Performance** : L'interface reste fluide même avec des milliers de torrents grâce à la pagination intelligente et aux requêtes SQL optimisées.
 
-### 🎨 **Interface moderne**
+### 🛑 **Arrêt et gestion**
 
-- **Design responsive** : S'adapte automatiquement mobile/desktop
-- **Badges colorés** : Identification visuelle rapide des statuts
-- **Mise à jour temps réel** : Toutes les 2 secondes sans rechargement
-- **Navigation intuitive** : Breadcrumbs et liens contextuels
-- **Feedback utilisateur** : Notifications toast pour toutes les actions
-
-### 🖼️ **Captures d'écran conceptuelles**
-
-L'interface web comprend :
-
-```
-🏠 Dashboard Principal
-├── 📊 4 cartes statistiques colorées (Total, Détails, Actifs, Erreurs)
-├── 🔄 Boutons d'actions de sync (Smart, Rapide, Torrents, Retry)
-├── 🔍 Navigation rapide (Tous, Erreurs, Téléchargements, Terminés)
-└── 📋 Zone de logs temps réel avec auto-scroll
-
-📋 Page Torrents
-├── 🔢 Pagination (50 par page)
-├── 🎛️ Filtres par statut avec compteurs
-├── 🔍 Recherche textuelle
-└── 📊 Tableau avec badges colorés et actions
-
-🔍 Détail Torrent
-├── ℹ️ Informations complètes (ID, Hash, Taille, etc.)
-├── 📊 Barre de progression visuelle
-├── 🔗 Liste des liens de téléchargement
-└── 🛠️ Actions (Retry, Copie, Télécharger tout)
-```
-
-### 🚨 **Dépannage**
-
-#### Erreur 403 Forbidden
 ```bash
-# Vérifier les permissions de la base
-chmod 664 data/redriva.db
+# Arrêt normal (recommandé)
+Ctrl+C
 
-# Relancer le serveur
-python src/web.py
-```
-
-#### Port 5000 déjà utilisé
-```bash
-# Nettoyer les processus
+# Arrêt forcé si bloqué
 ./stop_web.sh
 
-# Ou manuellement
-lsof -ti:5000 | xargs kill -9
-```
-
-#### Serveur bloqué après Ctrl+C
-```bash
-# Script d'arrêt d'urgence
-./stop_web.sh
-
-# Vérification
-ps aux | grep "python.*web.py"
+# Vérification du statut
+lsof -i:5000
 ```
 
 ## ⚡ Performances

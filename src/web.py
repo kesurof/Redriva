@@ -18,7 +18,7 @@ sys.path.append(os.path.dirname(__file__))
 from main import (
     DB_PATH, load_token, sync_smart, sync_all_v2, sync_torrents_only,
     show_stats, diagnose_errors, get_db_stats, format_size, get_status_emoji,
-    create_tables, sync_details_only
+    create_tables, sync_details_only, ACTIVE_STATUSES, ERROR_STATUSES, COMPLETED_STATUSES
 )
 
 app = Flask(__name__)
@@ -117,13 +117,15 @@ def dashboard():
             c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0")
             total_size = c.fetchone()[0] or 0
             
-            # Erreurs
-            c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'error'")
+            # Erreurs (utilisation des constantes)
+            placeholders = ','.join('?' * len(ERROR_STATUSES))
+            c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ERROR_STATUSES)
             error_count = c.fetchone()[0] or 0
             
-            # Téléchargements actifs
-            c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloading'")
-            downloading_count = c.fetchone()[0] or 0
+            # Téléchargements actifs (utilisation des constantes)
+            placeholders = ','.join('?' * len(ACTIVE_STATUSES))
+            c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ACTIVE_STATUSES)
+            active_count = c.fetchone()[0] or 0
             
         stats = {
             'total_torrents': total_torrents,
@@ -132,7 +134,7 @@ def dashboard():
             'recent_24h': recent_24h,
             'total_size': format_size(total_size),
             'error_count': error_count,
-            'downloading_count': downloading_count,
+            'active_count': active_count,  # Renommé pour plus de clarté
             'status_data': status_data
         }
         

@@ -44,6 +44,40 @@ import json
 import re
 from pathlib import Path
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONSTANTES DE STATUTS POUR COHÉRENCE DANS TOUT LE CODE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Statuts considérés comme "actifs" (torrents en cours de traitement)
+ACTIVE_STATUSES = (
+    'downloading',           # ⬇️ En cours de téléchargement
+    'queued',               # 🔄 En file d'attente
+    'waiting_files_selection', # ⏳ En attente de sélection des fichiers
+    'magnet_conversion',    # 🧲 Conversion magnet en cours
+    'uploading',            # ⬆️ Upload en cours
+    'compressing',          # 🗜️ Compression en cours
+    'waiting'               # ⏳ En attente générique
+)
+
+# Statuts considérés comme "erreurs" (problèmes nécessitant intervention)
+ERROR_STATUSES = (
+    'error',                # ❌ Erreur générique
+    'magnet_error',         # 🧲❌ Erreur de magnet
+    'virus',                # 🦠 Fichier infecté
+    'dead',                 # 💀 Torrent mort
+    'timeout',              # ⏱️ Timeout
+    'hoster_unavailable'    # 🚫 Hébergeur indisponible
+)
+
+# Statuts considérés comme "terminés" (téléchargements réussis)
+COMPLETED_STATUSES = (
+    'downloaded',           # ✅ Téléchargé avec succès
+    'finished'              # 🏁 Terminé
+)
+
+# Tous les statuts connus (pour validation)
+ALL_KNOWN_STATUSES = ACTIVE_STATUSES + ERROR_STATUSES + COMPLETED_STATUSES
+
 def load_env_file():
     """
     Charge les variables d'environnement depuis le fichier .env
@@ -827,18 +861,20 @@ def get_smart_update_summary():
         ''')
         new_count = c.fetchone()[0]
         
-        # Téléchargements actifs
-        c.execute('''
+        # Téléchargements actifs (utilisation des constantes)
+        placeholders = ','.join('?' * len(ACTIVE_STATUSES))
+        c.execute(f'''
             SELECT COUNT(*) FROM torrent_details
-            WHERE status IN ('downloading', 'queued', 'waiting_files_selection')
-        ''')
+            WHERE status IN ({placeholders})
+        ''', ACTIVE_STATUSES)
         active_count = c.fetchone()[0]
         
-        # Torrents en erreur (pour retry)
-        c.execute('''
+        # Torrents en erreur (pour retry) - utilisation des constantes d'erreur
+        placeholders = ','.join('?' * len(ERROR_STATUSES))
+        c.execute(f'''
             SELECT COUNT(*) FROM torrent_details
-            WHERE status = 'error' OR error IS NOT NULL
-        ''')
+            WHERE status IN ({placeholders}) OR error IS NOT NULL
+        ''', ERROR_STATUSES)
         error_count = c.fetchone()[0]
         
         # Torrents anciens (plus de 7 jours sans mise à jour)
@@ -1305,16 +1341,20 @@ def show_stats_compact():
         c.execute("SELECT COUNT(*) FROM torrent_details")
         details = c.fetchone()[0]
         
-        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloading'")
-        downloading = c.fetchone()[0] or 0
+        # Utilisation des constantes pour les torrents actifs
+        placeholders = ','.join('?' * len(ACTIVE_STATUSES))
+        c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ACTIVE_STATUSES)
+        active = c.fetchone()[0] or 0
         
-        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'error'")
+        # Utilisation des constantes pour les erreurs
+        placeholders = ','.join('?' * len(ERROR_STATUSES))
+        c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ERROR_STATUSES)
         errors = c.fetchone()[0] or 0
         
         coverage = (details / total * 100) if total > 0 else 0
         
         print(f"📊 {total:,} torrents | {details:,} détails ({coverage:.1f}%) | "
-              f"⬇️ {downloading} en cours | ❌ {errors} erreurs")
+              f"⬇️ {active} actifs | ❌ {errors} erreurs")
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                     SECTION 7: DIAGNOSTIC ET MAINTENANCE                  ║
