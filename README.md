@@ -70,7 +70,27 @@ export RD_QUOTA_WAIT=60        # Attente quota global (défaut: 60s)
 export RD_TORRENT_WAIT=10      # Attente quota torrent (défaut: 10s)
 ```
 
-## 📖 Utilisation
+## 🎮 Menu Interactif
+
+**Lancez Redriva sans arguments pour accéder au menu convivial :**
+
+```bash
+python src/main.py
+```
+
+**Fonctionnalités du menu :**
+- 🎯 **Interface guidée** : Choix numérotés avec descriptions claires
+- ⚡ **Actions rapides** : Accès direct aux fonctions principales  
+- 💡 **Guide intégré** : Recommandations selon votre usage
+- 🔄 **Navigation fluide** : Retour automatique au menu après chaque action
+- 🏃 **Mode hybride** : Basculement vers ligne de commande si besoin
+
+**Utilisation recommandée :**
+- 🥇 **Première utilisation** : Menu → Choix 5 (Sync rapide complet)
+- � **Usage quotidien** : Menu → Choix 2 + 4 (Stats + Sync intelligent)  
+- 🔧 **Maintenance** : Menu → Choix 1 + 3 (Stats complètes + Diagnostic)
+
+## 📖 Usage en ligne de commande
 
 ### Synchronisation complète
 ```bash
@@ -421,6 +441,105 @@ Redriva/
     ├── main.py                 # Script principal avec toutes les fonctionnalités
     └── main.py.backup          # Sauvegarde automatique
 ```
+
+## 📁 Structure du projet
+
+```
+Redriva/
+├── README.md                    # Documentation complète
+├── LICENSE                      # Licence MIT
+├── SECURITY.md                  # Politique de sécurité
+├── CONTRIBUTING.md              # Guide de contribution
+├── requirements.txt             # Dépendances Python
+├── setup.sh                     # Script de configuration automatique
+├── .env.example                 # Modèle de configuration
+├── .gitignore                   # Protection fichiers sensibles
+├── config/
+│   ├── rd_token.conf           # Token Real-Debrid (ignoré par Git)
+│   └── rd_token.conf.example   # Modèle de token
+├── data/
+│   ├── redriva.db              # Base SQLite (auto-générée)
+│   └── sync_progress.json      # Progression des sync (temporaire)
+└── src/
+    ├── main.py                 # Script principal réorganisé par sections
+    └── main.py.backup          # Sauvegarde automatique
+```
+
+### Architecture du script principal
+
+Le fichier `src/main.py` est organisé en **9 sections claires** pour une maintenance optimale :
+
+```python
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 1: IMPORTS ET CONFIGURATION         ║
+# ╚════════════════════════════════════════════════════════╝
+# - Imports et variables d'environnement
+# - Configuration logging et signaux
+# - Constantes et paramètres globaux
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 2: UTILITAIRES ET HELPERS           ║
+# ╚════════════════════════════════════════════════════════╝
+# - format_size(), get_status_emoji()
+# - Fonctions de conversion et formatage
+# - Helpers de sécurité (safe_int, safe_float)
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 3: BASE DE DONNÉES                  ║
+# ╚════════════════════════════════════════════════════════╝
+# - create_tables(), get_db_stats()
+# - Gestion SQLite et structure données
+# - Fonctions de maintenance base
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 4: API REAL-DEBRID                  ║
+# ╚════════════════════════════════════════════════════════╝
+# - api_request(), fetch_all_torrents()
+# - Communication avec l'API Real-Debrid
+# - Gestion tokens et authentification
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 5: SYNCHRONISATION                  ║
+# ╚════════════════════════════════════════════════════════╝
+# - sync_smart(), sync_all_v2(), sync_resume()
+# - Moteurs de synchronisation optimisés
+# - Contrôle dynamique et reprise auto
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 6: STATISTIQUES ET ANALYTICS        ║
+# ╚════════════════════════════════════════════════════════╝
+# - show_stats(), show_stats_compact()
+# - Analytics avancées et recommandations
+# - Métriques de performance
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 7: DIAGNOSTIC ET MAINTENANCE        ║
+# ╚════════════════════════════════════════════════════════╝
+# - diagnose_errors(), analyze_error_type()
+# - Diagnostic automatique des problèmes
+# - Suggestions de correction
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 8: INTERFACE UTILISATEUR (MENU)     ║
+# ╚════════════════════════════════════════════════════════╝
+# - show_interactive_menu(), show_quick_guide()
+# - Menu interactif avec guide intégré
+# - Navigation conviviale
+
+# ╔════════════════════════════════════════════════════════╗
+# ║            SECTION 9: POINT D'ENTRÉE PRINCIPAL         ║
+# ╚════════════════════════════════════════════════════════╝
+# - main(), gestion arguments CLI
+# - Logique de démarrage et orchestration
+# - Support menu interactif + arguments
+```
+
+**Avantages de cette organisation :**
+- ✅ **Navigation facile** : Sections clairement délimitées avec séparateurs visuels
+- ✅ **Maintenance simplifiée** : Code organisé par responsabilité  
+- ✅ **Documentation inline** : Chaque fonction documentée avec exemples
+- ✅ **Claude/Copilot friendly** : Structure claire pour IA de maintenance
+- ✅ **Évolutivité** : Ajout de fonctionnalités sans impact sur l'existant
 
 ### Fonctionnalités du script principal
 
