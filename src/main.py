@@ -236,22 +236,156 @@ async def fetch_all_torrent_details(token, torrent_ids, max_concurrent=MAX_CONCU
     return total_processed
 
 def show_stats():
-    """Affiche les statistiques de la base de données"""
+    """Affiche les statistiques complètes et détaillées de la base de données"""
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
+        
+        # === STATISTIQUES GÉNÉRALES ===
         c.execute("SELECT COUNT(*) FROM torrents")
         total_torrents = c.fetchone()[0]
         
         c.execute("SELECT COUNT(*) FROM torrent_details")
         total_details = c.fetchone()[0]
         
-        c.execute("SELECT status, COUNT(*) FROM torrents GROUP BY status")
-        status_counts = dict(c.fetchall())
+        coverage_percent = (total_details / total_torrents * 100) if total_torrents > 0 else 0
         
-        print(f"\n📊 Statistiques Redriva:")
-        print(f"   Torrents: {total_torrents}")
-        print(f"   Détails: {total_details}")
-        print(f"   Status: {status_counts}")
+        # === RÉPARTITION PAR STATUT ===
+        c.execute("SELECT status, COUNT(*) FROM torrents GROUP BY status ORDER BY COUNT(*) DESC")
+        torrent_status = c.fetchall()
+        
+        c.execute("SELECT status, COUNT(*) FROM torrent_details GROUP BY status ORDER BY COUNT(*) DESC")
+        detail_status = c.fetchall()
+        
+        # === TAILLES ET VOLUMES ===
+        c.execute("SELECT SUM(bytes), AVG(bytes), MIN(bytes), MAX(bytes) FROM torrents WHERE bytes > 0")
+        size_stats = c.fetchone()
+        total_size, avg_size, min_size, max_size = size_stats if size_stats and size_stats[0] else (0, 0, 0, 0)
+        
+        # === ACTIVITÉ RÉCENTE ===
+        c.execute("""
+            SELECT COUNT(*) FROM torrents 
+            WHERE datetime(added_on) >= datetime('now', '-24 hours')
+        """)
+        recent_24h = c.fetchone()[0] or 0
+        
+        c.execute("""
+            SELECT COUNT(*) FROM torrents 
+            WHERE datetime(added_on) >= datetime('now', '-7 days')
+        """)
+        recent_7d = c.fetchone()[0] or 0
+        
+        # === TORRENTS PROBLÉMATIQUES ===
+        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'error' OR error IS NOT NULL")
+        error_count = c.fetchone()[0] or 0
+        
+        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status IN ('downloading', 'queued', 'waiting_files_selection')")
+        active_count = c.fetchone()[0] or 0
+        
+        # === TORRENTS SANS DÉTAILS ===
+        c.execute("""
+            SELECT COUNT(*) FROM torrents t 
+            LEFT JOIN torrent_details td ON t.id = td.id 
+            WHERE td.id IS NULL
+        """)
+        missing_details = c.fetchone()[0] or 0
+        
+        # === TOP HÉBERGEURS ===
+        c.execute("""
+            SELECT host, COUNT(*) as count 
+            FROM torrent_details 
+            WHERE host IS NOT NULL AND host != ''
+            GROUP BY host 
+            ORDER BY count DESC 
+            LIMIT 5
+        """)
+        top_hosts = c.fetchall()
+        
+        # === TORRENTS LES PLUS GROS ===
+        c.execute("""
+            SELECT name, size, status 
+            FROM torrent_details 
+            WHERE size > 0 AND name IS NOT NULL
+            ORDER BY size DESC 
+            LIMIT 5
+        """)
+        biggest_torrents = c.fetchall()
+        
+        # === PROGRESSION MOYENNE ===
+        c.execute("SELECT AVG(progress) FROM torrent_details WHERE progress IS NOT NULL")
+        avg_progress = c.fetchone()[0] or 0
+        
+        # === AFFICHAGE FORMATÉ ===
+        print("\n" + "="*60)
+        print("📊 STATISTIQUES COMPLÈTES REDRIVA")
+        print("="*60)
+        
+        # Vue d'ensemble
+        print(f"\n🗂️  VUE D'ENSEMBLE")
+        print(f"   📁 Total torrents     : {total_torrents:,}")
+        print(f"   📋 Détails disponibles: {total_details:,}")
+        print(f"   📊 Couverture         : {coverage_percent:.1f}%")
+        print(f"   ❌ Détails manquants  : {missing_details:,}")
+        
+        # Volumes de données
+        if total_size and total_size > 0:
+            print(f"\n💾 VOLUMES DE DONNÉES")
+            print(f"   📦 Volume total       : {format_size(total_size)}")
+            print(f"   📊 Taille moyenne     : {format_size(avg_size) if avg_size else 'N/A'}")
+            print(f"   🔻 Plus petit         : {format_size(min_size) if min_size else 'N/A'}")
+            print(f"   🔺 Plus gros          : {format_size(max_size) if max_size else 'N/A'}")
+        
+        # Activité récente
+        print(f"\n⏰ ACTIVITÉ RÉCENTE")
+        print(f"   🆕 Dernières 24h      : {recent_24h:,} torrents")
+        print(f"   📅 Derniers 7 jours   : {recent_7d:,} torrents")
+        
+        # État des téléchargements
+        print(f"\n🔄 ÉTAT DES TÉLÉCHARGEMENTS")
+        print(f"   ✅ Progression moyenne: {avg_progress:.1f}%")
+        print(f"   ⬇️  Téléchargements    : {active_count:,}")
+        print(f"   ❌ Erreurs            : {error_count:,}")
+        
+        # Répartition par statut (torrents)
+        if torrent_status:
+            print(f"\n📈 RÉPARTITION PAR STATUT (Torrents)")
+            for status, count in torrent_status[:8]:  # Top 8
+                percent = (count / total_torrents * 100) if total_torrents > 0 else 0
+                status_emoji = get_status_emoji(status)
+                print(f"   {status_emoji} {status:<15} : {count:,} ({percent:.1f}%)")
+        
+        # Top hébergeurs
+        if top_hosts:
+            print(f"\n🌐 TOP HÉBERGEURS")
+            for host, count in top_hosts:
+                percent = (count / total_details * 100) if total_details > 0 else 0
+                print(f"   🔗 {host:<15} : {count:,} ({percent:.1f}%)")
+        
+        # Plus gros torrents
+        if biggest_torrents:
+            print(f"\n🏆 TOP 5 PLUS GROS TORRENTS")
+            for i, (name, size, status) in enumerate(biggest_torrents, 1):
+                status_emoji = get_status_emoji(status)
+                truncated_name = (name[:45] + "...") if len(name) > 48 else name
+                print(f"   {i}. {status_emoji} {format_size(size)} - {truncated_name}")
+        
+        # Recommandations
+        print(f"\n💡 RECOMMANDATIONS")
+        if missing_details > 0:
+            print(f"   🔧 Exécuter: python src/main.py --sync-smart")
+            print(f"      (pour récupérer {missing_details:,} détails manquants)")
+        
+        if error_count > 0:
+            print(f"   🔄 Exécuter: python src/main.py --details-only --status error")
+            print(f"      (pour retry {error_count:,} torrents en erreur)")
+        
+        if active_count > 0:
+            print(f"   ⬇️  {active_count:,} téléchargements en cours")
+            print(f"      (utilisez --sync-smart pour les suivre)")
+        
+        if missing_details == 0 and error_count == 0:
+            print(f"   ✅ Votre base est complète et à jour !")
+        
+        print("\n" + "="*60)
 
 def sync_details_only(token, status_filter=None):
     """Synchronise uniquement les détails des torrents existants"""
@@ -632,12 +766,164 @@ def sync_torrents_only(token):
     else:
         logging.info("ℹ️  Aucun torrent trouvé ou synchronisé")
 
+def format_size(bytes_size):
+    """Convertit les bytes en format lisible"""
+    if not bytes_size or bytes_size == 0:
+        return "0 B"
+    
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.1f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.1f} EB"
+
+def get_status_emoji(status):
+    """Retourne un emoji selon le statut"""
+    emoji_map = {
+        'downloaded': '✅',
+        'downloading': '⬇️',
+        'queued': '⏳',
+        'error': '❌',
+        'waiting_files_selection': '📋',
+        'magnet_error': '🧲',
+        'virus': '🦠',
+        'dead': '💀',
+        'compressing': '📦',
+        'uploading': '⬆️'
+    }
+    return emoji_map.get(status, '❓')
+
+def show_stats_compact():
+    """Version compacte des statistiques pour usage fréquent"""
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        
+        c.execute("SELECT COUNT(*) FROM torrents")
+        total = c.fetchone()[0]
+        
+        c.execute("SELECT COUNT(*) FROM torrent_details")
+        details = c.fetchone()[0]
+        
+        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloading'")
+        downloading = c.fetchone()[0] or 0
+        
+        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'error'")
+        errors = c.fetchone()[0] or 0
+        
+        coverage = (details / total * 100) if total > 0 else 0
+        
+        print(f"📊 {total:,} torrents | {details:,} détails ({coverage:.1f}%) | "
+              f"⬇️ {downloading} en cours | ❌ {errors} erreurs")
+
+def analyze_error_type(error_msg, status):
+    """Analyse le type d'erreur basé sur le message"""
+    if not error_msg:
+        return "❓ Erreur inconnue (pas de message)"
+    
+    error_lower = error_msg.lower()
+    
+    if "timeout" in error_lower or "time out" in error_lower:
+        return "⏱️ Timeout réseau (temporaire)"
+    elif "404" in error_lower or "not found" in error_lower:
+        return "🔍 Torrent introuvable (supprimé de RD)"
+    elif "403" in error_lower or "forbidden" in error_lower:
+        return "🚫 Accès refusé (problème d'autorisation)"
+    elif "500" in error_lower or "502" in error_lower or "503" in error_lower:
+        return "🖥️ Erreur serveur Real-Debrid (temporaire)"
+    elif "quota" in error_lower or "limit" in error_lower:
+        return "📊 Quota API dépassé (temporaire)"
+    elif "connection" in error_lower:
+        return "🌐 Problème de connexion (temporaire)"
+    elif "json" in error_lower or "parse" in error_lower:
+        return "📋 Données malformées (temporaire)"
+    else:
+        return f"❓ Erreur spécifique : {error_msg[:50]}..."
+
+def get_error_suggestion(error_msg, status):
+    """Propose une solution basée sur le type d'erreur"""
+    if not error_msg:
+        return "🔄 Retry avec --sync-smart"
+    
+    error_lower = error_msg.lower()
+    
+    if "timeout" in error_lower or "connection" in error_lower:
+        return "🔄 Retry automatique recommandé (erreur réseau temporaire)"
+    elif "404" in error_lower or "not found" in error_lower:
+        return "🗑️ Torrent probablement supprimé - considérer suppression de la base"
+    elif "403" in error_lower:
+        return "🔑 Vérifier la validité du token Real-Debrid"
+    elif "500" in error_lower or "502" in error_lower:
+        return "⏳ Attendre et retry plus tard (problème serveur RD)"
+    elif "quota" in error_lower:
+        return "⏰ Attendre la réinitialisation du quota (1 heure max)"
+    else:
+        return "🔄 Retry avec --sync-smart ou --details-only --status error"
+
+def diagnose_errors():
+    """Diagnostique détaillé des torrents en erreur"""
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        
+        # Récupérer tous les torrents en erreur avec leurs détails
+        c.execute("""
+            SELECT td.id, td.name, td.status, td.error, td.progress, 
+                   t.filename, t.added_on, t.bytes
+            FROM torrent_details td
+            LEFT JOIN torrents t ON td.id = t.id
+            WHERE td.status = 'error' OR td.error IS NOT NULL
+            ORDER BY t.added_on DESC
+        """)
+        
+        errors = c.fetchall()
+        
+        if not errors:
+            print("✅ Aucun torrent en erreur trouvé !")
+            return
+        
+        print(f"\n🔍 DIAGNOSTIC DES ERREURS ({len(errors)} torrents)")
+        print("="*80)
+        
+        for i, (torrent_id, name, status, error, progress, filename, added_on, bytes_size) in enumerate(errors, 1):
+            print(f"\n❌ ERREUR #{i}")
+            print(f"   🆔 ID             : {torrent_id}")
+            print(f"   📁 Nom            : {name or filename or 'N/A'}")
+            print(f"   📊 Statut         : {status}")
+            print(f"   ⚠️  Message d'erreur: {error or 'Aucun message spécifique'}")
+            print(f"   📈 Progression    : {progress or 0}%")
+            print(f"   📅 Ajouté le      : {added_on}")
+            print(f"   💾 Taille         : {format_size(bytes_size) if bytes_size else 'N/A'}")
+            
+            # Analyse du type d'erreur
+            error_type = analyze_error_type(error, status)
+            print(f"   🔬 Type d'erreur  : {error_type}")
+            
+            # Suggestion de correction
+            suggestion = get_error_suggestion(error, status)
+            print(f"   💡 Suggestion     : {suggestion}")
+            print("-" * 80)
+        
+        # Résumé des types d'erreurs
+        print(f"\n📊 RÉSUMÉ DES TYPES D'ERREURS")
+        error_types = {}
+        for _, _, _, error, _, _, _, _ in errors:
+            error_type = analyze_error_type(error, None)
+            error_types[error_type] = error_types.get(error_type, 0) + 1
+        
+        for error_type, count in sorted(error_types.items(), key=lambda x: x[1], reverse=True):
+            print(f"   • {error_type} : {count}")
+        
+        print(f"\n💡 ACTIONS RECOMMANDÉES :")
+        print(f"   🔄 Retry automatique    : python src/main.py --sync-smart")
+        print(f"   🎯 Retry forcé          : python src/main.py --details-only --status error")
+        print(f"   📊 Vérifier l'état      : python src/main.py --stats")
+
 def main():
     parser = argparse.ArgumentParser(description="Redriva - Sync Real-Debrid vers SQLite")
     parser.add_argument('--sync-all', action='store_true', help="Synchroniser tous les torrents")
     parser.add_argument('--details-only', action='store_true', help="Synchroniser uniquement les détails des torrents existants")
     parser.add_argument('--status', help="Filtrer par status (downloaded, error, etc.)")
     parser.add_argument('--stats', action='store_true', help="Afficher les statistiques de la base")
+    parser.add_argument('--compact', action='store_true', help="Affichage compact des statistiques")
     parser.add_argument('--clear', action='store_true', help="Vider complètement la base de données")
     
     # === NOUVELLES OPTIONS OPTIMISÉES ===
@@ -645,6 +931,7 @@ def main():
     parser.add_argument('--sync-smart', action='store_true', help="🧠 Synchronisation intelligente (seulement les changements)")
     parser.add_argument('--resume', action='store_true', help="⏮️  Reprendre une synchronisation interrompue")
     parser.add_argument('--torrents-only', action='store_true', help="📋 Synchroniser uniquement les torrents de base (sans détails)")
+    parser.add_argument('--diagnose-errors', action='store_true', help="🔍 Diagnostique détaillé des torrents en erreur")
     
     args = parser.parse_args()
 
@@ -660,9 +947,14 @@ def main():
             else:
                 print("❌ Opération annulée.")
         elif args.stats:
-            show_stats()
+            if args.compact:
+                show_stats_compact()
+            else:
+                show_stats()
         elif args.torrents_only:
             sync_torrents_only(token)   # NOUVELLE OPTION
+        elif args.diagnose_errors:
+            diagnose_errors()  # DIAGNOSTIC DES ERREURS
         elif args.sync_fast:
             sync_all_v2(token)  # NOUVELLE VERSION RAPIDE
         elif args.sync_smart:

@@ -115,12 +115,14 @@ python src/main.py --sync-smart --skip-error-retry
 ```
 
 **Que fait sync-smart exactement :**
-- ✅ **Détecte les nouveaux torrents** ajoutés à Real-Debrid
-- ✅ **Identifie les changements de statut** (downloading → downloaded, etc.)
-- ✅ **Met à jour les téléchargements actifs** (en cours, en attente)
-- ✅ **Récupère les détails manquants** des torrents sans informations complètes
-- ✅ **Retry intelligent des erreurs** pour les torrents qui étaient en erreur
-- ✅ **Ordre de priorité** : nouveaux → changements → actifs → retry → manquants
+- ✅ **Analyse pré-synchronisation** : Détecte précisément les changements avant de commencer
+- ✅ **Nouveaux torrents** : Identifie les torrents ajoutés sans détails
+- ✅ **Téléchargements actifs** : Met à jour les torrents en cours (downloading, queued)
+- ✅ **Retry intelligent** : Retente automatiquement les torrents en erreur
+- ✅ **Torrents anciens** : Rafraîchit les données de plus de 7 jours
+- ✅ **Priorité optimisée** : Traite d'abord les plus importants
+- ✅ **Statistiques temps réel** : Affiche vitesse, ETA et progression
+- ✅ **Résumé post-sync** : Analyse complète des résultats avec recommandations
 
 ### Reprendre une synchronisation ⏮️
 ```bash
@@ -140,11 +142,57 @@ python src/main.py --details-only --status downloaded
 python src/main.py --details-only --status error
 ```
 
-### Statistiques
+### Diagnostic des erreurs 🔍
+```bash
+python src/main.py --diagnose-errors
+```
+Diagnostique détaillé des torrents en erreur avec :
+- **Informations complètes** : ID, nom, statut, message d'erreur, progression
+- **Analyse automatique** : Type d'erreur (timeout, 404, quota, etc.)
+- **Suggestions ciblées** : Actions recommandées selon le type d'erreur
+- **Résumé par type** : Répartition des erreurs par catégorie
+- **Actions correctives** : Commandes exactes pour résoudre les problèmes
+
+**Exemple de sortie :**
+```
+🔍 DIAGNOSTIC DES ERREURS (2 torrents)
+
+❌ ERREUR #1
+   🆔 ID             : 6EFUCLXXXPINY
+   📁 Nom            : Mr.XXX.20XX.FRENCH.BDRip.x264-UTT.mkv
+   📊 Statut         : error
+   ⚠️  Message d'erreur: Timeout after 30s
+   🔬 Type d'erreur  : ⏱️ Timeout réseau (temporaire)
+   💡 Suggestion     : 🔄 Retry automatique recommandé
+
+📊 RÉSUMÉ DES TYPES D'ERREURS
+   • ⏱️ Timeout réseau (temporaire) : 1
+   • 🔍 Torrent introuvable (supprimé de RD) : 1
+
+💡 ACTIONS RECOMMANDÉES :
+   🔄 Retry automatique    : python src/main.py --sync-smart
+   🎯 Retry forcé          : python src/main.py --details-only --status error
+```
+
+### Statistiques détaillées 📊
 ```bash
 python src/main.py --stats
 ```
-Affiche un résumé des données en base.
+Affiche des statistiques complètes et détaillées de votre collection :
+- **Vue d'ensemble** : total, couverture, détails manquants
+- **Volumes de données** : taille totale, moyenne, min/max
+- **Activité récente** : torrents des dernières 24h et 7 jours
+- **État des téléchargements** : progression, actifs, erreurs
+- **Répartition par statut** : avec pourcentages et emojis
+- **Top hébergeurs** : les plus utilisés
+- **Plus gros torrents** : top 5 avec tailles
+- **Recommandations** : actions suggérées automatiquement
+
+**Version compacte :**
+```bash
+python src/main.py --stats --compact
+```
+Affichage sur une ligne : `📊 4,233 torrents | 4,232 détails (100.0%) | ⬇️ 0 en cours | ❌ 2 erreurs`
 
 ### Vider la base de données
 ```bash
@@ -176,44 +224,49 @@ Supprime toutes les données de la base (demande confirmation).
 
 ## 🔧 Fonctionnalités
 
-- ✅ **Sync asynchrone** : Récupération rapide avec contrôle de concurrence
-- ✅ **Gestion des quotas** : Respect automatique des limites API
-- ✅ **Retry intelligent** : Backoff exponentiel en cas d'erreur
-- ✅ **Interruption propre** : Support CTRL+C sans corruption
-- ✅ **Configuration flexible** : Variables d'environnement
-- ✅ **Logging détaillé** : Suivi en temps réel des opérations
-- ✅ **Sync rapide** : Contrôle dynamique de concurrence (nouveau)
-- ✅ **Sync intelligente** : Seulement les changements (nouveau)
-- ✅ **Reprise automatique** : Continue après interruption (nouveau)
+- ✅ **Synchronisation asynchrone** : Récupération rapide avec contrôle de concurrence
+- ✅ **Contrôle dynamique** : Ajustement automatique de la concurrence selon les performances
+- ✅ **Gestion intelligente des quotas** : Respect automatique des limites API avec pauses adaptatives
+- ✅ **Système de retry avancé** : Backoff exponentiel en cas d'erreur avec récupération automatique
+- ✅ **Interruption propre** : Support CTRL+C sans corruption de données
+- ✅ **Configuration flexible** : Variables d'environnement et fichiers .env
+- ✅ **Logging détaillé** : Suivi en temps réel avec statistiques de performance
+- ✅ **Reprise automatique** : Continue les synchronisations interrompues
+- ✅ **Synchronisation intelligente** : Détecte et synchronise uniquement les changements
+- ✅ **Statistiques enrichies** : Analyse complète avec recommandations automatiques
+- ✅ **Sauvegarde progressive** : Protection contre les interruptions lors des gros sync
+- ✅ **Pool de connexions optimisé** : Performance maximale avec gestion des timeouts
 
 ## ⚡ Performances
 
-### Comparaison des vitesses (testé sur 3883 torrents)
+### Comparaison des vitesses (testé sur 4,233 torrents)
 
 | Mode | Temps | Vitesse | Usage recommandé |
 |------|-------|---------|------------------|
-| `--sync-all` (classique) | 4-6 heures | 0.2-0.3/s | Version stable de référence |
-| `--sync-fast` 🚀 | **7.3 minutes** | **8.9/s** | Synchronisation complète rapide |
-| `--sync-smart` 🧠 | 1-3 minutes | 15-30/s | Mises à jour quotidiennes |
-| `--torrents-only` 📋 | 30-60 secondes | 50-100/s | Vue d'ensemble ultra-rapide |
-| `--resume` ⏮️ | Variable | 8.9/s | Reprise après interruption |
+| `--sync-all` (classique) | 4-6 heures | 0.2-0.3/s | Première synchronisation complète |
+| `--sync-fast` 🚀 | **7-10 minutes** | **8-12/s** | Synchronisation complète optimisée |
+| `--sync-smart` 🧠 | **30s-2 minutes** | **15-50/s** | Mises à jour quotidiennes (recommandé) |
+| `--torrents-only` 📋 | **10-30 secondes** | **50-200/s** | Vue d'ensemble ultra-rapide |
+| `--resume` ⏮️ | Variable | 8-12/s | Reprise après interruption |
+| `--stats` 📊 | **<1 seconde** | Instantané | Monitoring et analyse |
+| `--stats --compact` | **<1 seconde** | Instantané | Check rapide |
 
-**Workflow recommandé avec les options avancées**
+**Workflow recommandé avec analyse intelligente**
 
 ```bash
-# 1. Premier sync complet (une fois) - 7 minutes
+# 1. Premier sync complet (une fois) - 7-10 minutes
 python src/main.py --sync-fast
 
-# 2. Vérifier ce qui changerait avant de synchroniser
-python src/main.py --sync-smart --dry-run --verbose
+# 2. Check rapide quotidien - <1 seconde  
+python src/main.py --stats --compact
 
-# 3. Mises à jour quotidiennes - 1-2 minutes  
+# 3. Mises à jour intelligentes - 30s-2 minutes  
 python src/main.py --sync-smart
 
-# 4. Sync ultra-rapide (seulement les changements de statut)
-python src/main.py --sync-smart --status-changes-only
+# 4. Analyse détaillée si nécessaire
+python src/main.py --stats
 
-# 5. Vue d'ensemble rapide - 30 secondes
+# 5. Vue d'ensemble rapide - 10-30 secondes
 python src/main.py --torrents-only
 
 # 6. Si interruption pendant un gros sync
@@ -223,18 +276,93 @@ python src/main.py --resume
 **Exemples d'usage spécialisés :**
 
 ```bash
-# Sync avec informations détaillées
-python src/main.py --sync-smart --verbose
+# Monitoring rapide (idéal pour scripts/cron)
+python src/main.py --stats --compact
 
-# Sync sans retry des erreurs (plus rapide)  
-python src/main.py --sync-smart --skip-error-retry
+# Analyse complète avec recommandations
+python src/main.py --stats
 
-# Voir ce qui serait mis à jour sans le faire
-python src/main.py --sync-smart --dry-run
+# Diagnostic détaillé des problèmes
+python src/main.py --diagnose-errors
 
-# Sync incluant les téléchargements actifs
-python src/main.py --sync-smart --include-active-downloads
+# Sync intelligent avec détection des changements
+python src/main.py --sync-smart
+
+# Retry des torrents en erreur uniquement
+python src/main.py --details-only --status error
+
+# Vérification d'un statut spécifique  
+python src/main.py --details-only --status downloading
 ```
+
+## 📊 Analyse et Monitoring
+
+### Statistiques complètes
+```bash
+python src/main.py --stats
+```
+
+**Exemple de sortie :**
+```
+============================================================
+📊 STATISTIQUES COMPLÈTES REDRIVA
+============================================================
+
+🗂️  VUE D'ENSEMBLE
+   📁 Total torrents     : 4,233
+   📋 Détails disponibles: 4,232
+   📊 Couverture         : 100.0%
+   ❌ Détails manquants  : 1
+
+💾 VOLUMES DE DONNÉES
+   📦 Volume total       : 15.2 TB
+   📊 Taille moyenne     : 3.7 GB
+   🔻 Plus petit         : 112.6 MB
+   🔺 Plus gros          : 45.5 GB
+
+⏰ ACTIVITÉ RÉCENTE
+   🆕 Dernières 24h      : 35 torrents
+   📅 Derniers 7 jours   : 1,156 torrents
+
+🔄 ÉTAT DES TÉLÉCHARGEMENTS
+   ✅ Progression moyenne: 100.0%
+   ⬇️  Téléchargements    : 0
+   ❌ Erreurs            : 2
+
+📈 RÉPARTITION PAR STATUT
+   ✅ downloaded      : 4,229 (99.9%)
+   ❌ error           : 2 (0.0%)
+   ⬇️ downloading     : 2 (0.0%)
+
+🌐 TOP HÉBERGEURS
+   🔗 real-debrid.com : 4,232 (100.0%)
+
+🏆 TOP 5 PLUS GROS TORRENTS
+   1. ✅ 45.5 GB - Foundation.S01.MULTi.1080p.ATVP.WEB-DL...
+   2. ✅ 44.1 GB - Foundation.S02.MULTI.1080p.WEB.H264...
+
+💡 RECOMMANDATIONS
+   🔧 Exécuter: python src/main.py --sync-smart
+      (pour récupérer 1 détails manquants)
+   🔄 Exécuter: python src/main.py --details-only --status error
+      (pour retry 2 torrents en erreur)
+============================================================
+```
+
+### Monitoring rapide
+```bash
+python src/main.py --stats --compact
+# Sortie : 📊 4,233 torrents | 4,232 détails (100.0%) | ⬇️ 0 en cours | ❌ 2 erreurs
+```
+
+### Informations fournies
+- **Couverture complète** des données avec pourcentages
+- **Volumes détaillés** : espace utilisé, moyennes, extrêmes
+- **Activité temporelle** : ajouts récents (24h, 7j)
+- **État en temps réel** : téléchargements actifs, erreurs
+- **Analyse des hébergeurs** : répartition par service
+- **Top torrents** : les plus volumineux avec statuts
+- **Recommandations automatiques** : actions suggérées selon l'état
 
 ## 📊 Exemples de requêtes SQL
 
@@ -275,14 +403,35 @@ Le système de retry automatique gère les coupures temporaires.
 
 ```
 Redriva/
-├── README.md
+├── README.md                    # Documentation complète
+├── LICENSE                      # Licence MIT
+├── SECURITY.md                  # Politique de sécurité
+├── CONTRIBUTING.md              # Guide de contribution
+├── requirements.txt             # Dépendances Python
+├── setup.sh                     # Script de configuration automatique
+├── .env.example                 # Modèle de configuration
+├── .gitignore                   # Protection fichiers sensibles
 ├── config/
-│   └── rd_token.conf          # Token Real-Debrid
+│   ├── rd_token.conf           # Token Real-Debrid (ignoré par Git)
+│   └── rd_token.conf.example   # Modèle de token
 ├── data/
-│   └── redriva.db            # Base SQLite (auto-générée)
+│   ├── redriva.db              # Base SQLite (auto-générée)
+│   └── sync_progress.json      # Progression des sync (temporaire)
 └── src/
-    └── main.py               # Script principal
+    ├── main.py                 # Script principal avec toutes les fonctionnalités
+    └── main.py.backup          # Sauvegarde automatique
 ```
+
+### Fonctionnalités du script principal
+
+- **Synchronisation** : `--sync-all`, `--sync-fast`, `--sync-smart`
+- **Monitoring** : `--stats`, `--stats --compact`
+- **Diagnostic** : `--diagnose-errors` (nouveau)
+- **Maintenance** : `--resume`, `--details-only`, `--clear`
+- **Vues spécialisées** : `--torrents-only`
+- **Configuration** : Support `.env`, variables d'environnement
+- **Sécurité** : Protection des tokens, gestion des erreurs
+- **Performance** : Contrôle dynamique, pools de connexions optimisés
 
 ## 🤝 Contribution
 
