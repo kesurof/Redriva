@@ -1117,12 +1117,12 @@ def display_final_summary():
             c.execute("SELECT COUNT(*) FROM torrent_details")
             total_details = c.fetchone()[0]
             
-            # Répartition par statut (top 5)
+            # Répartition par statut (top 5) - CORRIGER: utiliser seulement torrent_details
             c.execute("""
-                SELECT COALESCE(td.status, t.status, 'inconnu') as status, COUNT(*) as count
-                FROM torrents t
-                LEFT JOIN torrent_details td ON t.id = td.id
-                GROUP BY COALESCE(td.status, t.status)
+                SELECT td.status, COUNT(*) as count
+                FROM torrent_details td
+                WHERE td.status IS NOT NULL
+                GROUP BY td.status
                 ORDER BY count DESC
                 LIMIT 5
             """)
