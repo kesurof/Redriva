@@ -26,6 +26,9 @@ def load_env_file():
 # Chargement des variables d'environnement depuis .env
 load_env_file()
 
+# Chargement des variables d'environnement depuis .env
+load_env_file()
+
 # Configuration du logging
 logging.basicConfig(
     level=logging.INFO,
@@ -370,47 +373,88 @@ def get_torrents_needing_update():
         ''')
         return [row[0] for row in c.fetchall()]
 
-def get_smart_update_summary():
-    """Analyse intelligente des torrents nécessitant une mise à jour"""
+async def detect_changes_smart(token):
+    """Détecte les changements précis nécessitant une mise à jour"""
+    changes = {
+        'new_torrents': [],
+        'status_changes': [],
+        'missing_details': [],
+        'active_downloads': [],
+        'error_retry': []
+    }
+    
+    # Récupérer la liste basique des torrents RD
+    logging.info("🔍 Analyse des changements en cours...")
+    rd_torrents = await fetch_torrents_list(token)
+    
+    # Obtenir les torrents locaux
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
-        
-        # Nouveaux torrents (pas de détails)
         c.execute('''
-            SELECT COUNT(*) FROM torrents t
+            SELECT t.id, t.status as t_status, t.filename, 
+                   td.status as td_status, td.progress, td.error
+            FROM torrents t
             LEFT JOIN torrent_details td ON t.id = td.id
-            WHERE td.id IS NULL
         ''')
-        new_count = c.fetchone()[0]
+        local_torrents = {row[0]: {
+            'id': row[0],
+            'status': row[1],
+            'filename': row[2],
+            'detail_status': row[3],
+            'progress': row[4],
+            'error': row[5],
+            'has_details': row[3] is not None
+        } for row in c.fetchall()}
+    
+    rd_ids = set()
+    
+    # Analyser chaque torrent RD
+    for rd_torrent in rd_torrents:
+        rd_id = rd_torrent['id']
+        rd_ids.add(rd_id)
+        rd_status = rd_torrent.get('status', '')
         
-        # Téléchargements actifs
-        c.execute('''
-            SELECT COUNT(*) FROM torrent_details
-            WHERE status IN ('downloading', 'queued', 'waiting_files_selection')
-        ''')
-        active_count = c.fetchone()[0]
+        local = local_torrents.get(rd_id)
         
-        # Torrents en erreur (pour retry)
-        c.execute('''
-            SELECT COUNT(*) FROM torrent_details
-            WHERE status = 'error' OR error IS NOT NULL
-        ''')
-        error_count = c.fetchone()[0]
-        
-        # Torrents anciens (plus de 7 jours sans mise à jour)
-        c.execute('''
-            SELECT COUNT(*) FROM torrents t
-            LEFT JOIN torrent_details td ON t.id = td.id
-            WHERE datetime('now') - datetime(t.added_on) > 7
-        ''')
-        old_count = c.fetchone()[0]
-        
-        return {
-            'new_torrents': new_count,
-            'active_downloads': active_count,
-            'error_retry': error_count,
-            'old_updates': old_count
-        }
+        if not local:
+            # Nouveau torrent
+            changes['new_torrents'].append(rd_id)
+        elif not local['has_details']:
+            # Détails manquants
+            changes['missing_details'].append(rd_id)
+        elif local['detail_status'] != rd_status and rd_status:
+            # Changement de statut détecté
+            changes['status_changes'].append(rd_id)
+        elif rd_status in ['downloading', 'queued', 'waiting_files_selection']:
+            # Téléchargement actif
+            changes['active_downloads'].append(rd_id)
+        elif local['error'] and rd_status not in ['error', 'virus', 'dead']:
+            # Retry des erreurs si le statut RD n'est plus en erreur
+            changes['error_retry'].append(rd_id)
+    
+    # Vérifier les torrents supprimés de RD
+    local_ids = set(local_torrents.keys())
+    deleted_ids = local_ids - rd_ids
+    if deleted_ids:
+        logging.info(f"🗑️  {len(deleted_ids)} torrents supprimés de Real-Debrid détectés")
+    
+    return changes
+
+async def fetch_torrents_list(token):
+    """Récupère la liste basique des torrents depuis Real-Debrid"""
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(RD_API_URL, headers=headers) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    logging.error(f"Erreur API: {response.status}")
+                    return []
+        except Exception as e:
+            logging.error(f"Erreur lors de la récupération des torrents: {e}")
+            return []
 
 async def fetch_all_torrent_details_v2(token, torrent_ids, resumable=False):
     """Version optimisée de fetch_all_torrent_details"""
@@ -511,37 +555,100 @@ def sync_all_v2(token):
     processed = asyncio.run(fetch_all_torrent_details_v2(token, torrent_ids, resumable=True))
     logging.info(f"🎯 Synchronisation rapide terminée ! {processed} détails traités")
 
-def sync_smart(token):
+def sync_smart(token, args=None):
     """Synchronisation intelligente (seulement ce qui a changé)"""
     logging.info("🧠 Synchronisation intelligente démarrée...")
     
-    # Analyser les changements avant de commencer
-    summary = get_smart_update_summary()
+    # Détecter les changements avec la nouvelle fonction
+    changes = asyncio.run(detect_changes_smart(token))
     
-    # Afficher le résumé des changements détectés
-    logging.info("📊 Analyse des changements :")
-    if summary['new_torrents'] > 0:
-        logging.info(f"   🆕 Nouveaux torrents sans détails : {summary['new_torrents']}")
-    if summary['active_downloads'] > 0:
-        logging.info(f"   ⬇️  Téléchargements actifs : {summary['active_downloads']}")
-    if summary['error_retry'] > 0:
-        logging.info(f"   🔄 Torrents en erreur (retry) : {summary['error_retry']}")
-    if summary['old_updates'] > 0:
-        logging.info(f"   📅 Torrents anciens (>7j) : {summary['old_updates']}")
+    # Appliquer les filtres selon les options
+    if args:
+        if args.skip_error_retry:
+            changes['error_retry'] = []
+            
+        if not args.include_active_downloads:
+            changes['active_downloads'] = []
+            
+        if args.status_changes_only:
+            # Garder seulement les changements de statut et nouveaux torrents
+            changes = {
+                'new_torrents': changes['new_torrents'],
+                'status_changes': changes['status_changes'],
+                'missing_details': [],
+                'active_downloads': [],
+                'error_retry': []
+            }
     
-    # Obtenir la liste des torrents à mettre à jour
-    torrent_ids = get_torrents_needing_update()
+    # Calculer le total des changements
+    total_changes = sum(len(changes[key]) for key in changes)
     
-    if not torrent_ids:
+    if total_changes == 0:
         logging.info("✅ Rien à synchroniser, tout est à jour !")
         return
     
-    total_changes = len(torrent_ids)
-    logging.info(f"🎯 Total : {total_changes} torrents nécessitent une mise à jour")
+    # Mode dry-run : afficher ce qui serait fait sans le faire
+    if args and args.dry_run:
+        logging.info("🔍 Mode dry-run : aucune modification ne sera effectuée")
+        logging.info("   Les torrents suivants seraient mis à jour :")
+        
+        priority_order = [
+            ('new_torrents', '🆕'),
+            ('status_changes', '🔄'),
+            ('active_downloads', '⬇️'),
+            ('error_retry', '🔄'),
+            ('missing_details', '📝')
+        ]
+        
+        for key, emoji in priority_order:
+            if changes[key]:
+                logging.info(f"   {emoji} {key.replace('_', ' ').title()} : {len(changes[key])}")
+                if args.verbose:
+                    for tid in changes[key][:5]:  # Montrer les 5 premiers
+                        logging.info(f"      • {tid}")
+                    if len(changes[key]) > 5:
+                        logging.info(f"      • ... et {len(changes[key]) - 5} autres")
+        return
     
-    # Traiter les mises à jour avec mesure du temps
+    # Afficher le résumé des changements détectés
+    logging.info("📊 Changements détectés :")
+    if changes['new_torrents']:
+        logging.info(f"   � Nouveaux torrents : {len(changes['new_torrents'])}")
+    if changes['status_changes']:
+        logging.info(f"   🔄 Changements de statut : {len(changes['status_changes'])}")
+    if changes['active_downloads']:
+        logging.info(f"   ⬇️  Téléchargements actifs : {len(changes['active_downloads'])}")
+    if changes['missing_details']:
+        logging.info(f"   📝 Détails manquants : {len(changes['missing_details'])}")
+    if changes['error_retry']:
+        logging.info(f"   🔄 Retry d'erreurs : {len(changes['error_retry'])}")
+    
+    logging.info(f"🎯 Total : {total_changes} torrents à mettre à jour")
+    
+    # Rassembler tous les IDs à traiter par ordre de priorité
+    priority_order = [
+        'new_torrents',        # Nouveaux = priorité max
+        'status_changes',      # Changements de statut
+        'active_downloads',    # Downloads en cours
+        'error_retry',         # Retry des erreurs
+        'missing_details'      # Détails manquants
+    ]
+    
+    torrent_ids = []
+    for priority in priority_order:
+        torrent_ids.extend(changes[priority])
+    
+    # Éviter les doublons tout en gardant l'ordre de priorité
+    seen = set()
+    unique_ids = []
+    for tid in torrent_ids:
+        if tid not in seen:
+            seen.add(tid)
+            unique_ids.append(tid)
+    
+    # Traiter les mises à jour
     start_time = time.time()
-    processed = asyncio.run(fetch_all_torrent_details_v2(token, torrent_ids))
+    processed = asyncio.run(fetch_all_torrent_details_v2(token, unique_ids))
     end_time = time.time()
     
     # Statistiques finales
@@ -551,10 +658,10 @@ def sync_smart(token):
     logging.info(f"✅ Synchronisation intelligente terminée !")
     logging.info(f"   📊 {processed} détails mis à jour en {duration:.1f}s ({rate:.1f}/s)")
     
-    # Afficher un résumé final
-    display_final_summary()
+    # Afficher un résumé des résultats
+    display_sync_summary()
 
-def display_final_summary():
+def display_sync_summary():
     """Affiche un résumé des données synchronisées"""
     try:
         with sqlite3.connect(DB_PATH) as conn:
@@ -567,14 +674,13 @@ def display_final_summary():
             c.execute("SELECT COUNT(*) FROM torrent_details")
             total_details = c.fetchone()[0]
             
-            # Répartition par statut (top 5)
+            # Répartition par statut
             c.execute("""
-                SELECT COALESCE(td.status, t.status, 'inconnu') as status, COUNT(*) as count
+                SELECT COALESCE(td.status, t.status) as status, COUNT(*) as count
                 FROM torrents t
                 LEFT JOIN torrent_details td ON t.id = td.id
                 GROUP BY COALESCE(td.status, t.status)
                 ORDER BY count DESC
-                LIMIT 5
             """)
             status_counts = c.fetchall()
             
@@ -585,16 +691,15 @@ def display_final_summary():
             """)
             recent_count = c.fetchone()[0]
             
-            print(f"\n📊 Résumé de la base de données :")
+            print(f"\n📊 Résumé de la synchronisation :")
             print(f"   📂 Total torrents : {total_torrents}")
-            print(f"   📝 Avec détails : {total_details} ({100*total_details/total_torrents:.1f}%)")
-            print(f"   🆕 Ajoutés récemment (24h) : {recent_count}")
+            print(f"   📝 Avec détails : {total_details}")
+            print(f"   🆕 Récents (24h) : {recent_count}")
             
             if status_counts:
-                print(f"\n📈 Top 5 des statuts :")
-                for status, count in status_counts:
-                    percentage = 100 * count / total_torrents if total_torrents > 0 else 0
-                    print(f"   • {status} : {count} ({percentage:.1f}%)")
+                print(f"\n📈 Répartition par statut :")
+                for status, count in status_counts[:5]:  # Top 5
+                    print(f"   {status or 'inconnu'} : {count}")
                     
     except Exception as e:
         logging.warning(f"Impossible d'afficher le résumé : {e}")
@@ -646,6 +751,13 @@ def main():
     parser.add_argument('--resume', action='store_true', help="⏮️  Reprendre une synchronisation interrompue")
     parser.add_argument('--torrents-only', action='store_true', help="📋 Synchroniser uniquement les torrents de base (sans détails)")
     
+    # === OPTIONS POUR SYNC-SMART ===
+    parser.add_argument('--include-active-downloads', action='store_true', help="Inclure les téléchargements actifs dans sync-smart")
+    parser.add_argument('--skip-error-retry', action='store_true', help="Ignorer les retry d'erreurs dans sync-smart")
+    parser.add_argument('--status-changes-only', action='store_true', help="Sync-smart : seulement les changements de statut")
+    parser.add_argument('--dry-run', action='store_true', help="Afficher ce qui serait synchronisé sans le faire")
+    parser.add_argument('--verbose', action='store_true', help="Affichage détaillé des opérations")
+    
     args = parser.parse_args()
 
     token = load_token()
@@ -666,7 +778,7 @@ def main():
         elif args.sync_fast:
             sync_all_v2(token)  # NOUVELLE VERSION RAPIDE
         elif args.sync_smart:
-            sync_smart(token)   # NOUVELLE VERSION INTELLIGENTE
+            sync_smart(token, args)   # NOUVELLE VERSION INTELLIGENTE
         elif args.resume:
             sync_resume(token)  # NOUVELLE VERSION RESUMABLE
         elif args.details_only:

@@ -96,6 +96,32 @@ python src/main.py --sync-smart
 ```
 Ne synchronise que les torrents modifiés ou sans détails (très rapide pour les mises à jour).
 
+**Options avancées :**
+```bash
+# Afficher ce qui serait synchronisé sans le faire
+python src/main.py --sync-smart --dry-run
+
+# Mode détaillé avec plus d'informations
+python src/main.py --sync-smart --verbose
+
+# Seulement les changements de statut (plus rapide)
+python src/main.py --sync-smart --status-changes-only
+
+# Inclure les téléchargements actifs (par défaut exclus)
+python src/main.py --sync-smart --include-active-downloads
+
+# Ignorer les tentatives de retry d'erreurs
+python src/main.py --sync-smart --skip-error-retry
+```
+
+**Que fait sync-smart exactement :**
+- ✅ **Détecte les nouveaux torrents** ajoutés à Real-Debrid
+- ✅ **Identifie les changements de statut** (downloading → downloaded, etc.)
+- ✅ **Met à jour les téléchargements actifs** (en cours, en attente)
+- ✅ **Récupère les détails manquants** des torrents sans informations complètes
+- ✅ **Retry intelligent des erreurs** pour les torrents qui étaient en erreur
+- ✅ **Ordre de priorité** : nouveaux → changements → actifs → retry → manquants
+
 ### Reprendre une synchronisation ⏮️
 ```bash
 python src/main.py --resume
@@ -172,20 +198,42 @@ Supprime toutes les données de la base (demande confirmation).
 | `--torrents-only` 📋 | 30-60 secondes | 50-100/s | Vue d'ensemble ultra-rapide |
 | `--resume` ⏮️ | Variable | 8.9/s | Reprise après interruption |
 
-### Workflow recommandé
+**Workflow recommandé avec les options avancées**
 
 ```bash
 # 1. Premier sync complet (une fois) - 7 minutes
 python src/main.py --sync-fast
 
-# 2. Mises à jour quotidiennes - 1-2 minutes  
+# 2. Vérifier ce qui changerait avant de synchroniser
+python src/main.py --sync-smart --dry-run --verbose
+
+# 3. Mises à jour quotidiennes - 1-2 minutes  
 python src/main.py --sync-smart
 
-# 3. Vue d'ensemble rapide - 30 secondes
+# 4. Sync ultra-rapide (seulement les changements de statut)
+python src/main.py --sync-smart --status-changes-only
+
+# 5. Vue d'ensemble rapide - 30 secondes
 python src/main.py --torrents-only
 
-# 4. Si interruption pendant un gros sync
+# 6. Si interruption pendant un gros sync
 python src/main.py --resume
+```
+
+**Exemples d'usage spécialisés :**
+
+```bash
+# Sync avec informations détaillées
+python src/main.py --sync-smart --verbose
+
+# Sync sans retry des erreurs (plus rapide)  
+python src/main.py --sync-smart --skip-error-retry
+
+# Voir ce qui serait mis à jour sans le faire
+python src/main.py --sync-smart --dry-run
+
+# Sync incluant les téléchargements actifs
+python src/main.py --sync-smart --include-active-downloads
 ```
 
 ## 📊 Exemples de requêtes SQL
