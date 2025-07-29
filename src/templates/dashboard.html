@@ -99,91 +99,94 @@
     </div>
 </div>
 
-<!-- Navigation rapide -->
-<div class="card">
-    <h2>🔍 Navigation rapide</h2>
-    <div class="quick-nav-grid">
-        <a href="/torrents" class="quick-nav-item primary">
-            <span class="nav-icon">📁</span>
-            <span class="nav-text">Tous les torrents</span>
-            <span class="nav-count">{{ stats.total_torrents|default(0) }}</span>
-        </a>
-        <a href="/torrents?status=error" class="quick-nav-item danger">
-            <span class="nav-icon">❌</span>
-            <span class="nav-text">En erreur</span>
-            <span class="nav-count">{{ stats.error_count|default(0) }}</span>
-        </a>
-        <a href="/torrents?status=downloading" class="quick-nav-item warning">
-            <span class="nav-icon">⬇️</span>
-            <span class="nav-text">En cours</span>
-            <span class="nav-count">{{ stats.active_count|default(0) }}</span>
-        </a>
-        <a href="/torrents?status=downloaded" class="quick-nav-item success">
-            <span class="nav-icon">✅</span>
-            <span class="nav-text">Téléchargés</span>
-        </a>
-    </div>
-</div>
-
-{% if stats.status_data %}
-<div class="card">
-    <h2>📈 Répartition par statut</h2>
-    <div class="status-distribution">
-        <table class="table modern-table">
-            <thead>
-                <tr>
-                    <th>Statut</th>
-                    <th>Nombre</th>
-                    <th>Pourcentage</th>
-                    <th>Visualisation</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for status, count in stats.status_data %}
-                <tr>
-                    <td class="status-cell">
-                        <span class="status-badge">{{ status }}</span>
-                    </td>
-                    <td class="count-cell">{{ count }}</td>
-                    <td class="percent-cell">{{ "%.1f"|format((count / stats.total_details * 100) if stats.total_details > 0 else 0) }}%</td>
-                    <td class="progress-cell">
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{ (count / stats.total_details * 100) if stats.total_details > 0 else 0 }}%"></div>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-<!-- Informations système -->
+<!-- Informations système enrichies -->
 <div class="card system-info">
     <h2>ℹ️ Informations système</h2>
     <div class="info-grid">
+        <!-- Base de données -->
         <div class="info-item">
-            <div class="info-icon">🆕</div>
+            <div class="info-icon">📁</div>
             <div class="info-content">
-                <strong>Torrents récents (24h)</strong>
-                <span>{{ stats.recent_24h|default(0) }}</span>
+                <strong>Base de données</strong>
+                <span>{{ stats.total_torrents|default(0) }} torrents</span>
             </div>
         </div>
+        
+        <!-- Couverture -->
+        <div class="info-item">
+            <div class="info-icon">📊</div>
+            <div class="info-content">
+                <strong>Couverture détails</strong>
+                <span>{{ "%.1f"|format((stats.total_details / stats.total_torrents * 100) if stats.total_torrents > 0 else 0) }}%</span>
+            </div>
+        </div>
+        
+        <!-- Volume total -->
         <div class="info-item">
             <div class="info-icon">💾</div>
             <div class="info-content">
-                <strong>Taille totale</strong>
+                <strong>Volume total</strong>
                 <span>{{ stats.total_size|default("N/A") }}</span>
             </div>
         </div>
+        
+        <!-- Taille moyenne -->
+        <div class="info-item">
+            <div class="info-icon">�</div>
+            <div class="info-content">
+                <strong>Taille moyenne</strong>
+                <span>{{ stats.avg_size|default("N/A") }}</span>
+            </div>
+        </div>
+        
+        <!-- Activité récente 24h -->
+        <div class="info-item">
+            <div class="info-icon">🆕</div>
+            <div class="info-content">
+                <strong>Nouveaux (24h)</strong>
+                <span>{{ stats.recent_24h|default(0) }}</span>
+            </div>
+        </div>
+        
+        <!-- Activité récente 7j -->
+        <div class="info-item">
+            <div class="info-icon">📅</div>
+            <div class="info-content">
+                <strong>Nouveaux (7j)</strong>
+                <span>{{ stats.recent_7d|default(0) }}</span>
+            </div>
+        </div>
+        
+        <!-- Progression moyenne -->
+        <div class="info-item">
+            <div class="info-icon">�</div>
+            <div class="info-content">
+                <strong>Progression moy.</strong>
+                <span>{{ "%.1f"|format(stats.avg_progress|default(0)) }}%</span>
+            </div>
+        </div>
+        
+        <!-- Statut des tâches -->
         <div class="info-item">
             <div class="info-icon">🕒</div>
             <div class="info-content">
-                <strong>Statut des tâches</strong>
+                <strong>Statut système</strong>
                 <span class="status-indicator {{ 'running' if task_status.running else 'ready' }}">
                     {{ 'En cours' if task_status.running else 'Prêt' }}
                 </span>
+            </div>
+        </div>
+        
+        <!-- Répartition rapide -->
+        <div class="info-item span-full">
+            <div class="info-icon">🔄</div>
+            <div class="info-content status-summary">
+                <strong>Répartition rapide</strong>
+                <div class="status-quick-view">
+                    <span class="status-pill success">✅ {{ stats.downloaded_count|default(0) }}</span>
+                    <span class="status-pill warning">⬇️ {{ stats.active_count|default(0) }}</span>
+                    <span class="status-pill danger">❌ {{ stats.error_count|default(0) }}</span>
+                </div>
             </div>
         </div>
     </div>
@@ -505,6 +508,49 @@
 .status-indicator.ready {
     background: #d4edda;
     color: #155724;
+}
+
+/* Styles pour le bloc informations système enrichi */
+.span-full {
+    grid-column: 1 / -1;
+}
+
+.status-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.status-quick-view {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.status-pill.success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-pill.warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-pill.danger {
+    background: #f8d7da;
+    color: #721c24;
 }
 
 .logs-card {

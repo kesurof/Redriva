@@ -246,19 +246,47 @@ def dashboard():
             c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ERROR_STATUSES)
             error_count = c.fetchone()[0] or 0
             
-            # Téléchargements actifs (utilisation des constantes)
+                    # Statistiques complémentaires
+        # Récupération de la taille moyenne et des activités récentes
+        c.execute("""
+            SELECT AVG(CAST(size AS REAL)), 
+                   SUM(CASE WHEN datetime(added) > datetime('now', '-7 days') THEN 1 ELSE 0 END)
+            FROM torrent_details WHERE size IS NOT NULL AND size != ''
+        """)
+        result = c.fetchone()
+        avg_size = result[0] if result and result[0] else 0
+        recent_7d = result[1] if result and result[1] else 0
+        
+        # Progression moyenne
+        c.execute("""
+            SELECT AVG(CAST(progress AS REAL))
+            FROM torrent_details 
+            WHERE progress IS NOT NULL AND progress != '' AND progress != 'N/A'
+        """)
+        avg_progress_result = c.fetchone()
+        avg_progress = avg_progress_result[0] if avg_progress_result and avg_progress_result[0] else 0
+        
+        # Compte des téléchargés
+        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
+        downloaded_count = c.fetchone()[0] or 0
+            # Compte des téléchargements actifs (status in ACTIVE_STATUSES)
+        if ACTIVE_STATUSES:
             placeholders = ','.join('?' * len(ACTIVE_STATUSES))
             c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ACTIVE_STATUSES)
             active_count = c.fetchone()[0] or 0
-            
+        
         stats = {
             'total_torrents': total_torrents,
             'total_details': total_details,
             'coverage': coverage,
             'recent_24h': recent_24h,
+            'recent_7d': recent_7d,
             'total_size': format_size(total_size),
+            'avg_size': format_size(avg_size) if avg_size > 0 else "N/A",
+            'avg_progress': avg_progress,
             'error_count': error_count,
-            'active_count': active_count,  # Renommé pour plus de clarté
+            'active_count': active_count,
+            'downloaded_count': downloaded_count,
             'status_data': status_data
         }
         

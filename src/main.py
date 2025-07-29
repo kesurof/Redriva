@@ -1183,7 +1183,7 @@ def show_stats():
         coverage_percent = (total_details / total_torrents * 100) if total_torrents > 0 else 0
         
         # === RÉPARTITION PAR STATUT ===
-        c.execute("SELECT status, COUNT(*) FROM torrents GROUP BY status ORDER BY COUNT(*) DESC")
+        c.execute("SELECT status, COUNT(*) FROM torrent_details WHERE status IS NOT NULL GROUP BY status ORDER BY COUNT(*) DESC")
         torrent_status = c.fetchall()
         
         c.execute("SELECT status, COUNT(*) FROM torrent_details GROUP BY status ORDER BY COUNT(*) DESC")
