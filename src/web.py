@@ -18,6 +18,7 @@ import logging
 import requests
 from io import StringIO
 import contextlib
+import urllib.parse
 
 # Import des fonctions existantes
 sys.path.append(os.path.dirname(__file__))
@@ -48,6 +49,15 @@ task_status = {
 
 # Fichier de persistance des logs
 LOGS_FILE = "data/webapp_logs.json"
+
+def format_download_link(direct_link):
+    """Transforme un lien direct en lien downloader Real-Debrid"""
+    if not direct_link or not direct_link.startswith('https://real-debrid.com/d/'):
+        return direct_link
+    
+    # URL encoder le lien complet
+    encoded_link = urllib.parse.quote(direct_link, safe='')
+    return f"https://real-debrid.com/downloader?links={encoded_link}"
 
 class LogCapture:
     """Capture les logs et print() des fonctions de synchronisation"""
@@ -547,11 +557,11 @@ def get_cached_torrent_data(torrent_id, error_msg=None, refreshed=True):
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             
-            # Informations de base
+            # Informations de base avec les liens de streaming
             c.execute("""
                 SELECT t.id, t.filename, t.status, t.bytes, t.added_on,
                        td.name, td.status, td.size, td.files_count, td.progress,
-                       td.links, td.hash, td.host, td.error, td.added
+                       td.links, td.streaming_links, td.hash, td.host, td.error, td.added
                 FROM torrents t
                 LEFT JOIN torrent_details td ON t.id = td.id
                 WHERE t.id = ?
@@ -561,6 +571,25 @@ def get_cached_torrent_data(torrent_id, error_msg=None, refreshed=True):
             
             if not torrent:
                 return jsonify({'success': False, 'error': 'Torrent non trouvé'}), 404
+
+        # Traitement des liens
+        raw_download_links = torrent[10].split(',') if torrent[10] else []
+        raw_streaming_links = torrent[11].split(',') if torrent[11] else []
+        
+        # Formatter les liens de téléchargement pour le downloader
+        formatted_links = []
+        for raw_link in raw_download_links:
+            if raw_link.strip():
+                download_link = format_download_link(raw_link.strip())
+                formatted_links.append(download_link)
+        
+        # Utiliser les vrais liens de streaming depuis la base de données
+        streaming_links = []
+        for raw_streaming_link in raw_streaming_links:
+            if raw_streaming_link.strip():
+                streaming_links.append(raw_streaming_link.strip())
+            else:
+                streaming_links.append(None)  # Pas de lien streaming pour ce fichier
 
         # Construire la réponse avec indicateur de fraîcheur
         torrent_data = {
@@ -576,11 +605,12 @@ def get_cached_torrent_data(torrent_id, error_msg=None, refreshed=True):
                 'size': torrent[7],
                 'files_count': torrent[8],
                 'progress': torrent[9],
-                'links': torrent[10].split(',') if torrent[10] else [],
-                'hash': torrent[11],
-                'host': torrent[12],
-                'error': torrent[13],
-                'added_detail': torrent[14],
+                'links': formatted_links,  # Liens formatés pour le downloader
+                'streaming_links': streaming_links,  # Vrais liens de streaming depuis l'API
+                'hash': torrent[12],
+                'host': torrent[13],
+                'error': torrent[14],
+                'added_detail': torrent[15],
                 'size_formatted': format_size(torrent[3]) if torrent[3] else format_size(torrent[7]) if torrent[7] else 'N/A',
                 'status_emoji': get_status_emoji(torrent[6] or torrent[2]),
                 'last_updated': datetime.now().strftime("%H:%M:%S") if refreshed else "Données en cache"

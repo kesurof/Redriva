@@ -248,9 +248,11 @@ def create_tables():
             files_count INTEGER,
             progress INTEGER,
             links TEXT,
+            streaming_links TEXT,
             hash TEXT,
             host TEXT,
             error TEXT,
+            added TEXT,
             FOREIGN KEY (id) REFERENCES torrents (id)
         )
     ''')
@@ -564,11 +566,39 @@ def upsert_torrent_detail(detail):
     if not detail or not detail.get('id'):
         return
         
+    # Extraire les liens de téléchargement et de streaming
+    download_links = []
+    streaming_links = []
+    
+    # Parcourir les fichiers du torrent
+    files = detail.get('files', [])
+    for file_info in files:
+        # Lien de téléchargement
+        download_link = file_info.get('link', '')
+        if download_link:
+            download_links.append(download_link)
+        
+        # Lien de streaming - plusieurs champs possibles selon l'API Real-Debrid
+        streaming_link = (
+            file_info.get('streamable_link') or 
+            file_info.get('streaming_link') or 
+            file_info.get('stream_link') or
+            file_info.get('alternative_link') or
+            ''
+        )
+        streaming_links.append(streaming_link)
+    
+    # Si pas de fichiers, utiliser l'ancien format (liste de liens directe)
+    if not files and detail.get('links'):
+        download_links = detail.get('links', [])
+        # Pour l'ancien format, on ne peut pas deviner les liens de streaming
+        streaming_links = [''] * len(download_links)
+        
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         c.execute('''INSERT OR REPLACE INTO torrent_details
-            (id, name, status, size, files_count, progress, links, hash, host, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (id, name, status, size, files_count, progress, links, streaming_links, hash, host, error, added)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 detail.get('id'),
                 detail.get('filename') or detail.get('name'),
@@ -576,10 +606,12 @@ def upsert_torrent_detail(detail):
                 detail.get('bytes'),
                 len(detail.get('files', [])),
                 detail.get('progress'),
-                ",".join(detail.get('links', [])) if detail.get('links') else None,
+                ",".join(download_links) if download_links else None,
+                ",".join(streaming_links) if streaming_links else None,
                 detail.get('hash'),
                 detail.get('host'),
-                detail.get('error')
+                detail.get('error'),
+                detail.get('added')
             )
         )
         conn.commit()

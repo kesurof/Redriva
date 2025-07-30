@@ -274,7 +274,7 @@
                         onmouseout="this.style.background='transparent'; this.style.color='#007bff';">
                     🔄 Actualiser
                 </button>
-                <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+                <button class="close" onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
             </div>
         </div>
         
@@ -518,19 +518,35 @@ function showDetailsModal(torrentId) {
                     errorContainer.style.display = 'none';
                 }
                 
-                // Liens de téléchargement
+                // Liens de téléchargement et streaming
                 const linksContainer = document.getElementById('modalLinksContainer');
                 const linksDiv = document.getElementById('modalLinks');
                 
                 if (torrent.links && torrent.links.length > 0 && torrent.links[0] !== '') {
                     linksContainer.style.display = 'block';
-                    linksDiv.innerHTML = torrent.links.map((link, index) => 
-                        `<div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #dee2e6;">
-                            <a href="${link}" target="_blank" style="color: #007bff; text-decoration: none;">
-                                📁 Fichier ${index + 1} - Télécharger
-                            </a>
-                        </div>`
-                    ).join('');
+                    linksDiv.innerHTML = torrent.links.map((link, index) => {
+                        const streamingLink = torrent.streaming_links && torrent.streaming_links[index];
+                        
+                        return `<div style="margin-bottom: 12px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #dee2e6;">
+                            <div style="margin-bottom: 8px; font-weight: bold; color: #495057;">📁 Fichier ${index + 1}</div>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <a href="${link}" target="_blank" 
+                                   style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9em;"
+                                   onmouseover="this.style.background='#0056b3'"
+                                   onmouseout="this.style.background='#007bff'">
+                                    ⬇️ Télécharger
+                                </a>
+                                ${streamingLink ? `
+                                    <a href="${streamingLink}" target="_blank" 
+                                       style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9em;"
+                                       onmouseover="this.style.background='#1e7e34'"
+                                       onmouseout="this.style.background='#28a745'">
+                                        🎬 Streaming
+                                    </a>
+                                ` : ''}
+                            </div>
+                        </div>`;
+                    }).join('');
                 } else {
                     linksContainer.style.display = 'none';
                 }
@@ -580,13 +596,6 @@ function createRefreshIndicator() {
     const modalContent = document.getElementById('modalContent');
     modalContent.insertBefore(indicator, modalContent.firstChild);
     return indicator;
-}
-            loading.style.display = 'none';
-            error.style.display = 'block';
-            document.getElementById('modalErrorText').textContent = 'Erreur réseau: ' + err.message;
-            showToast('❌ Erreur lors du chargement des détails', 'error');
-            console.error('Erreur:', err);
-        });
 }
 
 function closeModal() {
