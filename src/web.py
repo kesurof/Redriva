@@ -296,26 +296,47 @@ def dashboard():
         flash(f"Erreur lors du chargement des statistiques: {str(e)}", 'error')
         return render_template('dashboard.html', stats={}, task_status=task_status)
 
-@app.route('/torrents')
+@app.route('/torrents', endpoint='torrents')
 def torrents_list():
-    """Liste des torrents avec pagination et filtres"""
-    page = int(request.args.get('page', 1))
+    """Liste des torrents avec pagination et filtres natifs"""
+    # Paramètres de pagination et filtres
+    page = max(1, int(request.args.get('page', 1)))
     status_filter = request.args.get('status', '')
     search = request.args.get('search', '')
-    per_page = 50
+    sort_by = request.args.get('sort', 'added_on')
+    sort_dir = request.args.get('dir', 'desc')
+    per_page = 25
     offset = (page - 1) * per_page
+    
+    # Validation des paramètres de tri
+    valid_sorts = {
+        'id': 't.id',
+        'filename': 'display_name',
+        'status': 'current_status', 
+        'bytes': 't.bytes',
+        'added_on': 't.added_on',
+        'progress': 'progress'
+    }
+    sort_column = valid_sorts.get(sort_by, 't.added_on')
+    if sort_dir not in ['asc', 'desc']:
+        sort_dir = 'desc'
     
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         
-        # Construction de la requête avec filtres
+        # Construction de la requête de base
         base_query = """
             SELECT t.id, t.filename, t.status, t.bytes, t.added_on,
-                   td.name, td.status as detail_status, td.progress, td.host, td.error
+                   COALESCE(td.name, t.filename) as display_name,
+                   COALESCE(td.status, t.status) as current_status,
+                   COALESCE(td.progress, 0) as progress,
+                   td.host, td.error
             FROM torrents t
             LEFT JOIN torrent_details td ON t.id = td.id
+            WHERE t.status != 'deleted'
         """
         
+        # Conditions et paramètres
         conditions = []
         params = []
         
@@ -325,58 +346,90 @@ def torrents_list():
             else:
                 conditions.append("(t.status = ? OR td.status = ?)")
                 params.extend([status_filter, status_filter])
-            
+        
         if search:
             conditions.append("(t.filename LIKE ? OR td.name LIKE ?)")
             params.extend([f"%{search}%", f"%{search}%"])
         
+        # Ajout des conditions WHERE supplémentaires
         if conditions:
-            base_query += " WHERE " + " AND ".join(conditions)
+            base_query += " AND " + " AND ".join(conditions)
         
-        # Requête pour les données
-        query = base_query + " ORDER BY t.added_on DESC LIMIT ? OFFSET ?"
+        # Requête pour le total
+        count_query = f"SELECT COUNT(*) FROM ({base_query})"
+        c.execute(count_query, params)
+        total_count = c.fetchone()[0]
+        
+        # Ajout du tri et pagination
+        base_query += f" ORDER BY {sort_column} {sort_dir.upper()} LIMIT ? OFFSET ?"
         params.extend([per_page, offset])
         
-        c.execute(query, params)
-        torrents = c.fetchall()
+        # Exécution de la requête principale
+        c.execute(base_query, params)
+        torrents_data = c.fetchall()
         
-        # Requête pour le total (pagination)
-        count_params = params[:-2] if conditions else []
-        count_query = f"SELECT COUNT(*) FROM ({base_query})"
-        c.execute(count_query, count_params)
-        total = c.fetchone()[0]
-        
-        # Statuts disponibles pour le filtre
+        # Récupération des statuts disponibles pour les filtres
         c.execute("""
-            SELECT status, COUNT(*) as count 
+            SELECT status, COUNT(*) as count
             FROM (
-                SELECT COALESCE(td.status, t.status) as status 
-                FROM torrents t 
+                SELECT COALESCE(td.status, t.status) as status
+                FROM torrents t
                 LEFT JOIN torrent_details td ON t.id = td.id
-            ) 
-            WHERE status IS NOT NULL 
-            GROUP BY status 
+            ) sub
+            WHERE status IS NOT NULL
+            GROUP BY status
             ORDER BY count DESC
         """)
         available_statuses = c.fetchall()
     
+    # Calcul de la pagination
+    total_pages = (total_count + per_page - 1) // per_page
+    has_prev = page > 1
+    has_next = page < total_pages
+    
+    # Formatage des données pour le template
+    torrents = []
+    for row in torrents_data:
+        torrent = {
+            'id': row[0],
+            'filename': row[1],
+            'status': row[2],
+            'bytes': row[3],
+            'added_on': row[4],
+            'display_name': row[5],
+            'current_status': row[6],
+            'progress': row[7],
+            'host': row[8],
+            'error': row[9],
+            'size_formatted': format_size(row[3]) if row[3] else 'N/A',
+            'status_emoji': get_status_emoji(row[6]),
+            'added_date': row[4][:10] if row[4] else 'N/A'
+        }
+        torrents.append(torrent)
+    
+    # Données de pagination pour le template
     pagination = {
         'page': page,
         'per_page': per_page,
-        'total': total,
-        'pages': (total + per_page - 1) // per_page,
-        'has_prev': page > 1,
-        'has_next': page * per_page < total
+        'total': total_count,
+        'total_pages': total_pages,
+        'has_prev': has_prev,
+        'has_next': has_next,
+        'prev_page': page - 1 if has_prev else None,
+        'next_page': page + 1 if has_next else None,
+        'start_item': offset + 1,
+        'end_item': min(offset + per_page, total_count)
     }
     
     return render_template('torrents.html', 
-                         torrents=torrents, 
+                         torrents=torrents,
                          pagination=pagination,
                          status_filter=status_filter,
                          search=search,
+                         sort_by=sort_by,
+                         sort_dir=sort_dir,
                          available_statuses=available_statuses,
-                         get_status_emoji=get_status_emoji,
-                         format_size=format_size)
+                         total_count=total_count)
 
 @app.route('/sync/<action>')
 def sync_action(action):
@@ -619,202 +672,6 @@ def get_stream_links(torrent_id):
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/test', methods=['GET'])
-def api_test():
-    """Test endpoint simple"""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM torrents")
-        count = cursor.fetchone()[0]
-        conn.close()
-        return jsonify({'status': 'ok', 'torrents_count': count})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)})
-
-@app.route('/api/torrents/data', methods=['GET'])
-def get_torrents_data():
-    """API endpoint pour DataTable avec pagination et recherche"""
-    try:
-        # Paramètres DataTable
-        draw = int(request.args.get('draw', 1))
-        start = int(request.args.get('start', 0))
-        length = int(request.args.get('length', 25))
-        search_value = request.args.get('search[value]', '')
-        
-        # Filtres
-        status_filter = request.args.get('status', '')
-        size_min = request.args.get('size_min', '')
-        size_max = request.args.get('size_max', '')
-        
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Version simplifiée pour débugger
-        simple_query = """
-            SELECT id, filename, status, bytes, added_on, 0 as progress,
-                   0 as files_count, 0 as seeders, '' as hash, '' as host
-            FROM torrents
-            ORDER BY added_on DESC
-            LIMIT ?
-        """
-        
-        cursor.execute(simple_query, [length])
-        torrents = cursor.fetchall()
-        
-        # Compter le total simplement
-        cursor.execute("SELECT COUNT(*) FROM torrents")
-        total_records = cursor.fetchone()[0]
-        
-        # Formater les données pour DataTable
-        data = []
-        for torrent in torrents:
-            data.append({
-                'id': torrent[0],
-                'filename': torrent[1],
-                'status': torrent[2],
-                'status_emoji': get_status_emoji(torrent[2]),
-                'bytes': torrent[3],
-                'size_formatted': format_size(torrent[3]) if torrent[3] else "N/A",
-                'added_at': torrent[4],
-                'progress': torrent[5] or 0,
-                'files_count': torrent[6] or 0,
-                'seeders': torrent[7] or 0,
-                'hash': torrent[8],
-                'host': torrent[9]
-            })
-        
-        conn.close()
-        
-        return jsonify({
-            'draw': draw,
-            'recordsTotal': total_records,
-            'recordsFiltered': total_records,
-            'data': data
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
-@app.route('/api/torrents/data_full', methods=['GET'])
-def get_torrents_data_full():
-    """Version complète de l'API - une fois que la version simple fonctionne"""
-    try:
-        # Paramètres DataTable
-        draw = int(request.args.get('draw', 1))
-        start = int(request.args.get('start', 0))
-        length = int(request.args.get('length', 25))
-        search_value = request.args.get('search[value]', '')
-        
-        # Filtres
-        status_filter = request.args.get('status', '')
-        size_min = request.args.get('size_min', '')
-        size_max = request.args.get('size_max', '')
-        
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Requête de base avec jointure pour récupérer toutes les données
-        base_query = """
-            SELECT 
-                COALESCE(td.id, t.id) as id,
-                COALESCE(td.name, t.filename) as filename,
-                COALESCE(td.status, t.status) as status,
-                COALESCE(td.size, t.bytes) as bytes,
-                COALESCE(td.added, t.added_on) as added_date,
-                COALESCE(td.progress, 0) as progress,
-                td.files_count,
-                0 as seeders,
-                td.hash,
-                td.host
-            FROM torrents t
-            LEFT JOIN torrent_details td ON t.id = td.id
-        """
-        
-        # Conditions WHERE
-        conditions = []
-        params = []
-        
-        if search_value:
-            conditions.append("COALESCE(td.name, t.filename) LIKE ?")
-            params.append(f'%{search_value}%')
-        
-        if status_filter:
-            conditions.append("COALESCE(td.status, t.status) = ?")
-            params.append(status_filter)
-        
-        if size_min:
-            conditions.append("COALESCE(td.size, t.bytes) >= ?")
-            params.append(int(size_min) * 1024 * 1024)  # MB to bytes
-        
-        if size_max:
-            conditions.append("COALESCE(td.size, t.bytes) <= ?")
-            params.append(int(size_max) * 1024 * 1024)  # MB to bytes
-        
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        
-        # Compter le total
-        count_query = f"""
-            SELECT COUNT(*) FROM (
-                SELECT COALESCE(td.id, t.id) as id,
-                       COALESCE(td.name, t.filename) as filename,
-                       COALESCE(td.status, t.status) as status,
-                       COALESCE(td.size, t.bytes) as bytes
-                FROM torrents t
-                LEFT JOIN torrent_details td ON t.id = td.id
-                {where_clause}
-            )
-        """
-        
-        cursor.execute(count_query, params)
-        total_records = cursor.fetchone()[0]
-        
-        # Requête avec pagination
-        order_column = int(request.args.get('order[0][column]', 4))  # Default: added_date
-        order_dir = request.args.get('order[0][dir]', 'desc')
-        
-        order_columns = ['id', 'filename', 'status', 'bytes', 'added_date', 'progress']
-        order_by = order_columns[order_column] if order_column < len(order_columns) else 'added_date'
-        
-        final_query = f"""
-            {base_query}{where_clause}
-            ORDER BY {order_by} {order_dir.upper()}
-            LIMIT ? OFFSET ?
-        """
-        
-        cursor.execute(final_query, params + [length, start])
-        torrents = cursor.fetchall()
-        
-        # Formater les données pour DataTable
-        data = []
-        for torrent in torrents:
-            data.append({
-                'id': torrent[0],
-                'filename': torrent[1],
-                'status': torrent[2],
-                'status_emoji': get_status_emoji(torrent[2]),
-                'bytes': torrent[3],
-                'size_formatted': format_size(torrent[3]) if torrent[3] else "N/A",
-                'added_at': torrent[4],
-                'progress': torrent[5] or 0,
-                'files_count': torrent[6] or 0,
-                'seeders': torrent[7] or 0,
-                'hash': torrent[8],
-                'host': torrent[9]
-            })
-        
-        conn.close()
-        
-        return jsonify({
-            'draw': draw,
-            'recordsTotal': total_records,
-            'recordsFiltered': total_records,
-            'data': data
-        })
-        
-    except Exception as e:
-        return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
     import signal

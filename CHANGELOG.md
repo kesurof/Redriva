@@ -32,11 +32,9 @@
 
 ### 🌐 **Nouvelles API REST**
 ```http
-GET  /api/torrents/data          # DataTable avec pagination
 POST /api/torrent/delete/{id}    # Supprimer un torrent
 POST /api/torrent/reinsert/{id}  # Réinsérer un torrent  
 GET  /api/torrent/stream/{id}    # Liens de streaming
-GET  /api/test                   # Endpoint de validation
 ```
 
 ### 📱 **Amélioration UX**
