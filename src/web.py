@@ -15,6 +15,7 @@ import sys
 import json
 import queue
 import logging
+import requests
 from io import StringIO
 import contextlib
 
@@ -499,6 +500,56 @@ def api_clear_logs_history():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/torrent/<torrent_id>')
+def api_torrent_detail(torrent_id):
+    """API pour récupérer les détails d'un torrent en JSON"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Informations de base
+            c.execute("""
+                SELECT t.id, t.filename, t.status, t.bytes, t.added_on,
+                       td.name, td.status, td.size, td.files_count, td.progress,
+                       td.links, td.hash, td.host, td.error, td.added
+                FROM torrents t
+                LEFT JOIN torrent_details td ON t.id = td.id
+                WHERE t.id = ?
+            """, (torrent_id,))
+            
+            torrent = c.fetchone()
+            
+            if not torrent:
+                return jsonify({'success': False, 'error': 'Torrent non trouvé'}), 404
+        
+        torrent_data = {
+            'success': True,
+            'torrent': {
+                'id': torrent[0],
+                'filename': torrent[1],
+                'status': torrent[2],
+                'bytes': torrent[3],
+                'added_on': torrent[4],
+                'name': torrent[5],
+                'detail_status': torrent[6],
+                'size': torrent[7],
+                'files_count': torrent[8],
+                'progress': torrent[9],
+                'links': torrent[10].split(',') if torrent[10] else [],
+                'hash': torrent[11],
+                'host': torrent[12],
+                'error': torrent[13],
+                'added_detail': torrent[14],
+                'size_formatted': format_size(torrent[3]) if torrent[3] else format_size(torrent[7]) if torrent[7] else 'N/A',
+                'status_emoji': get_status_emoji(torrent[6] or torrent[2])
+            }
+        }
+        
+        return jsonify(torrent_data)
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/torrent/<torrent_id>')
 def torrent_detail(torrent_id):
     """Détail d'un torrent spécifique"""
@@ -519,7 +570,7 @@ def torrent_detail(torrent_id):
         
         if not torrent:
             flash("Torrent non trouvé", 'error')
-            return redirect(url_for('torrents_list'))
+            return redirect(url_for('torrents'))
     
     torrent_data = {
         'id': torrent[0],
@@ -547,7 +598,6 @@ def torrent_detail(torrent_id):
 def delete_torrent(torrent_id):
     """Supprimer un torrent de Real-Debrid"""
     try:
-        import requests
         token = load_token()
         if not token:
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
@@ -564,9 +614,9 @@ def delete_torrent(torrent_id):
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE torrents 
-                SET status = 'deleted', updated_at = ? 
+                SET status = 'deleted' 
                 WHERE id = ?
-            """, (datetime.now().isoformat(), torrent_id))
+            """, (torrent_id,))
             conn.commit()
             conn.close()
             
@@ -581,7 +631,6 @@ def delete_torrent(torrent_id):
 def reinsert_torrent(torrent_id):
     """Réinsérer un torrent dans Real-Debrid"""
     try:
-        import requests
         token = load_token()
         if not token:
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
@@ -589,12 +638,17 @@ def reinsert_torrent(torrent_id):
         # Récupérer les infos du torrent depuis la DB
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT filename, hash FROM torrents WHERE id = ?", (torrent_id,))
+        cursor.execute("""
+            SELECT t.filename, td.hash 
+            FROM torrents t 
+            LEFT JOIN torrent_details td ON t.id = td.id 
+            WHERE t.id = ?
+        """, (torrent_id,))
         torrent_data = cursor.fetchone()
         conn.close()
         
-        if not torrent_data:
-            return jsonify({'success': False, 'error': 'Torrent non trouvé'})
+        if not torrent_data or not torrent_data[1]:
+            return jsonify({'success': False, 'error': 'Torrent non trouvé ou hash manquant'})
         
         filename, torrent_hash = torrent_data
         
@@ -614,9 +668,9 @@ def reinsert_torrent(torrent_id):
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE torrents 
-                SET id = ?, status = 'magnet_error', updated_at = ? 
+                SET id = ?, status = 'magnet_error' 
                 WHERE id = ?
-            """, (new_id, datetime.now().isoformat(), torrent_id))
+            """, (new_id, torrent_id))
             conn.commit()
             conn.close()
             
@@ -631,7 +685,6 @@ def reinsert_torrent(torrent_id):
 def get_stream_links(torrent_id):
     """Récupérer les liens de streaming pour un torrent"""
     try:
-        import requests
         token = load_token()
         if not token:
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})

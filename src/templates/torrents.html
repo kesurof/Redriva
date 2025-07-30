@@ -8,8 +8,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h2>📋 Gestion des torrents</h2>
         <div style="display: flex; gap: 10px;">
-            <a href="/torrents" class="btn btn-primary">🔄 Actualiser</a>
-            <a href="/sync/torrents" class="btn btn-success">⬇️ Synchroniser</a>
+            <a href="/sync/smart" class="btn btn-success">🧠 Sync Intelligent</a>
         </div>
     </div>
     
@@ -53,17 +52,17 @@
 <!-- Statistiques rapides -->
 <div class="stats-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-        <div class="stat-item" style="text-align: center;">
+        <a href="{{ url_for('torrents') }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: transform 0.2s;">
             <div style="font-size: 1.5em; font-weight: bold; color: #667eea;">{{ total_count }}</div>
             <div style="font-size: 0.9em; color: #666;">Total</div>
-        </div>
+        </a>
         {% for status_info in available_statuses %}
-        <div class="stat-item" style="text-align: center;">
+        <a href="{{ url_for('torrents', status=status_info[0]) }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: transform 0.2s;">
             <div style="font-size: 1.2em; font-weight: bold; color: {% if status_info[0] == 'downloaded' %}#28a745{% elif 'error' in status_info[0] %}#dc3545{% else %}#6c757d{% endif %};">
                 {{ status_info[1] }}
             </div>
             <div style="font-size: 0.8em; color: #666;">{{ status_info[0] }}</div>
-        </div>
+        </a>
         {% endfor %}
     </div>
 </div>
@@ -109,33 +108,58 @@
                 <tr data-torrent-id="{{ torrent.id }}">
                     <td style="font-family: monospace; font-size: 0.9em;">{{ torrent.id }}</td>
                     <td>
-                        <a href="{{ url_for('torrent_detail', torrent_id=torrent.id) }}" title="{{ torrent.display_name }}" style="text-decoration: none; color: inherit;">
-                            {{ torrent.display_name[:50] + ('...' if torrent.display_name|length > 50 else '') }}
-                        </a>
+                        <span onclick="copyTorrentName({{ torrent.display_name|tojson }})" title="Cliquer pour copier le nom" style="cursor: copy; text-decoration: none; color: inherit; display: inline-flex; align-items: center; gap: 5px;">
+                            {{ torrent.display_name[:50] + ('...' if torrent.display_name|length > 50 else '') }} 📋
+                        </span>
                     </td>
                     <td>
                         <span class="badge badge-{{ 'success' if torrent.current_status == 'downloaded' else 'danger' if 'error' in torrent.current_status else 'warning' }}"
                               style="padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;
                                      background: {% if torrent.current_status == 'downloaded' %}#d4edda; color: #155724{% elif 'error' in torrent.current_status %}#f8d7da; color: #721c24{% else %}#fff3cd; color: #856404{% endif %};">
-                            {{ torrent.status_emoji }} {{ torrent.current_status }}
+                            {{ torrent.current_status }}
                         </span>
                     </td>
                     <td style="text-align: right; font-family: monospace;">{{ torrent.size_formatted }}</td>
                     <td style="font-family: monospace; font-size: 0.9em;">{{ torrent.added_date }}</td>
                     <td>
                         {% if torrent.progress > 0 %}
-                        <div style="background: #e9ecef; border-radius: 10px; height: 8px; width: 100%; overflow: hidden;">
-                            <div style="background: linear-gradient(90deg, #007bff, #28a745); height: 100%; width: {{ torrent.progress }}%; transition: width 0.3s ease;"></div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="min-width: 40px; font-weight: bold; font-size: 0.9em;">
+                                {{ '{:.1f}%'.format(torrent.progress) }}
+                            </span>
+                            <div style="flex: 1; height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                <div style="height: 100%; background: linear-gradient(90deg, #007bff, #28a745); border-radius: 4px; transition: width 0.3s ease; width: {{ torrent.progress }}%;"></div>
+                            </div>
                         </div>
-                        <small style="font-size: 0.7em;">{{ torrent.progress }}%</small>
                         {% else %}
                         <span style="color: #6c757d; font-size: 0.8em;">N/A</span>
                         {% endif %}
                     </td>
                     <td>
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                            <a href="{{ url_for('torrent_detail', torrent_id=torrent.id) }}" class="btn btn-sm btn-outline-primary" title="Voir détails">👁️</a>
-                            <button onclick="deleteTorrent('{{ torrent.id }}')" class="btn btn-sm btn-outline-danger" title="Supprimer">🗑️</button>
+                        <div style="display: flex; gap: 3px; justify-content: center;">
+                            <button onclick="showDetailsModal('{{ torrent.id }}')" 
+                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid #007bff; background: transparent; color: #007bff; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                                    title="Voir détails"
+                                    onmouseover="this.style.background='#007bff'; this.style.color='white';"
+                                    onmouseout="this.style.background='transparent'; this.style.color='#007bff';">
+                                🔍
+                            </button>
+                            <button onclick="deleteTorrent('{{ torrent.id }}')" 
+                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid #dc3545; background: transparent; color: #dc3545; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                                    title="Supprimer"
+                                    onmouseover="this.style.background='#dc3545'; this.style.color='white';"
+                                    onmouseout="this.style.background='transparent'; this.style.color='#dc3545';">
+                                🗑️
+                            </button>
+                            {% if torrent.current_status in ['error', 'virus', 'dead'] %}
+                            <button onclick="reinsertTorrent('{{ torrent.id }}')" 
+                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid #28a745; background: transparent; color: #28a745; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                                    title="Réinsérer"
+                                    onmouseover="this.style.background='#28a745'; this.style.color='white';"
+                                    onmouseout="this.style.background='transparent'; this.style.color='#28a745';">
+                                ♻️
+                            </button>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -206,6 +230,71 @@
     {% endif %}
 </div>
 
+<!-- Modal pour les détails de torrent -->
+<div id="torrentModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+    <div class="modal-content" style="background: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 800px; max-height: 80%; overflow-y: auto;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+            <h3 id="modalTitle">Détails du torrent</h3>
+            <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+        </div>
+        
+        <div id="modalLoading" style="text-align: center; padding: 50px;">
+            <div style="font-size: 2em; margin-bottom: 10px;">⏳</div>
+            <div>Chargement des détails...</div>
+        </div>
+        
+        <div id="modalContent" style="display: none;">
+            <div class="modal-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div>
+                        <h4 style="margin-bottom: 10px; color: #495057;">📋 Informations générales</h4>
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                            <div style="margin-bottom: 8px;"><strong>ID:</strong> <span id="modalId" style="font-family: monospace;"></span></div>
+                            <div style="margin-bottom: 8px;"><strong>Nom:</strong> <span id="modalName"></span></div>
+                            <div style="margin-bottom: 8px;"><strong>Statut:</strong> <span id="modalStatus"></span></div>
+                            <div style="margin-bottom: 8px;"><strong>Taille:</strong> <span id="modalSize"></span></div>
+                            <div style="margin-bottom: 8px;"><strong>Fichiers:</strong> <span id="modalFiles"></span></div>
+                            <div><strong>Hash:</strong> <span id="modalHash" style="font-family: monospace; font-size: 0.9em;"></span></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4 style="margin-bottom: 10px; color: #495057;">📊 Progression</h4>
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                            <div style="margin-bottom: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span>Progression:</span>
+                                    <span id="modalProgress">0%</span>
+                                </div>
+                                <div style="background: #e9ecef; border-radius: 10px; height: 10px; width: 100%; overflow: hidden;">
+                                    <div id="modalProgressBar" style="background: linear-gradient(90deg, #007bff, #28a745); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 8px;"><strong>Hébergeur:</strong> <span id="modalHost"></span></div>
+                            <div style="margin-bottom: 8px;"><strong>Ajouté le:</strong> <span id="modalAdded"></span></div>
+                            <div id="modalErrorContainer" style="display: none; padding: 10px; background: #f8d7da; color: #721c24; border-radius: 4px; margin-top: 10px;">
+                                <strong>Erreur:</strong> <span id="modalError"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="modalLinksContainer" style="display: none;">
+                    <h4 style="margin-bottom: 10px; color: #495057;">🔗 Liens de téléchargement</h4>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                        <div id="modalLinks"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="modalError" style="display: none; text-align: center; padding: 50px; color: #dc3545;">
+            <div style="font-size: 2em; margin-bottom: 10px;">❌</div>
+            <div id="modalErrorText">Erreur lors du chargement des détails</div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -215,14 +304,59 @@
 .btn:hover { opacity: 0.8; }
 .table-responsive { overflow-x: auto; }
 .card { background: white; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 20px; padding: 20px; }
+.stat-item:hover { transform: scale(1.05); background: rgba(0,0,0,0.05); border-radius: 8px; }
+.modal { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-content { animation: slideIn 0.3s ease; }
+@keyframes slideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 </style>
 
 <script>
+// Système de notifications toast
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.innerHTML = message;
+    toast.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 2000;
+        padding: 12px 20px; border-radius: 6px; color: white; font-size: 14px;
+        background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#17a2b8'};
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: slideInRight 0.3s ease, slideOutRight 0.3s ease 2.7s forwards;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// Indicateur de chargement global
+function showLoading(show = true, message = 'Chargement...') {
+    let loader = document.getElementById('global-loader');
+    if (show) {
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.id = 'global-loader';
+            loader.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.5); z-index: 9999; display: flex;
+                align-items: center; justify-content: center; color: white;
+                font-size: 16px; font-weight: bold;
+            `;
+            loader.innerHTML = `<div style="text-align: center;"><div style="font-size: 2em; margin-bottom: 10px;">⏳</div>${message}</div>`;
+            document.body.appendChild(loader);
+        }
+    } else if (loader) {
+        loader.remove();
+    }
+}
+
 function deleteTorrent(torrentId) {
     if (confirm('Êtes-vous sûr de vouloir supprimer ce torrent de Real-Debrid ?')) {
+        showLoading(true, 'Suppression en cours...');
         fetch(`/api/torrent/delete/${torrentId}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
+                showLoading(false);
                 if (data.success) {
                     // Supprimer dynamiquement la ligne du tableau
                     const row = document.querySelector(`tr[data-torrent-id="${torrentId}"]`);
@@ -230,16 +364,169 @@ function deleteTorrent(torrentId) {
                         row.style.opacity = '0.5';
                         setTimeout(() => row.remove(), 300);
                     }
-                    alert('Torrent supprimé avec succès');
+                    showToast('✅ Torrent supprimé avec succès', 'success');
                 } else {
-                    alert('Erreur: ' + data.error);
+                    showToast('❌ Erreur: ' + data.error, 'error');
                 }
             })
             .catch(error => {
-                alert('Erreur réseau');
+                showLoading(false);
+                showToast('❌ Erreur réseau', 'error');
                 console.error('Erreur:', error);
             });
     }
 }
+
+function showDetailsModal(torrentId) {
+    const modal = document.getElementById('torrentModal');
+    const loading = document.getElementById('modalLoading');
+    const content = document.getElementById('modalContent');
+    const error = document.getElementById('modalError');
+    
+    // Réinitialiser l'état du modal
+    modal.style.display = 'block';
+    loading.style.display = 'block';
+    content.style.display = 'none';
+    error.style.display = 'none';
+    
+    // Appel API pour récupérer les détails
+    fetch(`/api/torrent/${torrentId}`)
+        .then(response => response.json())
+        .then(data => {
+            loading.style.display = 'none';
+            
+            if (data.success) {
+                const torrent = data.torrent;
+                
+                // Remplir les informations générales
+                document.getElementById('modalTitle').textContent = `${torrent.status_emoji} ${torrent.name || torrent.filename}`;
+                document.getElementById('modalId').textContent = torrent.id;
+                document.getElementById('modalName').textContent = torrent.name || torrent.filename;
+                document.getElementById('modalStatus').innerHTML = `<span style="padding: 2px 8px; border-radius: 12px; font-size: 0.8em; background: ${torrent.detail_status === 'downloaded' ? '#d4edda; color: #155724' : (torrent.detail_status && torrent.detail_status.includes('error')) ? '#f8d7da; color: #721c24' : '#fff3cd; color: #856404'};">${torrent.status_emoji} ${torrent.detail_status || torrent.status}</span>`;
+                document.getElementById('modalSize').textContent = torrent.size_formatted;
+                document.getElementById('modalFiles').textContent = torrent.files_count ? `${torrent.files_count} fichier(s)` : 'N/A';
+                document.getElementById('modalHash').textContent = torrent.hash || 'N/A';
+                
+                // Progression
+                const progress = torrent.progress || 0;
+                document.getElementById('modalProgress').textContent = `${progress}%`;
+                document.getElementById('modalProgressBar').style.width = `${progress}%`;
+                
+                document.getElementById('modalHost').textContent = torrent.host || 'N/A';
+                document.getElementById('modalAdded').textContent = torrent.added_on ? new Date(torrent.added_on).toLocaleDateString('fr-FR') : 'N/A';
+                
+                // Gestion des erreurs
+                const errorContainer = document.getElementById('modalErrorContainer');
+                if (torrent.error) {
+                    errorContainer.style.display = 'block';
+                    document.getElementById('modalError').textContent = torrent.error;
+                } else {
+                    errorContainer.style.display = 'none';
+                }
+                
+                // Liens de téléchargement
+                const linksContainer = document.getElementById('modalLinksContainer');
+                const linksDiv = document.getElementById('modalLinks');
+                
+                if (torrent.links && torrent.links.length > 0 && torrent.links[0] !== '') {
+                    linksContainer.style.display = 'block';
+                    linksDiv.innerHTML = torrent.links.map((link, index) => 
+                        `<div style="margin-bottom: 8px; padding: 8px; background: white; border-radius: 4px; border: 1px solid #dee2e6;">
+                            <a href="${link}" target="_blank" style="color: #007bff; text-decoration: none;">
+                                📁 Fichier ${index + 1} - Télécharger
+                            </a>
+                        </div>`
+                    ).join('');
+                } else {
+                    linksContainer.style.display = 'none';
+                }
+                
+                content.style.display = 'block';
+            } else {
+                error.style.display = 'block';
+                document.getElementById('modalErrorText').textContent = data.error || 'Erreur inconnue';
+            }
+        })
+        .catch(err => {
+            loading.style.display = 'none';
+            error.style.display = 'block';
+            document.getElementById('modalErrorText').textContent = 'Erreur réseau: ' + err.message;
+            showToast('❌ Erreur lors du chargement des détails', 'error');
+            console.error('Erreur:', err);
+        });
+}
+
+function closeModal() {
+    document.getElementById('torrentModal').style.display = 'none';
+}
+
+function reinsertTorrent(torrentId) {
+    if (confirm('Êtes-vous sûr de vouloir réinsérer ce torrent sur Real-Debrid ?')) {
+        showLoading(true, 'Réinsertion en cours...');
+        fetch(`/api/torrent/reinsert/${torrentId}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    showToast('✅ Torrent réinséré avec succès !', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast('❌ Erreur lors de la réinsertion: ' + (data.error || 'Erreur inconnue'), 'error');
+                }
+            })
+            .catch(err => {
+                showLoading(false);
+                showToast('❌ Erreur réseau: ' + err.message, 'error');
+                console.error('Erreur:', err);
+            });
+    }
+}
+
+function copyTorrentName(torrentName) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(torrentName).then(function() {
+            showToast('📋 Nom copié dans le presse-papier !', 'success');
+        }).catch(function() {
+            // Fallback si l'API Clipboard échoue
+            copyToClipboardFallback(torrentName);
+        });
+    } else {
+        // Fallback pour les navigateurs qui ne supportent pas l'API Clipboard
+        copyToClipboardFallback(torrentName);
+    }
+}
+
+function copyToClipboardFallback(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.cssText = 'position: fixed; top: -9999px; left: -9999px;';
+    document.body.appendChild(textArea);
+    textArea.select();
+    
+    try {
+        document.execCommand('copy');
+        showToast('📋 Nom copié dans le presse-papier !', 'success');
+    } catch (err) {
+        showToast('❌ Impossible de copier. Sélectionnez le texte manuellement.', 'error');
+        console.error('Erreur copie:', err);
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+// Fermer le modal en cliquant à l'extérieur
+window.onclick = function(event) {
+    const modal = document.getElementById('torrentModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+
+// Fermer le modal avec Escape
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeModal();
+    }
+});
 </script>
 {% endblock %}

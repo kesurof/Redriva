@@ -310,12 +310,13 @@ def clear_database():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute("DELETE FROM sync_progress")
     cursor.execute("DELETE FROM torrent_details")
     cursor.execute("DELETE FROM torrents")
     
-    # Reset des auto-increment
-    cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('torrents', 'torrent_details', 'sync_progress')")
+    # Reset des compteurs auto-increment seulement si la table existe
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'")
+    if cursor.fetchone():
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('torrents', 'torrent_details')")
     
     conn.commit()
     conn.close()
