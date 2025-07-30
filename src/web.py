@@ -24,7 +24,8 @@ sys.path.append(os.path.dirname(__file__))
 from main import (
     DB_PATH, load_token, sync_smart, sync_all_v2, sync_torrents_only,
     show_stats, diagnose_errors, get_db_stats, format_size, get_status_emoji,
-    create_tables, sync_details_only, ACTIVE_STATUSES, ERROR_STATUSES, COMPLETED_STATUSES
+    create_tables, sync_details_only, ACTIVE_STATUSES, ERROR_STATUSES, COMPLETED_STATUSES,
+    fetch_torrent_detail, upsert_torrent_detail
 )
 
 app = Flask(__name__)
@@ -502,7 +503,46 @@ def api_clear_logs_history():
 
 @app.route('/api/torrent/<torrent_id>')
 def api_torrent_detail(torrent_id):
-    """API pour récupérer les détails d'un torrent en JSON"""
+    """API pour récupérer les détails d'un torrent avec rafraîchissement depuis Real-Debrid"""
+    try:
+        # 1. Charger le token Real-Debrid
+        token = load_token()
+        if not token:
+            # Fallback sur les données en cache si pas de token
+            return get_cached_torrent_data(torrent_id, error_msg="Token Real-Debrid non configuré")
+        
+        # 2. Rafraîchir les données depuis l'API Real-Debrid
+        import asyncio
+        import aiohttp
+        
+        async def refresh_torrent_data():
+            async with aiohttp.ClientSession() as session:
+                result = await fetch_torrent_detail(session, token, torrent_id)
+                return result is not None
+        
+        # 3. Exécuter le rafraîchissement (avec timeout)
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            refreshed = loop.run_until_complete(asyncio.wait_for(refresh_torrent_data(), timeout=30.0))
+            loop.close()
+        except asyncio.TimeoutError:
+            logging.warning(f"Timeout lors du rafraîchissement du torrent {torrent_id}")
+            return get_cached_torrent_data(torrent_id, error_msg="Timeout lors de la récupération des données fraîches", refreshed=False)
+        except Exception as e:
+            logging.error(f"Erreur lors du rafraîchissement du torrent {torrent_id}: {e}")
+            return get_cached_torrent_data(torrent_id, error_msg=f"Erreur API: {str(e)}", refreshed=False)
+        
+        # 4. Récupérer les données mises à jour depuis la base
+        return get_cached_torrent_data(torrent_id, refreshed=refreshed)
+        
+    except Exception as e:
+        logging.error(f"Erreur dans api_torrent_detail: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def get_cached_torrent_data(torrent_id, error_msg=None, refreshed=True):
+    """Récupère les données du torrent depuis la base locale"""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
@@ -521,7 +561,8 @@ def api_torrent_detail(torrent_id):
             
             if not torrent:
                 return jsonify({'success': False, 'error': 'Torrent non trouvé'}), 404
-        
+
+        # Construire la réponse avec indicateur de fraîcheur
         torrent_data = {
             'success': True,
             'torrent': {
@@ -541,14 +582,20 @@ def api_torrent_detail(torrent_id):
                 'error': torrent[13],
                 'added_detail': torrent[14],
                 'size_formatted': format_size(torrent[3]) if torrent[3] else format_size(torrent[7]) if torrent[7] else 'N/A',
-                'status_emoji': get_status_emoji(torrent[6] or torrent[2])
-            }
+                'status_emoji': get_status_emoji(torrent[6] or torrent[2]),
+                'last_updated': datetime.now().strftime("%H:%M:%S") if refreshed else "Données en cache"
+            },
+            'refreshed': refreshed,
+            'timestamp': datetime.now().isoformat()
         }
         
+        if error_msg and not refreshed:
+            torrent_data['warning'] = error_msg
+            
         return jsonify(torrent_data)
         
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e), 'cached_data': None}), 500
 
 @app.route('/torrent/<torrent_id>')
 def torrent_detail(torrent_id):

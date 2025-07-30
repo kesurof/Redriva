@@ -3,6 +3,36 @@
 {% block title %}Torrents - Redriva Web{% endblock %}
 
 {% block content %}
+<style>
+/* Animations pour le modal de rafraîchissement */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes progress {
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+
+/* Style pour les indicateurs de fraîcheur */
+.refresh-indicator {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Animation pour les boutons de retry */
+.retry-button:hover {
+    transform: scale(1.05);
+    transition: transform 0.2s ease;
+}
+</style>
+
 <!-- En-tête avec actions -->
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -235,7 +265,17 @@
     <div class="modal-content" style="background: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 800px; max-height: 80%; overflow-y: auto;">
         <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
             <h3 id="modalTitle">Détails du torrent</h3>
-            <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="refreshTorrentData()" 
+                        class="btn btn-sm btn-outline-primary retry-button" 
+                        style="padding: 4px 8px; font-size: 0.8em; border: 1px solid #007bff; background: transparent; color: #007bff; border-radius: 4px; cursor: pointer;"
+                        title="Actualiser les données depuis Real-Debrid"
+                        onmouseover="this.style.background='#007bff'; this.style.color='white';"
+                        onmouseout="this.style.background='transparent'; this.style.color='#007bff';">
+                    🔄 Actualiser
+                </button>
+                <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d;">&times;</button>
+            </div>
         </div>
         
         <div id="modalLoading" style="text-align: center; padding: 50px;">
@@ -378,6 +418,9 @@ function deleteTorrent(torrentId) {
 }
 
 function showDetailsModal(torrentId) {
+    // Stocker l'ID du torrent pour le bouton d'actualisation
+    currentTorrentId = torrentId;
+    
     const modal = document.getElementById('torrentModal');
     const loading = document.getElementById('modalLoading');
     const content = document.getElementById('modalContent');
@@ -389,11 +432,42 @@ function showDetailsModal(torrentId) {
     content.style.display = 'none';
     error.style.display = 'none';
     
-    // Appel API pour récupérer les détails
-    fetch(`/api/torrent/${torrentId}`)
+    // Message de rafraîchissement avec animation
+    loading.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 2em; margin-bottom: 15px; animation: spin 2s linear infinite;">🔄</div>
+            <div style="font-size: 1.1em; font-weight: bold; margin-bottom: 10px; color: #007bff;">
+                Récupération des données actualisées...
+            </div>
+            <div style="font-size: 0.9em; color: #6c757d;">
+                Synchronisation avec Real-Debrid en cours
+            </div>
+            <div style="margin-top: 15px; height: 4px; background: #e9ecef; border-radius: 2px; overflow: hidden;">
+                <div style="height: 100%; width: 30%; background: linear-gradient(90deg, #007bff, #28a745); animation: progress 3s ease-in-out infinite;"></div>
+            </div>
+        </div>
+    `;
+    
+    // Désactiver temporairement le bouton de fermeture
+    const closeBtn = modal.querySelector('.close');
+    closeBtn.style.opacity = '0.5';
+    closeBtn.style.pointerEvents = 'none';
+    
+    // Appel API avec timeout étendu pour le rafraîchissement
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 secondes
+    
+    fetch(`/api/torrent/${torrentId}`, {
+        signal: controller.signal
+    })
         .then(response => response.json())
         .then(data => {
+            clearTimeout(timeoutId);
             loading.style.display = 'none';
+            
+            // Réactiver le bouton de fermeture
+            closeBtn.style.opacity = '1';
+            closeBtn.style.pointerEvents = 'auto';
             
             if (data.success) {
                 const torrent = data.torrent;
@@ -406,6 +480,26 @@ function showDetailsModal(torrentId) {
                 document.getElementById('modalSize').textContent = torrent.size_formatted;
                 document.getElementById('modalFiles').textContent = torrent.files_count ? `${torrent.files_count} fichier(s)` : 'N/A';
                 document.getElementById('modalHash').textContent = torrent.hash || 'N/A';
+                
+                // Indicateur de fraîcheur des données
+                const refreshIndicator = document.getElementById('refreshIndicator') || createRefreshIndicator();
+                if (data.refreshed) {
+                    refreshIndicator.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #d4edda; color: #155724; border-radius: 4px; font-size: 0.85em; margin-bottom: 15px;">
+                            <span style="font-size: 1.2em;">✅</span>
+                            <span><strong>Données actualisées</strong> - Dernière mise à jour: ${torrent.last_updated}</span>
+                        </div>
+                    `;
+                    showToast('✅ Données mises à jour depuis Real-Debrid', 'success');
+                } else {
+                    refreshIndicator.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff3cd; color: #856404; border-radius: 4px; font-size: 0.85em; margin-bottom: 15px;">
+                            <span style="font-size: 1.2em;">⚠️</span>
+                            <span><strong>Données en cache</strong> - ${data.warning || 'Impossible de récupérer les données fraîches'}</span>
+                        </div>
+                    `;
+                    showToast('⚠️ Affichage des données en cache', 'warning');
+                }
                 
                 // Progression
                 const progress = torrent.progress || 0;
@@ -445,9 +539,48 @@ function showDetailsModal(torrentId) {
             } else {
                 error.style.display = 'block';
                 document.getElementById('modalErrorText').textContent = data.error || 'Erreur inconnue';
+                showToast('❌ Erreur lors du chargement des détails', 'error');
             }
         })
         .catch(err => {
+            clearTimeout(timeoutId);
+            loading.style.display = 'none';
+            
+            // Réactiver le bouton de fermeture
+            closeBtn.style.opacity = '1';
+            closeBtn.style.pointerEvents = 'auto';
+            
+            if (err.name === 'AbortError') {
+                error.style.display = 'block';
+                document.getElementById('modalErrorText').innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5em; margin-bottom: 10px;">⏱️</div>
+                        <div style="font-weight: bold; margin-bottom: 8px;">Timeout lors de la récupération</div>
+                        <div style="font-size: 0.9em; color: #6c757d; margin-bottom: 15px;">
+                            La récupération des données depuis Real-Debrid a pris trop de temps
+                        </div>
+                        <button onclick="showDetailsModal('${torrentId}')" class="btn btn-primary btn-sm">
+                            🔄 Réessayer
+                        </button>
+                    </div>
+                `;
+                showToast('⏱️ Timeout - Réessayez ou consultez les données en cache', 'warning');
+            } else {
+                error.style.display = 'block';
+                document.getElementById('modalErrorText').textContent = 'Erreur réseau: ' + err.message;
+                showToast('❌ Erreur réseau lors du chargement', 'error');
+            }
+            console.error('Erreur:', err);
+        });
+}
+
+function createRefreshIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'refreshIndicator';
+    const modalContent = document.getElementById('modalContent');
+    modalContent.insertBefore(indicator, modalContent.firstChild);
+    return indicator;
+}
             loading.style.display = 'none';
             error.style.display = 'block';
             document.getElementById('modalErrorText').textContent = 'Erreur réseau: ' + err.message;
@@ -458,6 +591,15 @@ function showDetailsModal(torrentId) {
 
 function closeModal() {
     document.getElementById('torrentModal').style.display = 'none';
+}
+
+// Variable globale pour stocker l'ID du torrent actuellement affiché
+let currentTorrentId = null;
+
+function refreshTorrentData() {
+    if (currentTorrentId) {
+        showDetailsModal(currentTorrentId);
+    }
 }
 
 function reinsertTorrent(torrentId) {
