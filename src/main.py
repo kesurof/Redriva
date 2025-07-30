@@ -80,12 +80,12 @@ ALL_KNOWN_STATUSES = ACTIVE_STATUSES + ERROR_STATUSES + COMPLETED_STATUSES
 
 def load_env_file():
     """
-    Charge les variables d'environnement depuis le fichier .env
+    Charge les variables d'environnement depuis le fichier config/.env
     
     Permet une configuration flexible sans modifier le code.
     Variables supportées: RD_TOKEN, RD_MAX_CONCURRENT, RD_BATCH_SIZE, etc.
     """
-    env_file = Path(__file__).parent.parent / '.env'
+    env_file = Path(__file__).parent.parent / 'config' / '.env'
     if env_file.exists():
         with open(env_file, 'r') as f:
             for line in f:
@@ -123,6 +123,7 @@ MAX_CONCURRENT = int(os.getenv('RD_MAX_CONCURRENT', '50'))    # Requêtes simult
 BATCH_SIZE = int(os.getenv('RD_BATCH_SIZE', '250'))          # Taille des batches
 QUOTA_WAIT_TIME = int(os.getenv('RD_QUOTA_WAIT', '60'))      # Attente quota global (sec)
 TORRENT_QUOTA_WAIT = int(os.getenv('RD_TORRENT_WAIT', '10')) # Attente quota torrent (sec)
+PAGE_WAIT_TIME = float(os.getenv('RD_PAGE_WAIT', '1.0'))     # Attente entre pages (sec)
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                         SECTION 2: UTILITAIRES ET HELPERS                 ║
@@ -328,13 +329,10 @@ def clear_database():
 
 def load_token():
     """
-    Récupère le token Real-Debrid avec nettoyage et validation maximum
+    Récupère le token Real-Debrid depuis config/.env uniquement
     Gère tous les cas d'erreurs possibles pour éviter Header Injection
     
-    Priorité de recherche:
-    1. Variable d'environnement RD_TOKEN
-    2. Fichier config/rd_token.conf
-    3. Fichier .env (fallback)
+    Source unique: Fichier config/.env
     
     Returns:
         str: Token Real-Debrid valide et nettoyé
@@ -368,64 +366,25 @@ def load_token():
             
         return token
     
-    def extract_token_from_file(filepath):
-        """Extrait le token d'un fichier en ignorant commentaires et lignes vides"""
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    # Ignorer les lignes vides et les commentaires
-                    if line and not line.startswith('#'):
-                        # Prendre la première ligne valide trouvée
-                        cleaned = clean_token(line)
-                        if cleaned:
-                            return cleaned
-            return None
-        except (FileNotFoundError, PermissionError, UnicodeDecodeError):
-            return None
-    
-    # Chargement des variables d'environnement
+    # Chargement des variables d'environnement depuis config/.env
     load_env_file()
     
-    # Tentative 1 : Variable d'environnement RD_TOKEN
+    # Source unique : Variable RD_TOKEN depuis config/.env
     env_token = os.environ.get("RD_TOKEN")
     if env_token:
-        cleaned_env = clean_token(env_token)
-        if cleaned_env:
-            logging.debug("✅ Token récupéré depuis variable d'environnement")
-            return cleaned_env
+        cleaned_token = clean_token(env_token)
+        if cleaned_token:
+            logging.debug("✅ Token récupéré depuis config/.env")
+            return cleaned_token
         else:
-            logging.warning("⚠️  Variable RD_TOKEN contient un token invalide")
-    
-    # Tentative 2 : Fichier config/rd_token.conf
-    config_path = os.path.join(os.path.dirname(__file__), "../config/rd_token.conf")
-    config_token = extract_token_from_file(config_path)
-    if config_token:
-        logging.debug("✅ Token récupéré depuis config/rd_token.conf")
-        return config_token
-    
-    # Tentative 3 : Fichier .env (secours)
-    env_file_token = None
-    try:
-        with open('.env', 'r') as f:
-            for line in f:
-                if line.strip().startswith('RD_TOKEN='):
-                    env_file_token = line.split('=', 1)[1]
-                    break
-        
-        if env_file_token:
-            cleaned_env_file = clean_token(env_file_token)
-            if cleaned_env_file:
-                logging.debug("✅ Token récupéré depuis fichier .env")
-                return cleaned_env_file
-    except FileNotFoundError:
-        pass
+            logging.error("⚠️ Token dans config/.env invalide (caractères interdits ou longueur incorrecte)")
     
     # Aucun token valide trouvé
     logging.error("❌ Aucun token Real-Debrid valide trouvé")
-    logging.error("💡 Veuillez configurer votre token :")
-    logging.error("   • Variable : export RD_TOKEN='votre_token'")
-    logging.error("   • Fichier  : echo -n 'votre_token' > config/rd_token.conf")
+    logging.error("💡 Configuration requise :")
+    logging.error("   1. Copiez config/.env.example vers config/.env")
+    logging.error("   2. Modifiez config/.env et remplacez 'votre_token_ici' par votre vrai token")
+    logging.error("   3. Obtenez votre token sur : https://real-debrid.com/apitoken")
     
     sys.exit(1)
 

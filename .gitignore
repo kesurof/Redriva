@@ -1,4 +1,5 @@
 # Fichiers sensibles
+config/.env
 config/rd_token.conf
 config/*.conf
 *.token
