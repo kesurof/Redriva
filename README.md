@@ -38,36 +38,28 @@ mkdir -p config data
 
 #### Configuration du token
 
-**Option 1 : Variable d'environnement (recommandée)**
+**Configuration unique dans config/.env :**
 ```bash
-export RD_TOKEN="votre_token_real_debrid"
-```
+# 1. Copiez le fichier d'exemple
+cp config/.env.example config/.env
 
-**Option 2 : Fichier de configuration**
-```bash
-# Copiez le fichier d'exemple
-cp config/rd_token.conf.example config/rd_token.conf
+# 2. Éditez le fichier avec votre token
+nano config/.env
 
-# Éditez le fichier avec votre token
-nano config/rd_token.conf
-```
-
-**Option 3 : Fichier .env**
-```bash
-# Copiez le fichier d'exemple
-cp .env.example .env
-
-# Éditez le fichier avec vos paramètres
-nano .env
+# 3. Remplacez 'votre_token_ici' par votre vrai token Real-Debrid
+RD_TOKEN=votre_token_real_debrid_ici
 ```
 
 ### Variables d'environnement optionnelles
 
+Vous pouvez aussi définir ces variables dans `config/.env` :
+
 ```bash
-export RD_MAX_CONCURRENT=50    # Requêtes simultanées (défaut: 50)
-export RD_BATCH_SIZE=250       # Taille des batches (défaut: 250)
-export RD_QUOTA_WAIT=60        # Attente quota global (défaut: 60s)
-export RD_TORRENT_WAIT=10      # Attente quota torrent (défaut: 10s)
+RD_MAX_CONCURRENT=50    # Requêtes simultanées (défaut: 50)
+RD_BATCH_SIZE=250       # Taille des batches (défaut: 250)
+RD_QUOTA_WAIT=60        # Attente quota global (défaut: 60s)
+RD_TORRENT_WAIT=10      # Attente quota torrent (défaut: 10s)
+RD_PAGE_WAIT=1.0        # Attente entre pages (défaut: 1.0s)
 ```
 
 ## 🎮 Menu Interactif

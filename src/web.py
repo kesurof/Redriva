@@ -490,6 +490,332 @@ def torrent_detail(torrent_id):
                          get_status_emoji=get_status_emoji,
                          format_size=format_size)
 
+@app.route('/api/torrent/delete/<torrent_id>', methods=['POST'])
+def delete_torrent(torrent_id):
+    """Supprimer un torrent de Real-Debrid"""
+    try:
+        import requests
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
+        
+        # Appel API Real-Debrid pour supprimer le torrent
+        response = requests.delete(
+            f'https://api.real-debrid.com/rest/1.0/torrents/delete/{torrent_id}',
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        
+        if response.status_code == 204:
+            # Marquer le torrent comme supprimé dans la DB locale
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE torrents 
+                SET status = 'deleted', updated_at = ? 
+                WHERE id = ?
+            """, (datetime.now().isoformat(), torrent_id))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': 'Torrent supprimé avec succès'})
+        else:
+            return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/torrent/reinsert/<torrent_id>', methods=['POST'])
+def reinsert_torrent(torrent_id):
+    """Réinsérer un torrent dans Real-Debrid"""
+    try:
+        import requests
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
+        
+        # Récupérer les infos du torrent depuis la DB
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename, hash FROM torrents WHERE id = ?", (torrent_id,))
+        torrent_data = cursor.fetchone()
+        conn.close()
+        
+        if not torrent_data:
+            return jsonify({'success': False, 'error': 'Torrent non trouvé'})
+        
+        filename, torrent_hash = torrent_data
+        
+        # Réinsérer via l'API Real-Debrid
+        response = requests.post(
+            'https://api.real-debrid.com/rest/1.0/torrents/addMagnet',
+            headers={'Authorization': f'Bearer {token}'},
+            data={'magnet': f'magnet:?xt=urn:btih:{torrent_hash}&dn={filename}'}
+        )
+        
+        if response.status_code == 201:
+            result = response.json()
+            new_id = result.get('id')
+            
+            # Mettre à jour la DB locale
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE torrents 
+                SET id = ?, status = 'magnet_error', updated_at = ? 
+                WHERE id = ?
+            """, (new_id, datetime.now().isoformat(), torrent_id))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': 'Torrent réinséré avec succès', 'new_id': new_id})
+        else:
+            return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/torrent/stream/<torrent_id>', methods=['GET'])
+def get_stream_links(torrent_id):
+    """Récupérer les liens de streaming pour un torrent"""
+    try:
+        import requests
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
+        
+        # Récupérer les infos du torrent depuis Real-Debrid
+        response = requests.get(
+            f'https://api.real-debrid.com/rest/1.0/torrents/info/{torrent_id}',
+            headers={'Authorization': f'Bearer {token}'}
+        )
+        
+        if response.status_code == 200:
+            torrent_info = response.json()
+            
+            # Générer les liens de streaming pour les fichiers vidéo
+            stream_links = []
+            if 'files' in torrent_info:
+                for file_info in torrent_info['files']:
+                    if file_info.get('selected', 0) == 1:
+                        # Obtenir le lien de téléchargement
+                        download_response = requests.post(
+                            'https://api.real-debrid.com/rest/1.0/unrestrict/link',
+                            headers={'Authorization': f'Bearer {token}'},
+                            data={'link': file_info['link']}
+                        )
+                        
+                        if download_response.status_code == 200:
+                            download_info = download_response.json()
+                            stream_links.append({
+                                'filename': file_info['path'],
+                                'size': file_info['bytes'],
+                                'download_link': download_info['download'],
+                                'stream_link': download_info['download'].replace('http:', 'https:')
+                            })
+            
+            return jsonify({'success': True, 'links': stream_links})
+        else:
+            return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/test', methods=['GET'])
+def api_test():
+    """Test endpoint simple"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM torrents")
+        count = cursor.fetchone()[0]
+        conn.close()
+        return jsonify({'status': 'ok', 'torrents_count': count})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/api/torrents/data', methods=['GET'])
+def get_torrents_data():
+    """API endpoint pour DataTable avec pagination et recherche"""
+    try:
+        # Paramètres DataTable
+        draw = int(request.args.get('draw', 1))
+        start = int(request.args.get('start', 0))
+        length = int(request.args.get('length', 25))
+        search_value = request.args.get('search[value]', '')
+        
+        # Filtres
+        status_filter = request.args.get('status', '')
+        size_min = request.args.get('size_min', '')
+        size_max = request.args.get('size_max', '')
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Version simplifiée pour débugger
+        simple_query = """
+            SELECT id, filename, status, bytes, added_on, 0 as progress,
+                   0 as files_count, 0 as seeders, '' as hash, '' as host
+            FROM torrents
+            ORDER BY added_on DESC
+            LIMIT ?
+        """
+        
+        cursor.execute(simple_query, [length])
+        torrents = cursor.fetchall()
+        
+        # Compter le total simplement
+        cursor.execute("SELECT COUNT(*) FROM torrents")
+        total_records = cursor.fetchone()[0]
+        
+        # Formater les données pour DataTable
+        data = []
+        for torrent in torrents:
+            data.append({
+                'id': torrent[0],
+                'filename': torrent[1],
+                'status': torrent[2],
+                'status_emoji': get_status_emoji(torrent[2]),
+                'bytes': torrent[3],
+                'size_formatted': format_size(torrent[3]) if torrent[3] else "N/A",
+                'added_at': torrent[4],
+                'progress': torrent[5] or 0,
+                'files_count': torrent[6] or 0,
+                'seeders': torrent[7] or 0,
+                'hash': torrent[8],
+                'host': torrent[9]
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': total_records,
+            'data': data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/api/torrents/data_full', methods=['GET'])
+def get_torrents_data_full():
+    """Version complète de l'API - une fois que la version simple fonctionne"""
+    try:
+        # Paramètres DataTable
+        draw = int(request.args.get('draw', 1))
+        start = int(request.args.get('start', 0))
+        length = int(request.args.get('length', 25))
+        search_value = request.args.get('search[value]', '')
+        
+        # Filtres
+        status_filter = request.args.get('status', '')
+        size_min = request.args.get('size_min', '')
+        size_max = request.args.get('size_max', '')
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Requête de base avec jointure pour récupérer toutes les données
+        base_query = """
+            SELECT 
+                COALESCE(td.id, t.id) as id,
+                COALESCE(td.name, t.filename) as filename,
+                COALESCE(td.status, t.status) as status,
+                COALESCE(td.size, t.bytes) as bytes,
+                COALESCE(td.added, t.added_on) as added_date,
+                COALESCE(td.progress, 0) as progress,
+                td.files_count,
+                0 as seeders,
+                td.hash,
+                td.host
+            FROM torrents t
+            LEFT JOIN torrent_details td ON t.id = td.id
+        """
+        
+        # Conditions WHERE
+        conditions = []
+        params = []
+        
+        if search_value:
+            conditions.append("COALESCE(td.name, t.filename) LIKE ?")
+            params.append(f'%{search_value}%')
+        
+        if status_filter:
+            conditions.append("COALESCE(td.status, t.status) = ?")
+            params.append(status_filter)
+        
+        if size_min:
+            conditions.append("COALESCE(td.size, t.bytes) >= ?")
+            params.append(int(size_min) * 1024 * 1024)  # MB to bytes
+        
+        if size_max:
+            conditions.append("COALESCE(td.size, t.bytes) <= ?")
+            params.append(int(size_max) * 1024 * 1024)  # MB to bytes
+        
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        
+        # Compter le total
+        count_query = f"""
+            SELECT COUNT(*) FROM (
+                SELECT COALESCE(td.id, t.id) as id,
+                       COALESCE(td.name, t.filename) as filename,
+                       COALESCE(td.status, t.status) as status,
+                       COALESCE(td.size, t.bytes) as bytes
+                FROM torrents t
+                LEFT JOIN torrent_details td ON t.id = td.id
+                {where_clause}
+            )
+        """
+        
+        cursor.execute(count_query, params)
+        total_records = cursor.fetchone()[0]
+        
+        # Requête avec pagination
+        order_column = int(request.args.get('order[0][column]', 4))  # Default: added_date
+        order_dir = request.args.get('order[0][dir]', 'desc')
+        
+        order_columns = ['id', 'filename', 'status', 'bytes', 'added_date', 'progress']
+        order_by = order_columns[order_column] if order_column < len(order_columns) else 'added_date'
+        
+        final_query = f"""
+            {base_query}{where_clause}
+            ORDER BY {order_by} {order_dir.upper()}
+            LIMIT ? OFFSET ?
+        """
+        
+        cursor.execute(final_query, params + [length, start])
+        torrents = cursor.fetchall()
+        
+        # Formater les données pour DataTable
+        data = []
+        for torrent in torrents:
+            data.append({
+                'id': torrent[0],
+                'filename': torrent[1],
+                'status': torrent[2],
+                'status_emoji': get_status_emoji(torrent[2]),
+                'bytes': torrent[3],
+                'size_formatted': format_size(torrent[3]) if torrent[3] else "N/A",
+                'added_at': torrent[4],
+                'progress': torrent[5] or 0,
+                'files_count': torrent[6] or 0,
+                'seeders': torrent[7] or 0,
+                'hash': torrent[8],
+                'host': torrent[9]
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': total_records,
+            'data': data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 if __name__ == '__main__':
     import signal
     import sys

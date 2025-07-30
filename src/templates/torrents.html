@@ -3,226 +3,505 @@
 {% block title %}Torrents - Redriva Web{% endblock %}
 
 {% block content %}
+<!-- En-tête avec actions -->
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2>📋 Liste des torrents</h2>
-        <div>
-            <a href="/sync/torrents" class="btn btn-primary">🔄 Actualiser</a>
+        <h2>📋 Gestion des torrents</h2>
+        <div style="display: flex; gap: 10px;">
+            <button id="refresh-btn" class="btn btn-primary" onclick="refreshData()">
+                🔄 Actualiser
+            </button>
+            <a href="/sync/torrents" class="btn btn-success">
+                ⬇️ Synchroniser
+            </a>
         </div>
     </div>
     
-    <!-- Filtres -->
-    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-        <select id="status-filter" onchange="filterTorrents()">
-            <option value="">Tous les statuts</option>
-            {% for status, count in available_statuses %}
-            <option value="{{ status }}" {% if status == status_filter %}selected{% endif %}>
-                {{ status }} ({{ count }})
-            </option>
-            {% endfor %}
-        </select>
+    <!-- Filtres avancés -->
+    <div class="filters-container" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <label for="status-filter" style="font-weight: bold;">Statut:</label>
+            <select id="status-filter" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <option value="">Tous les statuts</option>
+                <option value="downloaded">✅ Downloaded</option>
+                <option value="downloading">⬇️ Downloading</option>
+                <option value="error">❌ Error</option>
+                <option value="magnet_error">🧲 Magnet Error</option>
+                <option value="waiting_files_selection">⏳ Waiting</option>
+            </select>
+        </div>
         
-        <input type="text" id="search-filter" placeholder="Rechercher..." value="{{ search }}" onkeyup="filterTorrents()" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-weight: bold;">Taille:</label>
+            <input type="number" id="size-min" placeholder="Min (MB)" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <span>-</span>
+            <input type="number" id="size-max" placeholder="Max (MB)" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
         
-        <button onclick="clearFilters()" class="btn btn-secondary">🗑️ Effacer</button>
+        <button onclick="applyFilters()" class="btn btn-secondary">🔍 Filtrer</button>
+        <button onclick="clearFilters()" class="btn btn-light">🗑️ Effacer</button>
     </div>
 </div>
 
-<!-- Stats en haut -->
-<div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
-    <div class="stat-card">
-        <h4>Total</h4>
-        <h2 id="total-count">{{ torrents|length }}</h2>
+<!-- Statistiques rapides -->
+<div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+    <div class="stat-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h4 style="margin: 0; opacity: 0.9;">Total</h4>
+        <h2 id="total-torrents" style="margin: 10px 0 0 0; font-size: 2em;">-</h2>
     </div>
-    <div class="stat-card">
-        <h4>Visibles</h4>
-        <h2 id="visible-count">{{ torrents|length }}</h2>
+    <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h4 style="margin: 0; opacity: 0.9;">Téléchargés</h4>
+        <h2 id="downloaded-count" style="margin: 10px 0 0 0; font-size: 2em;">-</h2>
+    </div>
+    <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h4 style="margin: 0; opacity: 0.9;">En cours</h4>
+        <h2 id="downloading-count" style="margin: 10px 0 0 0; font-size: 2em;">-</h2>
+    </div>
+    <div class="stat-card" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+        <h4 style="margin: 0; opacity: 0.9;">Erreurs</h4>
+        <h2 id="error-count" style="margin: 10px 0 0 0; font-size: 2em;">-</h2>
     </div>
 </div>
 
-<!-- Table des torrents -->
+<!-- Table DataTable moderne -->
 <div class="card">
-    <table class="table" id="torrents-table">
-        <thead>
+    <table id="torrents-datatable" class="table table-striped table-hover" style="width: 100%;">
+        <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
             <tr>
-                <th style="width: 40%;">Nom</th>
-                <th style="width: 15%;">Statut</th>
-                <th style="width: 15%;">Taille</th>
-                <th style="width: 15%;">Date ajout</th>
-                <th style="width: 15%;">Actions</th>
+                <th style="width: 5%;">ID</th>
+                <th style="width: 35%;">Nom du fichier</th>
+                <th style="width: 12%;">Statut</th>
+                <th style="width: 10%;">Taille</th>
+                <th style="width: 12%;">Date ajout</th>
+                <th style="width: 8%;">Progression</th>
+                <th style="width: 18%;">Actions</th>
             </tr>
         </thead>
         <tbody>
-            {% for torrent in torrents %}
-            <tr class="torrent-row" 
-                data-status="{{ (torrent[6] or torrent[2])|default('unknown') }}"
-                data-name="{{ (torrent[5] or torrent[1])|default('') }}">
-                
-                <td style="max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
-                    title="{{ (torrent[5] or torrent[1])|default('N/A') }}">
-                    <strong>{{ (torrent[5] or torrent[1])|default('N/A') }}</strong>
-                </td>
-                
-                <td>
-                    {% set status = (torrent[6] or torrent[2])|default('unknown') %}
-                    {% if status == 'downloaded' %}
-                        <span class="badge badge-success">✅ Downloaded</span>
-                    {% elif status == 'downloading' %}
-                        <span class="badge badge-warning">⬇️ Downloading</span>
-                    {% elif status == 'error' %}
-                        <span class="badge badge-danger">❌ Error</span>
-                    {% elif status == 'magnet_error' %}
-                        <span class="badge badge-danger">🧲 Magnet Error</span>
-                    {% elif status == 'waiting_files_selection' %}
-                        <span class="badge badge-info">⏳ Waiting</span>
-                    {% else %}
-                        <span class="badge badge-secondary">❓ {{ status }}</span>
-                    {% endif %}
-                </td>
-                
-                <td>
-                    {% if torrent[3] %}
-                        {{ "%.1f"|format(torrent[3] / 1024 / 1024 / 1024) }} GB
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </td>
-                
-                <td>
-                    {% if torrent[4] %}
-                        {{ torrent[4][:10] }}
-                    {% else %}
-                        N/A
-                    {% endif %}
-                </td>
-                
-                <td>
-                    <a href="/torrent/{{ torrent[0] }}" class="btn btn-sm btn-primary">👁️ Voir</a>
-                    {% if (torrent[6] or torrent[2]) == 'error' %}
-                        <button onclick="retryTorrent('{{ torrent[0] }}')" class="btn btn-sm btn-warning">🔄 Retry</button>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
+            <!-- DataTable gère le contenu dynamiquement -->
         </tbody>
     </table>
-    
-    {% if not torrents %}
-    <div style="text-align: center; padding: 40px; color: #666;">
-        <h3>📭 Aucun torrent trouvé</h3>
-        <p>Lancez une synchronisation pour récupérer vos torrents Real-Debrid</p>
-        <a href="/sync/smart" class="btn btn-primary">🔄 Synchroniser maintenant</a>
-    </div>
-    {% endif %}
 </div>
 
-<!-- Pagination -->
-{% if pagination.pages > 1 %}
-<div class="card">
-    <div style="display: flex; justify-content: center; align-items: center; gap: 10px;">
-        {% if pagination.has_prev %}
-            <a href="?page={{ pagination.page - 1 }}&status={{ status_filter }}&search={{ search }}" class="btn btn-secondary">← Précédent</a>
-        {% endif %}
-        
-        <span>Page {{ pagination.page }} sur {{ pagination.pages }} ({{ pagination.total }} torrents)</span>
-        
-        {% if pagination.has_next %}
-            <a href="?page={{ pagination.page + 1 }}&status={{ status_filter }}&search={{ search }}" class="btn btn-secondary">Suivant →</a>
-        {% endif %}
+<!-- Modale pour les liens de streaming -->
+<div id="stream-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; max-width: 800px; width: 90%; max-height: 80%; overflow-y: auto;">
+        <h3 style="margin-top: 0;">🎬 Liens de streaming</h3>
+        <div id="stream-links-container"></div>
+        <div style="text-align: right; margin-top: 20px;">
+            <button onclick="closeStreamModal()" class="btn btn-secondary">Fermer</button>
+        </div>
     </div>
 </div>
-{% endif %}
+
+<!-- Toast container -->
+<div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 1100;"></div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+
+<style>
+/* Styles personnalisés pour DataTable */
+.dataTables_wrapper {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa !important;
+}
+
+/* Badges de statut */
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-downloaded { background: #d4edda; color: #155724; }
+.status-downloading { background: #fff3cd; color: #856404; }
+.status-error { background: #f8d7da; color: #721c24; }
+.status-magnet_error { background: #f8d7da; color: #721c24; }
+.status-waiting_files_selection { background: #d1ecf1; color: #0c5460; }
+.status-default { background: #e2e3e5; color: #383d41; }
+
+/* Boutons d'action */
+.action-btn {
+    padding: 4px 8px;
+    margin: 0 2px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.btn-view { background: #007bff; color: white; }
+.btn-delete { background: #dc3545; color: white; }
+.btn-reinsert { background: #28a745; color: white; }
+.btn-stream { background: #6f42c1; color: white; }
+
+/* Barre de progression */
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #28a745);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .filters-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+</style>
 
 <script>
-function filterTorrents() {
-    const statusFilter = document.getElementById('status-filter').value.toLowerCase();
-    const searchFilter = document.getElementById('search-filter').value.toLowerCase();
-    const rows = document.querySelectorAll('.torrent-row');
-    let visibleCount = 0;
-    
-    rows.forEach(row => {
-        const status = row.dataset.status.toLowerCase();
-        const name = row.dataset.name.toLowerCase();
-        
-        const statusMatch = !statusFilter || status.includes(statusFilter);
-        const nameMatch = !searchFilter || name.includes(searchFilter);
-        
-        if (statusMatch && nameMatch) {
-            row.style.display = '';
-            visibleCount++;
-        } else {
-            row.style.display = 'none';
+let torrentsTable;
+
+$(document).ready(function() {
+    // Initialiser DataTable
+    torrentsTable = $('#torrents-datatable').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '/api/torrents/data',
+            data: function(d) {
+                d.status = $('#status-filter').val();
+                d.size_min = $('#size-min').val();
+                d.size_max = $('#size-max').val();
+            }
+        },
+        columns: [
+            { data: 'id', width: '5%' },
+            { 
+                data: 'filename', 
+                width: '35%',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        const truncated = data.length > 50 ? data.substr(0, 50) + '...' : data;
+                        return `<span title="${data}" style="cursor: help;">${truncated}</span>`;
+                    }
+                    return data;
+                }
+            },
+            { 
+                data: 'status', 
+                width: '12%',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        const emoji = row.status_emoji;
+                        const className = `status-${data.replace(' ', '_')}`;
+                        return `<span class="status-badge ${className}">${emoji} ${data}</span>`;
+                    }
+                    return data;
+                }
+            },
+            { 
+                data: 'size_formatted', 
+                width: '10%',
+                className: 'text-right'
+            },
+            { 
+                data: 'added_at', 
+                width: '12%',
+                render: function(data, type, row) {
+                    if (type === 'display' && data) {
+                        return data.substr(0, 10);
+                    }
+                    return data || 'N/A';
+                }
+            },
+            { 
+                data: 'progress', 
+                width: '8%',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        const progress = Math.max(0, Math.min(100, data || 0));
+                        return `
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${progress}%"></div>
+                            </div>
+                            <small style="font-size: 10px;">${progress}%</small>
+                        `;
+                    }
+                    return data;
+                }
+            },
+            { 
+                data: null, 
+                width: '18%',
+                orderable: false,
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        let actions = `
+                            <a href="/torrent/${row.id}" class="action-btn btn-view" title="Voir détails">👁️</a>
+                        `;
+                        
+                        // Actions contextuelles selon le statut
+                        if (row.status === 'downloaded') {
+                            actions += `
+                                <button onclick="getStreamLinks('${row.id}')" class="action-btn btn-stream" title="Lecture">🎬</button>
+                                <button onclick="deleteTorrent('${row.id}')" class="action-btn btn-delete" title="Supprimer">🗑️</button>
+                            `;
+                        } else if (row.status === 'error' || row.status === 'magnet_error') {
+                            actions += `
+                                <button onclick="reinsertTorrent('${row.id}')" class="action-btn btn-reinsert" title="Réinsérer">↻</button>
+                                <button onclick="deleteTorrent('${row.id}')" class="action-btn btn-delete" title="Supprimer">�️</button>
+                            `;
+                        } else {
+                            actions += `
+                                <button onclick="deleteTorrent('${row.id}')" class="action-btn btn-delete" title="Supprimer">🗑️</button>
+                            `;
+                        }
+                        
+                        return actions;
+                    }
+                    return '';
+                }
+            }
+        ],
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[4, 'desc']], // Trier par date d'ajout descendante
+        language: {
+            processing: "Chargement...",
+            search: "Rechercher:",
+            lengthMenu: "Afficher _MENU_ entrées",
+            info: "Affichage de _START_ à _END_ sur _TOTAL_ entrées",
+            infoEmpty: "Affichage de 0 à 0 sur 0 entrées",
+            infoFiltered: "(filtré de _MAX_ entrées au total)",
+            paginate: {
+                first: "Premier",
+                last: "Dernier",
+                next: "Suivant",
+                previous: "Précédent"
+            },
+            emptyTable: "Aucune donnée disponible"
+        },
+        responsive: true,
+        drawCallback: function() {
+            updateStats();
         }
     });
     
-    document.getElementById('visible-count').textContent = visibleCount;
+    // Actualiser les stats initiales
+    updateStats();
+});
+
+function applyFilters() {
+    torrentsTable.ajax.reload();
 }
 
 function clearFilters() {
-    document.getElementById('status-filter').value = '';
-    document.getElementById('search-filter').value = '';
-    filterTorrents();
+    $('#status-filter').val('');
+    $('#size-min').val('');
+    $('#size-max').val('');
+    torrentsTable.ajax.reload();
 }
 
-function retryTorrent(torrentId) {
-    if (confirm('Relancer ce torrent ?')) {
-        fetch(`/api/retry/${torrentId}`, { method: 'POST' })
+function refreshData() {
+    const btn = document.getElementById('refresh-btn');
+    btn.innerHTML = '⏳ Actualisation...';
+    btn.disabled = true;
+    
+    torrentsTable.ajax.reload(function() {
+        btn.innerHTML = '🔄 Actualiser';
+        btn.disabled = false;
+        showToast('Données actualisées', 'success');
+    });
+}
+
+function deleteTorrent(torrentId) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce torrent de Real-Debrid ?')) {
+        showToast('Suppression en cours...', 'info');
+        
+        fetch(`/api/torrent/delete/${torrentId}`, { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showToast('Torrent relancé avec succès', 'success');
-                    setTimeout(() => location.reload(), 1000);
+                    showToast('Torrent supprimé avec succès', 'success');
+                    torrentsTable.ajax.reload();
                 } else {
                     showToast('Erreur: ' + data.error, 'error');
                 }
             })
             .catch(error => {
                 showToast('Erreur réseau', 'error');
+                console.error('Erreur:', error);
             });
     }
 }
 
+function reinsertTorrent(torrentId) {
+    if (confirm('Réinsérer ce torrent dans Real-Debrid ?')) {
+        showToast('Réinsertion en cours...', 'info');
+        
+        fetch(`/api/torrent/reinsert/${torrentId}`, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Torrent réinséré avec succès', 'success');
+                    torrentsTable.ajax.reload();
+                } else {
+                    showToast('Erreur: ' + data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Erreur réseau', 'error');
+                console.error('Erreur:', error);
+            });
+    }
+}
+
+function getStreamLinks(torrentId) {
+    showToast('Récupération des liens...', 'info');
+    
+    fetch(`/api/torrent/stream/${torrentId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStreamModal(data.links);
+            } else {
+                showToast('Erreur: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Erreur réseau', 'error');
+            console.error('Erreur:', error);
+        });
+}
+
+function showStreamModal(links) {
+    const container = document.getElementById('stream-links-container');
+    
+    if (links.length === 0) {
+        container.innerHTML = '<p>Aucun lien de streaming disponible pour ce torrent.</p>';
+    } else {
+        let html = '<div style="max-height: 400px; overflow-y: auto;">';
+        links.forEach(link => {
+            const sizeFormatted = (link.size / 1024 / 1024 / 1024).toFixed(2);
+            html += `
+                <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 8px; background: #f8f9fa;">
+                    <h5 style="margin: 0 0 10px 0; color: #333;">${link.filename}</h5>
+                    <p style="margin: 5px 0; color: #666;">Taille: ${sizeFormatted} GB</p>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <a href="${link.download_link}" target="_blank" class="btn btn-primary btn-sm">📥 Télécharger</a>
+                        <a href="${link.stream_link}" target="_blank" class="btn btn-success btn-sm">🎬 Streaming</a>
+                        <button onclick="copyToClipboard('${link.stream_link}')" class="btn btn-secondary btn-sm">📋 Copier</button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+    
+    document.getElementById('stream-modal').style.display = 'block';
+}
+
+function closeStreamModal() {
+    document.getElementById('stream-modal').style.display = 'none';
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Lien copié dans le presse-papiers', 'success');
+    }).catch(() => {
+        showToast('Erreur lors de la copie', 'error');
+    });
+}
+
+function updateStats() {
+    // Récupérer les infos depuis DataTable
+    const info = torrentsTable.page.info();
+    document.getElementById('total-torrents').textContent = info.recordsTotal;
+    
+    // Compter par statut (approximatif basé sur la page visible)
+    let downloaded = 0, downloading = 0, errors = 0;
+    
+    torrentsTable.rows({page: 'current'}).every(function() {
+        const data = this.data();
+        if (data.status === 'downloaded') downloaded++;
+        else if (data.status === 'downloading') downloading++;
+        else if (data.status.includes('error')) errors++;
+    });
+    
+    // Estimation basée sur la page actuelle
+    const ratio = info.recordsTotal / Math.max(1, info.length);
+    document.getElementById('downloaded-count').textContent = Math.round(downloaded * ratio);
+    document.getElementById('downloading-count').textContent = Math.round(downloading * ratio);
+    document.getElementById('error-count').textContent = Math.round(errors * ratio);
+}
+
 function showToast(message, type) {
-    // Simple toast notification
+    const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
+    
+    const colors = {
+        success: '#28a745',
+        error: '#dc3545',
+        info: '#17a2b8',
+        warning: '#ffc107'
+    };
+    
     toast.style.cssText = `
-        position: fixed; top: 20px; right: 20px; z-index: 1000;
-        padding: 12px 20px; border-radius: 4px; color: white;
-        background: ${type === 'success' ? '#28a745' : '#dc3545'};
-        animation: slideIn 0.3s ease;
+        background: ${colors[type] || colors.info};
+        color: white;
+        padding: 12px 20px;
+        margin: 5px 0;
+        border-radius: 5px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        font-weight: 500;
     `;
     toast.textContent = message;
-    document.body.appendChild(toast);
     
+    container.appendChild(toast);
+    
+    // Animation d'entrée
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
+        toast.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Suppression automatique
+    setTimeout(() => {
+        toast.style.transform = 'translateX(100%)';
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
-// Style pour les animations
-document.head.insertAdjacentHTML('beforeend', `
-<style>
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-@keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
-}
-.badge {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: bold;
-}
-.badge-success { background: #28a745; color: white; }
-.badge-warning { background: #ffc107; color: black; }
-.badge-danger { background: #dc3545; color: white; }
-.badge-info { background: #17a2b8; color: white; }
-.badge-secondary { background: #6c757d; color: white; }
-</style>
-`);
+// Fermer la modale en cliquant à l'extérieur
+document.getElementById('stream-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeStreamModal();
+    }
+});
 </script>
 {% endblock %}
