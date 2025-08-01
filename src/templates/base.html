@@ -72,8 +72,6 @@
     </div>
 
     <script>
-        let logsData = [];
-
         // Mise à jour du statut des tâches
         function updateTaskStatus() {
             fetch('/api/task_status')
@@ -100,68 +98,13 @@
                 .catch(error => console.log('Erreur de mise à jour du statut:', error));
         }
 
-        // Mise à jour des logs
-        function updateLogs() {
-            // Vérifier si le dashboard gère ses propres logs
-            if (window.skipBaseLogs) {
-                return;
-            }
-            
-            fetch('/api/logs')
-                .then(response => response.json())
-                .then(data => {
-                    const logsContent = document.getElementById('logsContent');
-                    if (!logsContent) return;
-                    
-                    if (data.logs && data.logs.length > 0) {
-                        logsData = data.logs;
-                        logsContent.innerHTML = data.logs.map(log => 
-                            `<div style="margin: 2px 0; padding: 2px 0; border-bottom: 1px solid #dee2e6;">${log}</div>`
-                        ).join('');
-                        
-                        // Auto-scroll vers le bas
-                        const container = document.getElementById('logsContainer');
-                        if (container) {
-                            container.scrollTop = container.scrollHeight;
-                        }
-                    } else if (!data.running && logsData.length === 0) {
-                        logsContent.innerHTML = `
-                            <div style="color: #6c757d; text-align: center; padding: 50px 0;">
-                                Aucune action exécutée pour le moment.<br>
-                                Cliquez sur un bouton d'action pour voir les logs ici.
-                            </div>
-                        `;
-                    }
-                })
-                .catch(error => console.log('Erreur de mise à jour des logs:', error));
-        }
-
-        // Effacer les logs
-        function clearLogs() {
-            logsData = [];
-            const logsContent = document.getElementById('logsContent');
-            if (logsContent) {
-                logsContent.innerHTML = `
-                    <div style="color: #6c757d; text-align: center; padding: 50px 0;">
-                        Logs effacés.<br>
-                        Cliquez sur un bouton d'action pour voir les nouveaux logs ici.
-                    </div>
-                `;
-            }
-            
-            // Réinitialiser les logs côté serveur aussi
-            fetch('/api/logs', { method: 'DELETE' });
-        }
-
         // Mise à jour toutes les 2 secondes
         setInterval(() => {
             updateTaskStatus();
-            updateLogs();
         }, 2000);
         
-        // Premiers appels immédiats
+        // Premier appel immédiat
         updateTaskStatus();
-        updateLogs();
     </script>
     
     {% block scripts %}{% endblock %}

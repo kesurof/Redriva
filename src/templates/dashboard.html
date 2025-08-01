@@ -88,14 +88,6 @@
                 <span>Met à jour la liste des torrents</span>
             </div>
         </button>
-        
-        <button onclick="executeSyncAction('/sync/errors', '🔄 Nouvelle tentative erreurs')" class="action-btn danger">
-            <div class="action-icon">🔄</div>
-            <div class="action-content">
-                <strong>Retry erreurs</strong>
-                <span>Retente les torrents en échec</span>
-            </div>
-        </button>
     </div>
 </div>
 
@@ -103,15 +95,6 @@
 <div class="card system-info">
     <h2>ℹ️ Informations système</h2>
     <div class="info-grid">
-        <!-- Base de données -->
-        <div class="info-item">
-            <div class="info-icon">📁</div>
-            <div class="info-content">
-                <strong>Base de données</strong>
-                <span>{{ stats.total_torrents|default(0) }} torrents</span>
-            </div>
-        </div>
-        
         <!-- Couverture -->
         <div class="info-item">
             <div class="info-icon">📊</div>
@@ -127,15 +110,6 @@
             <div class="info-content">
                 <strong>Volume total</strong>
                 <span>{{ stats.total_size|default("N/A") }}</span>
-            </div>
-        </div>
-        
-        <!-- Taille moyenne -->
-        <div class="info-item">
-            <div class="info-icon">�</div>
-            <div class="info-content">
-                <strong>Taille moyenne</strong>
-                <span>{{ stats.avg_size|default("N/A") }}</span>
             </div>
         </div>
         
@@ -157,15 +131,6 @@
             </div>
         </div>
         
-        <!-- Progression moyenne -->
-        <div class="info-item">
-            <div class="info-icon">�</div>
-            <div class="info-content">
-                <strong>Progression moy.</strong>
-                <span>{{ "%.1f"|format(stats.avg_progress|default(0)) }}%</span>
-            </div>
-        </div>
-        
         <!-- Statut des tâches -->
         <div class="info-item">
             <div class="info-icon">🕒</div>
@@ -175,49 +140,6 @@
                     {{ 'En cours' if task_status.running else 'Prêt' }}
                 </span>
             </div>
-        </div>
-        
-        <!-- Répartition rapide -->
-        <div class="info-item span-full">
-            <div class="info-icon">🔄</div>
-            <div class="info-content status-summary">
-                <strong>Répartition rapide</strong>
-                <div class="status-quick-view">
-                    <span class="status-pill success">✅ {{ stats.downloaded_count|default(0) }}</span>
-                    <span class="status-pill warning">⬇️ {{ stats.active_count|default(0) }}</span>
-                    <span class="status-pill danger">❌ {{ stats.error_count|default(0) }}</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Console de logs améliorée -->
-<div class="card logs-card">
-    <div class="logs-header">
-        <h2>📋 Console d'activité</h2>
-        <div class="logs-controls">
-            <button onclick="toggleAutoScroll()" id="autoScrollBtn" class="btn btn-small">📌 Auto-scroll</button>
-            <button onclick="clearLogs()" class="btn btn-small danger">🗑️ Effacer</button>
-        </div>
-    </div>
-    
-    <div id="logsContainer" class="logs-container">
-        <div id="logsContent" class="logs-content">
-            <div class="logs-placeholder">
-                <div class="placeholder-icon">📝</div>
-                <div class="placeholder-text">
-                    <strong>Console prête</strong><br>
-                    Les logs d'activité apparaîtront ici lors de l'exécution des actions.
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="logs-footer">
-        <div class="logs-status">
-            <span id="logsCount">0 entrées</span>
-            <span id="logsTime">Dernière mise à jour : jamais</span>
         </div>
     </div>
 </div>
@@ -511,122 +433,6 @@
 }
 
 /* Styles pour le bloc informations système enrichi */
-.span-full {
-    grid-column: 1 / -1;
-}
-
-.status-summary {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.status-quick-view {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 0.85em;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.status-pill.success {
-    background: #d4edda;
-    color: #155724;
-}
-
-.status-pill.warning {
-    background: #fff3cd;
-    color: #856404;
-}
-
-.status-pill.danger {
-    background: #f8d7da;
-    color: #721c24;
-}
-
-.logs-card {
-    margin-top: 20px;
-}
-
-.logs-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.logs-controls {
-    display: flex;
-    gap: 10px;
-}
-
-.btn-small {
-    padding: 6px 12px;
-    font-size: 0.9em;
-}
-
-.logs-container {
-    background: #1e1e1e;
-    border-radius: 8px;
-    min-height: 300px;
-    max-height: 500px;
-    overflow-y: auto;
-    border: 1px solid #e9ecef;
-}
-
-.logs-content {
-    padding: 20px;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #f8f9fa;
-}
-
-.logs-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 250px;
-    color: #6c757d;
-    text-align: center;
-}
-
-.placeholder-icon {
-    font-size: 3em;
-    margin-bottom: 15px;
-    opacity: 0.5;
-}
-
-.logs-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 10px;
-    font-size: 0.9em;
-    color: #6c757d;
-}
-
-.log-entry {
-    margin-bottom: 8px;
-    padding: 8px;
-    border-radius: 4px;
-    border-left: 3px solid;
-}
-
-.log-entry.info { border-left-color: #17a2b8; background: rgba(23, 162, 184, 0.1); }
-.log-entry.success { border-left-color: #28a745; background: rgba(40, 167, 69, 0.1); }
-.log-entry.warning { border-left-color: #ffc107; background: rgba(255, 193, 7, 0.1); }
-.log-entry.error { border-left-color: #dc3545; background: rgba(220, 53, 69, 0.1); }
 
 .log-timestamp {
     color: #6c757d;
@@ -653,13 +459,6 @@
 </style>
 
 <script>
-// Désactiver le système de logs de base.html
-window.skipBaseLogs = true;
-
-// Variables globales
-let autoScroll = true;
-let logsCount = 0;
-
 // Fonctions de navigation
 function navigateToTorrents(status) {
     if (status) {
@@ -758,129 +557,6 @@ function showConfirmModal(title, message, onConfirm) {
     };
     document.addEventListener('keydown', handleEscape);
 }
-
-// Gestion simple des logs
-function updateLogsStatus() {
-    document.getElementById('logsCount').textContent = `${logsCount} entrées`;
-    document.getElementById('logsTime').textContent = `Dernière mise à jour : ${new Date().toLocaleTimeString()}`;
-}
-
-function getLogIcon(type) {
-    const icons = {
-        'info': 'ℹ️',
-        'success': '✅',
-        'error': '❌',
-        'warning': '⚠️',
-        'loading': '🔄'
-    };
-    return icons[type] || 'ℹ️';
-}
-
-function clearLogs() {
-    const logsContent = document.getElementById('logsContent');
-    logsContent.innerHTML = `
-        <div class="logs-placeholder">
-            <div class="placeholder-icon">📝</div>
-            <div class="placeholder-text">
-                <strong>Console vidée</strong><br>
-                Les nouveaux logs apparaîtront ici.
-            </div>
-        </div>
-    `;
-    logsCount = 0;
-    updateLogsStatus();
-    
-    // Vider aussi les logs côté serveur
-    fetch('/api/logs', { method: 'DELETE' })
-        .catch(console.error);
-}
-
-function toggleAutoScroll() {
-    autoScroll = !autoScroll;
-    const btn = document.getElementById('autoScrollBtn');
-    if (btn) {
-        btn.textContent = autoScroll ? '📌 Auto-scroll' : '📌 Manual';
-    }
-}
-
-function fetchLogs() {
-    fetch('/api/logs')
-        .then(response => response.json())
-        .then(data => {
-            if (data.logs && data.logs.length > 0) {
-                const logsContent = document.getElementById('logsContent');
-                
-                // Supprimer le placeholder s'il existe
-                const placeholder = logsContent.querySelector('.logs-placeholder');
-                if (placeholder) {
-                    placeholder.remove();
-                }
-                
-                // Vider COMPLÈTEMENT le contenu pour éviter les conflits
-                logsContent.innerHTML = '';
-                
-                data.logs.forEach(log => {
-                    // Analyser le type de log basé sur le contenu
-                    let type = 'info';
-                    if (log.includes('✅') || log.includes('SUCCESS')) type = 'success';
-                    else if (log.includes('❌') || log.includes('ERROR')) type = 'error';
-                    else if (log.includes('⚠️') || log.includes('WARNING')) type = 'warning';
-                    else if (log.includes('🔄') || log.includes('en cours')) type = 'loading';
-                    
-                    const logEntry = document.createElement('div');
-                    logEntry.className = `log-entry ${type}`;
-                    // FORCER les styles inline pour éviter les conflits CSS
-                    logEntry.style.cssText = `
-                        margin-bottom: 8px;
-                        padding: 8px;
-                        border-radius: 4px;
-                        border-left: 3px solid;
-                        font-size: 13px !important;
-                        line-height: 1.5 !important;
-                        font-family: 'Courier New', monospace !important;
-                    `;
-                    
-                    // Couleurs selon le type
-                    if (type === 'info') {
-                        logEntry.style.borderLeftColor = '#17a2b8';
-                        logEntry.style.background = 'rgba(23, 162, 184, 0.1)';
-                    } else if (type === 'success') {
-                        logEntry.style.borderLeftColor = '#28a745';
-                        logEntry.style.background = 'rgba(40, 167, 69, 0.1)';
-                    } else if (type === 'warning') {
-                        logEntry.style.borderLeftColor = '#ffc107';
-                        logEntry.style.background = 'rgba(255, 193, 7, 0.1)';
-                    } else if (type === 'error') {
-                        logEntry.style.borderLeftColor = '#dc3545';
-                        logEntry.style.background = 'rgba(220, 53, 69, 0.1)';
-                    }
-                    
-                    logEntry.innerHTML = `
-                        <div class="log-icon" style="display: inline-block; margin-right: 8px;">${getLogIcon(type)}</div>
-                        <div class="log-message" style="display: inline-block; font-size: 13px !important;">${log}</div>
-                    `;
-                    logsContent.appendChild(logEntry);
-                });
-                
-                logsCount = data.logs.length;
-                
-                // Auto-scroll si activé
-                if (autoScroll) {
-                    logsContent.scrollTop = logsContent.scrollHeight;
-                }
-                
-                updateLogsStatus();
-            }
-        })
-        .catch(console.error);
-}
-
-// Initialisation simplifiée
-document.addEventListener('DOMContentLoaded', function() {
-    // Polling simple toutes les 3 secondes
-    setInterval(fetchLogs, 3000);
-    fetchLogs(); // Premier appel
-});
 
 // Styles CSS pour les animations de sortie
 const style = document.createElement('style');
