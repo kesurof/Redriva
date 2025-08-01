@@ -70,9 +70,6 @@ RUN mkdir -p /app/data /app/config
 # Copie le code source de l'application dans le conteneur
 COPY . .
 
-# Copie le fichier .env.example dans le dossier config
-COPY config/.env.example /app/config/.env.example
-
 # Expose le port 5000, sur lequel Gunicorn écoutera les connexions
 EXPOSE 5000
 
