@@ -1,0 +1,41 @@
+# Fichiers et dossiers liés à Git
+.git
+.gitignore
+
+# Fichiers liés à Docker - ils ne doivent pas être dans l'image elle-même
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.override.yml
+docker-compose.override.yml.example
+docker-helper.sh
+build_docker.sh
+
+# Cache et fichiers compilés Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environnements virtuels Python
+env/
+venv/
+.venv/
+
+# Fichiers de configuration et de données locales
+# Ces dossiers seront montés en tant que volumes, pas copiés dans l'image.
+data/
+config/
+*.db
+*.db-journal
+*.log
+
+# Fichiers de développement et de sauvegarde
+*.bak
+*~
+stop_web.sh
+setup.sh
+
+# Fichiers spécifiques à l'IDE
+.vscode/
+.idea/

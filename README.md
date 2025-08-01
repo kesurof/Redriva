@@ -53,7 +53,63 @@ Redriva est un outil puissant doté d'une interface web élégante pour gérer v
     ```
     > Vous pouvez obtenir votre token depuis votre [page de profil Real-Debrid](https://real-debrid.com/apitoken).
 
-## 💡 Utilisation
+## � Installation Docker (Recommandée)
+
+Docker offre la solution la plus simple et la plus fiable pour faire fonctionner Redriva.
+
+### Installation Rapide avec Docker
+
+1.  **Clonez le dépôt :**
+    ```bash
+    git clone https://github.com/kesurof/Redriva.git
+    cd Redriva
+    ```
+
+2.  **Configuration automatique :**
+    ```bash
+    ./docker-helper.sh setup
+    ```
+
+3.  **Modifiez votre token** dans `config/.env` :
+    ```bash
+    nano config/.env
+    # Remplacez 'votre_token_ici' par votre vrai token Real-Debrid
+    ```
+
+4.  **Démarrez Redriva :**
+    ```bash
+    ./docker-helper.sh start
+    ```
+
+L'application sera accessible sur `http://localhost:5000` 🎉
+
+### Commandes Docker Utiles
+
+| Commande | Description |
+|----------|-------------|
+| `./docker-helper.sh start` | Démarre Redriva |
+| `./docker-helper.sh stop` | Arrête Redriva |
+| `./docker-helper.sh restart` | Redémarre Redriva |
+| `./docker-helper.sh logs` | Affiche les logs en temps réel |
+| `./docker-helper.sh status` | Vérifiez l'état des conteneurs |
+| `./docker-helper.sh update` | Met à jour vers la dernière version |
+
+### Installation Docker Manuelle
+
+Si vous préférez utiliser docker-compose directement :
+
+```bash
+# Après configuration du token dans config/.env
+docker-compose up -d
+
+# Pour voir les logs
+docker-compose logs -f
+
+# Pour arrêter
+docker-compose down
+```
+
+## �💡 Utilisation
 
 ### Lancer l'Interface Web (Recommandé)
 
@@ -89,6 +145,7 @@ Redriva est un outil puissant doté d'une interface web élégante pour gérer v
 -   **Backend** : Python, Flask, aiohttp
 -   **Base de données** : SQLite
 -   **Frontend** : HTML, CSS, JavaScript (sans framework)
+-   **Containerisation** : Docker, Docker Compose
 
 ## 📄 Licence
 

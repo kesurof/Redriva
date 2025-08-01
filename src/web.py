@@ -31,10 +31,10 @@ from main import (
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-# Configuration
-app.config['HOST'] = '127.0.0.1'
-app.config['PORT'] = 5000  # Port par défaut
-app.config['DEBUG'] = False  # Mode debug temporaire pour diagnostiquer l'erreur 403
+# Configuration adaptée pour Docker et environnements locaux
+app.config['HOST'] = os.getenv('FLASK_HOST', '0.0.0.0')  # 0.0.0.0 pour Docker, configurable via env
+app.config['PORT'] = int(os.getenv('FLASK_PORT', '5000'))  # Port configurable via env
+app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'  # Debug configurable
 
 # Ajout de gestionnaires d'erreur pour diagnostiquer le problème
 @app.errorhandler(403)
