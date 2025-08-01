@@ -6,6 +6,13 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# Variables d'environnement
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/redriva
 
 jobs:
   build-and-push:
@@ -17,25 +24,53 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Se connecte à Docker Hub en utilisant les secrets configurés
+      # 2. Vérification des secrets (pour debug)
+      - name: Check secrets
+        run: |
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "❌ DOCKERHUB_USERNAME secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "❌ DOCKERHUB_TOKEN secret is not set"
+            exit 1
+          fi
+          echo "✅ Docker Hub secrets are configured"
+
+      # 3. Se connecte à Docker Hub en utilisant les secrets configurés
       - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3. Met en place Docker Buildx pour des builds optimisés
+      # 4. Met en place Docker Buildx pour des builds optimisés
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 4. Construit l'image et la pousse sur Docker Hub
+      # 5. Extraire les métadonnées pour les tags
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # 6. Construit l'image et la pousse sur Docker Hub
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          # Pousse l'image vers le registre
-          push: true
-          # Crée deux tags pour l'image : "latest" et un tag basé sur le hash du commit
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/redriva:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/redriva:${{ github.sha }}
+          # Ne pousse que si ce n'est pas une pull request
+          push: ${{ github.event_name != 'pull_request' }}
+          # Tags extraits des métadonnées
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache pour accélérer les builds
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

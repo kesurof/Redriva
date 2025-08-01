@@ -1,0 +1,54 @@
+# .github/workflows/docker-test.yml
+
+name: Test Docker Build
+
+# Test la construction Docker sans push pour valider les changements
+on:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - 'src/**'
+      - '.github/workflows/docker-*.yml'
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Récupère le code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Met en place Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. Test de construction uniquement (sans push)
+      - name: Test Docker build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: redriva:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 4. Test de l'image construite
+      - name: Test image functionality
+        run: |
+          # Construire l'image localement pour test
+          docker build -t redriva:test .
+          
+          # Test que les fichiers principaux sont présents
+          docker run --rm redriva:test ls -la /app/src/
+          
+          # Test que Python peut importer les modules
+          docker run --rm redriva:test python -c "import src.main; print('✅ Main module import OK')"
+          docker run --rm redriva:test python -c "import src.web; print('✅ Web module import OK')"
+          
+          # Test que les dépendances sont installées
+          docker run --rm redriva:test python -c "import flask, aiohttp, requests; print('✅ Dependencies OK')"
+          
+          echo "🎉 Tous les tests passent !"
