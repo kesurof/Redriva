@@ -1017,6 +1017,15 @@ def sync_smart(token):
     logging.info(f"   📊 Phase 1 : {total_torrents} statuts mis à jour")
     logging.info(f"   📊 Phase 3 : {processed} détails mis à jour en {duration:.1f}s ({rate:.1f}/s)")
     
+    # Étape 4: Nettoyage des torrents obsolètes
+    logging.info("🧹 [PHASE 4] Nettoyage des torrents obsolètes...")
+    cleaned_count = clean_obsolete_torrents(token)
+    if cleaned_count > 0:
+        logging.info(f"🗑️ Supprimé {cleaned_count} torrents obsolètes de la base locale")
+        print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
+    else:
+        logging.info("✅ Aucun torrent obsolète trouvé")
+    
     # Afficher un résumé final
     display_final_summary()
 
@@ -1038,6 +1047,15 @@ def sync_resume(token):
     
     processed = asyncio.run(fetch_all_torrent_details_v2(token, all_ids, resumable=True))
     logging.info(f"✅ Reprise terminée ! {processed} détails traités")
+    
+    # Nettoyage des torrents obsolètes
+    logging.info("🧹 Nettoyage des torrents obsolètes...")
+    cleaned_count = clean_obsolete_torrents(token)
+    if cleaned_count > 0:
+        logging.info(f"🗑️ Supprimé {cleaned_count} torrents obsolètes de la base locale")
+        print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
+    else:
+        logging.info("✅ Aucun torrent obsolète trouvé")
 
 def sync_details_only(token, status_filter=None):
     """
@@ -1068,6 +1086,15 @@ def sync_details_only(token, status_filter=None):
     logging.info(f"🔄 Synchronisation des détails pour {len(torrent_ids)} torrents...")
     processed = asyncio.run(fetch_all_torrent_details(token, torrent_ids))
     logging.info(f"✅ Détails synchronisés pour {processed} torrents.")
+    
+    # Nettoyage des torrents obsolètes
+    logging.info("🧹 Nettoyage des torrents obsolètes...")
+    cleaned_count = clean_obsolete_torrents(token)
+    if cleaned_count > 0:
+        logging.info(f"🗑️ Supprimé {cleaned_count} torrents obsolètes de la base locale")
+        print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
+    else:
+        logging.info("✅ Aucun torrent obsolète trouvé")
 
 def sync_torrents_only(token):
     """
@@ -1088,6 +1115,15 @@ def sync_torrents_only(token):
     if total > 0:
         logging.info(f"✅ Synchronisation terminée ! {total} torrents enregistrés dans la table 'torrents'")
         
+        # Nettoyage des torrents obsolètes
+        logging.info("🧹 Nettoyage des torrents obsolètes...")
+        cleaned_count = clean_obsolete_torrents(token)
+        if cleaned_count > 0:
+            logging.info(f"🗑️ Supprimé {cleaned_count} torrents obsolètes de la base locale")
+            print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
+        else:
+            logging.info("✅ Aucun torrent obsolète trouvé")
+        
         # Afficher un petit résumé
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
@@ -1100,6 +1136,102 @@ def sync_torrents_only(token):
                 print(f"   {emoji} {status}: {count}")
     else:
         logging.info("ℹ️  Aucun torrent trouvé ou synchronisé")
+
+def clean_obsolete_torrents(token):
+    """
+    Nettoie les torrents qui existent localement mais qui ne sont plus présents côté Real-Debrid
+    
+    Cette fonction récupère la liste actuelle des torrents depuis Real-Debrid et supprime
+    de la base locale tous les torrents qui n'y figurent plus.
+    
+    Args:
+        token (str): Token d'authentification Real-Debrid
+        
+    Returns:
+        int: Nombre de torrents supprimés
+    """
+    logging.info("🔍 Récupération de la liste actuelle des torrents Real-Debrid...")
+    
+    # Récupérer tous les IDs de torrents actuels côté Real-Debrid
+    current_rd_ids = set()
+    headers = {"Authorization": f"Bearer {token}"}
+    limit = 2500
+    
+    try:
+        import aiohttp
+        import asyncio
+        
+        async def get_current_torrent_ids():
+            page = 1
+            async with aiohttp.ClientSession() as session:
+                while True:
+                    params = {"page": page, "limit": limit}
+                    try:
+                        torrents = await api_request(session, RD_API_URL, headers, params)
+                        if not torrents:
+                            break
+                        
+                        for t in torrents:
+                            current_rd_ids.add(t['id'])
+                        
+                        if len(torrents) < limit:
+                            break
+                            
+                        page += 1
+                        await asyncio.sleep(1)  # Pause entre pages
+                        
+                    except Exception as e:
+                        logging.error(f"Erreur lors de la récupération des IDs Real-Debrid: {e}")
+                        break
+        
+        # Exécuter la récupération
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(get_current_torrent_ids())
+        loop.close()
+        
+        if not current_rd_ids:
+            logging.warning("⚠️ Aucun torrent trouvé côté Real-Debrid, nettoyage annulé par sécurité")
+            return 0
+        
+        logging.info(f"✅ {len(current_rd_ids)} torrents trouvés côté Real-Debrid")
+        
+        # Récupérer tous les IDs locaux
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM torrents")
+            local_ids = {row[0] for row in c.fetchall()}
+        
+        # Identifier les torrents obsolètes (présents localement mais pas côté Real-Debrid)
+        obsolete_ids = local_ids - current_rd_ids
+        
+        if not obsolete_ids:
+            logging.info("✅ Aucun torrent obsolète trouvé")
+            return 0
+        
+        logging.info(f"🗑️ {len(obsolete_ids)} torrents obsolètes détectés")
+        
+        # Supprimer les torrents obsolètes des deux tables
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Supprimer de torrents
+            placeholders = ','.join('?' * len(obsolete_ids))
+            c.execute(f"DELETE FROM torrents WHERE id IN ({placeholders})", list(obsolete_ids))
+            torrents_deleted = c.rowcount
+            
+            # Supprimer de torrent_details
+            c.execute(f"DELETE FROM torrent_details WHERE id IN ({placeholders})", list(obsolete_ids))
+            details_deleted = c.rowcount
+            
+            conn.commit()
+        
+        logging.info(f"🗑️ Supprimé {torrents_deleted} entrées de 'torrents' et {details_deleted} entrées de 'torrent_details'")
+        return len(obsolete_ids)
+        
+    except Exception as e:
+        logging.error(f"❌ Erreur lors du nettoyage des torrents obsolètes: {e}")
+        return 0
 
 def sync_all_v2(token):
     """
@@ -1142,6 +1274,15 @@ def sync_all_v2(token):
     else:
         logging.info("✅ Tous les détails sont déjà à jour")
         print(f"🚀 Synchronisation complète terminée: {total_torrents} torrents, tous les détails à jour")
+    
+    # Étape 3: Nettoyage des torrents obsolètes
+    logging.info("🧹 Étape 3/3: Nettoyage des torrents obsolètes...")
+    cleaned_count = clean_obsolete_torrents(token)
+    if cleaned_count > 0:
+        logging.info(f"🗑️ Supprimé {cleaned_count} torrents obsolètes de la base locale")
+        print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
+    else:
+        logging.info("✅ Aucun torrent obsolète trouvé")
     
     display_final_summary()
 

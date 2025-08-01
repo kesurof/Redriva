@@ -16,6 +16,9 @@ import logging
 import requests
 import urllib.parse
 import uuid
+import signal
+import traceback
+from datetime import datetime
 
 # Import des fonctions existantes
 import sys
@@ -34,7 +37,7 @@ app.secret_key = os.urandom(24)
 # Configuration adaptée pour Docker et environnements locaux
 app.config['HOST'] = os.getenv('FLASK_HOST', '0.0.0.0')  # 0.0.0.0 pour Docker, configurable via env
 app.config['PORT'] = int(os.getenv('FLASK_PORT', '5000'))  # Port configurable via env
-app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'  # Debug configurable
+app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'  # Debug activé par défaut en dev
 
 # Ajout de gestionnaires d'erreur pour diagnostiquer le problème
 @app.errorhandler(403)
@@ -207,10 +210,16 @@ def dashboard():
                 c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0 AND status != 'deleted'")
                 total_size = c.fetchone()[0] or 0
                 
-                # Erreurs (utilisation des constantes, exclure les supprimés)
+                # Erreurs (logique unifiée : priorité torrents.status, exclure les supprimés)
                 if ERROR_STATUSES:
                     placeholders = ','.join('?' * len(ERROR_STATUSES))
-                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ERROR_STATUSES)
+                    c.execute(f"""
+                        SELECT COUNT(DISTINCT t.id) 
+                        FROM torrents t
+                        LEFT JOIN torrent_details td ON t.id = td.id
+                        WHERE t.status != 'deleted' 
+                        AND COALESCE(t.status, td.status) IN ({placeholders})
+                    """, ERROR_STATUSES)
                     error_count = c.fetchone()[0] or 0
                 else:
                     error_count = 0
@@ -241,10 +250,16 @@ def dashboard():
                 c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
                 downloaded_count = c.fetchone()[0] or 0
                 
-                # Compte des téléchargements actifs (status in ACTIVE_STATUSES, exclure les supprimés)
+                # Compte des téléchargements actifs (logique unifiée : priorité torrents.status)
                 if ACTIVE_STATUSES:
                     placeholders = ','.join('?' * len(ACTIVE_STATUSES))
-                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ACTIVE_STATUSES)
+                    c.execute(f"""
+                        SELECT COUNT(DISTINCT t.id) 
+                        FROM torrents t
+                        LEFT JOIN torrent_details td ON t.id = td.id
+                        WHERE t.status != 'deleted' 
+                        AND COALESCE(t.status, td.status) IN ({placeholders})
+                    """, ACTIVE_STATUSES)
                     active_count = c.fetchone()[0] or 0
                 else:
                     active_count = 0
@@ -1257,10 +1272,16 @@ def refresh_stats():
             
             coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
             
-            # Erreurs (exclure les supprimés)
+            # Erreurs (logique unifiée : priorité torrents.status)
             if ERROR_STATUSES:
                 placeholders = ','.join('?' * len(ERROR_STATUSES))
-                c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ERROR_STATUSES)
+                c.execute(f"""
+                    SELECT COUNT(DISTINCT t.id) 
+                    FROM torrents t
+                    LEFT JOIN torrent_details td ON t.id = td.id
+                    WHERE t.status != 'deleted' 
+                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                """, ERROR_STATUSES)
                 error_count = c.fetchone()[0] or 0
             else:
                 error_count = 0
@@ -1269,10 +1290,16 @@ def refresh_stats():
             c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
             downloaded_count = c.fetchone()[0] or 0
             
-            # Actifs (exclure les supprimés)
+            # Actifs (logique unifiée : priorité torrents.status)
             if ACTIVE_STATUSES:
                 placeholders = ','.join('?' * len(ACTIVE_STATUSES))
-                c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ACTIVE_STATUSES)
+                c.execute(f"""
+                    SELECT COUNT(DISTINCT t.id) 
+                    FROM torrents t
+                    LEFT JOIN torrent_details td ON t.id = td.id
+                    WHERE t.status != 'deleted' 
+                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                """, ACTIVE_STATUSES)
                 active_count = c.fetchone()[0] or 0
             else:
                 active_count = 0
@@ -1291,6 +1318,103 @@ def refresh_stats():
             
     except Exception as e:
         print(f"❌ Erreur lors du rafraîchissement des stats: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/processing_torrents')
+def get_processing_torrents():
+    """API pour récupérer le détail des torrents en cours de traitement"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Logique unifiée : une seule requête avec JOIN pour éviter les doublons
+            # Priorité au statut depuis torrents (source de vérité, mise à jour plus rapide)
+            if ACTIVE_STATUSES:
+                placeholders = ','.join('?' * len(ACTIVE_STATUSES))
+                
+                # Comptage unifié : priorité torrents.status, fallback sur torrent_details.status
+                # Exclusion stricte des torrents supprimés (torrents.status = 'deleted')
+                c.execute(f"""
+                    SELECT COUNT(DISTINCT t.id) 
+                    FROM torrents t
+                    LEFT JOIN torrent_details td ON t.id = td.id
+                    WHERE t.status != 'deleted' 
+                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                """, ACTIVE_STATUSES)
+                processing_count = c.fetchone()[0] or 0
+                
+                # Détail par statut avec priorité torrents.status
+                c.execute(f"""
+                    SELECT COALESCE(t.status, td.status) as final_status, COUNT(DISTINCT t.id) as count
+                    FROM torrents t
+                    LEFT JOIN torrent_details td ON t.id = td.id
+                    WHERE t.status != 'deleted' 
+                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                    GROUP BY COALESCE(t.status, td.status)
+                    ORDER BY count DESC
+                """, ACTIVE_STATUSES)
+                status_breakdown = c.fetchall()
+                
+                # Comptage des erreurs avec même logique
+                if ERROR_STATUSES:
+                    error_placeholders = ','.join('?' * len(ERROR_STATUSES))
+                    c.execute(f"""
+                        SELECT COUNT(DISTINCT t.id) 
+                        FROM torrents t
+                        LEFT JOIN torrent_details td ON t.id = td.id
+                        WHERE t.status != 'deleted' 
+                        AND COALESCE(t.status, td.status) IN ({error_placeholders})
+                    """, ERROR_STATUSES)
+                    error_count = c.fetchone()[0] or 0
+                else:
+                    error_count = 0
+                
+                # Récupérer quelques exemples avec statut unifié
+                c.execute(f"""
+                    SELECT t.id, t.filename, t.status as torrent_status, 
+                           td.status as detail_status, td.progress, 
+                           t.added_on, td.name,
+                           COALESCE(t.status, td.status) as final_status
+                    FROM torrents t
+                    LEFT JOIN torrent_details td ON t.id = td.id
+                    WHERE t.status != 'deleted' 
+                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                    ORDER BY t.added_on DESC
+                    LIMIT 10
+                """, ACTIVE_STATUSES)
+                
+                examples = []
+                for row in c.fetchall():
+                    examples.append({
+                        'id': row[0],
+                        'filename': row[1],
+                        'torrent_status': row[2],
+                        'detail_status': row[3],
+                        'progress': row[4] or 0,
+                        'added_on': row[5],
+                        'display_name': row[6] or row[1],
+                        'final_status': row[7]
+                    })
+                
+            else:
+                processing_count = 0
+                error_count = 0
+                status_breakdown = []
+                examples = []
+            
+            return jsonify({
+                'success': True,
+                'processing_count': processing_count,
+                'error_count': error_count,
+                'status_breakdown': [{'status': s[0], 'count': s[1]} for s in status_breakdown],
+                'active_statuses': list(ACTIVE_STATUSES),
+                'error_statuses': list(ERROR_STATUSES),
+                'examples': examples,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des torrents en traitement: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
@@ -1312,7 +1436,7 @@ if __name__ == '__main__':
     try:
         app.run(host=app.config['HOST'], 
                 port=app.config['PORT'], 
-                debug=app.config['DEBUG'],
+                debug=True,  # Force debug mode
                 threaded=True,
                 use_reloader=False)
     except KeyboardInterrupt:
