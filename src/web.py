@@ -34,8 +34,60 @@ app.secret_key = os.urandom(24)
 
 # Configuration
 app.config['HOST'] = '127.0.0.1'
-app.config['PORT'] = 5000
-app.config['DEBUG'] = False  # Production mode pour interface stable
+app.config['PORT'] = 5000  # Port par défaut
+app.config['DEBUG'] = False  # Mode debug temporaire pour diagnostiquer l'erreur 403
+
+# Ajout de gestionnaires d'erreur pour diagnostiquer le problème
+@app.errorhandler(403)
+def forbidden_error(error):
+    """Gestionnaire d'erreur 403 pour diagnostiquer le problème"""
+    print(f"❌ Erreur 403 interceptée: {error}")
+    print(f"   URL demandée: {request.url}")
+    print(f"   Méthode: {request.method}")
+    print(f"   Headers: {dict(request.headers)}")
+    
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False, 
+            'error': 'Accès refusé - Vérifiez votre configuration',
+            'debug_info': {
+                'url': request.url,
+                'method': request.method,
+                'path': request.path
+            }
+        }), 403
+    
+    flash('Erreur 403: Accès refusé - Vérifiez votre configuration', 'error')
+    return render_template('dashboard.html', 
+                         stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
+                         task_status=task_status,
+                         error_403=True), 403
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Gestionnaire d'erreur 500 pour diagnostiquer les erreurs internes"""
+    print(f"❌ Erreur 500 interceptée: {error}")
+    print(f"   URL demandée: {request.url}")
+    
+    if request.path.startswith('/api/'):
+        return jsonify({
+            'success': False, 
+            'error': 'Erreur interne du serveur',
+            'debug_info': str(error)
+        }), 500
+    
+    flash('Erreur interne du serveur - Consultez les logs', 'error')
+    return render_template('dashboard.html', 
+                         stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
+                         task_status=task_status,
+                         error_500=True), 500
+
+@app.before_request
+def log_request_info():
+    """Log toutes les requêtes pour diagnostic"""
+    print(f"🔍 Requête: {request.method} {request.path}")
+    print(f"   Remote addr: {request.remote_addr}")
+    print(f"   User agent: {request.headers.get('User-Agent', 'N/A')}")
 
 # Variables globales pour le système de logs avancé
 task_status = {
@@ -216,76 +268,129 @@ def load_logs_from_file():
 
 @app.route('/')
 def dashboard():
-    """Page d'accueil avec statistiques générales"""
+    """Page d'accueil avec statistiques générales et gestion d'erreurs renforcée"""
     try:
+        print("🔍 Début de la fonction dashboard()")
+        
+        # Vérifier le token avant tout
+        try:
+            token = load_token()
+            print(f"✅ Token chargé: {token[:10]}...")
+        except Exception as token_error:
+            print(f"❌ Erreur token: {token_error}")
+            flash("⚠️ Token Real-Debrid non configuré ou invalide", 'warning')
+            return render_template('dashboard.html', 
+                                 stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
+                                 task_status=task_status,
+                                 no_token=True)
+        
         create_tables()
+        print("✅ Tables créées/vérifiées")
         
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             
-            # Statistiques de base
-            c.execute("SELECT COUNT(*) FROM torrents")
-            total_torrents = c.fetchone()[0]
+            try:
+                # Statistiques de base
+                c.execute("SELECT COUNT(*) FROM torrents")
+                total_torrents = c.fetchone()[0]
+                
+                c.execute("SELECT COUNT(*) FROM torrent_details")
+                total_details = c.fetchone()[0]
+                
+                coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
+                print(f"📊 Stats de base: {total_torrents} torrents, {total_details} détails")
+            except sqlite3.Error as db_error:
+                print(f"❌ Erreur DB lors des stats de base: {db_error}")
+                flash("Erreur d'accès à la base de données", 'error')
+                return render_template('dashboard.html', 
+                                     stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
+                                     task_status=task_status,
+                                     db_error=True)
             
-            c.execute("SELECT COUNT(*) FROM torrent_details")
-            total_details = c.fetchone()[0]
+            try:
+                # Répartition par statut
+                c.execute("""
+                    SELECT status, COUNT(*) as count 
+                    FROM torrent_details 
+                    GROUP BY status 
+                    ORDER BY count DESC 
+                    LIMIT 8
+                """)
+                status_data = c.fetchall()
+                
+                # Torrents récents
+                c.execute("""
+                    SELECT COUNT(*) FROM torrents 
+                    WHERE datetime(added_on) >= datetime('now', '-24 hours')
+                """)
+                recent_24h = c.fetchone()[0] or 0
+                
+                # Taille totale
+                c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0")
+                total_size = c.fetchone()[0] or 0
+                
+                # Erreurs (utilisation des constantes)
+                if ERROR_STATUSES:
+                    placeholders = ','.join('?' * len(ERROR_STATUSES))
+                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ERROR_STATUSES)
+                    error_count = c.fetchone()[0] or 0
+                else:
+                    error_count = 0
+                    
+                print(f"📊 Stats avancées calculées: {error_count} erreurs")
+                
+            except sqlite3.Error as db_error:
+                print(f"❌ Erreur DB lors des stats avancées: {db_error}")
+                # Valeurs par défaut en cas d'erreur
+                status_data = []
+                recent_24h = 0
+                total_size = 0
+                error_count = 0
             
-            coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
-            
-            # Répartition par statut
-            c.execute("""
-                SELECT status, COUNT(*) as count 
-                FROM torrent_details 
-                GROUP BY status 
-                ORDER BY count DESC 
-                LIMIT 8
-            """)
-            status_data = c.fetchall()
-            
-            # Torrents récents
-            c.execute("""
-                SELECT COUNT(*) FROM torrents 
-                WHERE datetime(added_on) >= datetime('now', '-24 hours')
-            """)
-            recent_24h = c.fetchone()[0] or 0
-            
-            # Taille totale
-            c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0")
-            total_size = c.fetchone()[0] or 0
-            
-            # Erreurs (utilisation des constantes)
-            placeholders = ','.join('?' * len(ERROR_STATUSES))
-            c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ERROR_STATUSES)
-            error_count = c.fetchone()[0] or 0
-            
-                    # Statistiques complémentaires
-        # Récupération de la taille moyenne et des activités récentes
-        c.execute("""
-            SELECT AVG(CAST(size AS REAL)), 
-                   SUM(CASE WHEN datetime(added) > datetime('now', '-7 days') THEN 1 ELSE 0 END)
-            FROM torrent_details WHERE size IS NOT NULL AND size != ''
-        """)
-        result = c.fetchone()
-        avg_size = result[0] if result and result[0] else 0
-        recent_7d = result[1] if result and result[1] else 0
-        
-        # Progression moyenne
-        c.execute("""
-            SELECT AVG(CAST(progress AS REAL))
-            FROM torrent_details 
-            WHERE progress IS NOT NULL AND progress != '' AND progress != 'N/A'
-        """)
-        avg_progress_result = c.fetchone()
-        avg_progress = avg_progress_result[0] if avg_progress_result and avg_progress_result[0] else 0
-        
-        # Compte des téléchargés
-        c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
-        downloaded_count = c.fetchone()[0] or 0
-            # Compte des téléchargements actifs (status in ACTIVE_STATUSES)
-        if ACTIVE_STATUSES:
-            placeholders = ','.join('?' * len(ACTIVE_STATUSES))
-            c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ACTIVE_STATUSES)
-            active_count = c.fetchone()[0] or 0
+            try:
+                # Statistiques complémentaires
+                # Récupération de la taille moyenne et des activités récentes
+                c.execute("""
+                    SELECT AVG(CAST(size AS REAL)), 
+                           SUM(CASE WHEN datetime(added) > datetime('now', '-7 days') THEN 1 ELSE 0 END)
+                    FROM torrent_details WHERE size IS NOT NULL AND size != ''
+                """)
+                result = c.fetchone()
+                avg_size = result[0] if result and result[0] else 0
+                recent_7d = result[1] if result and result[1] else 0
+                
+                # Progression moyenne
+                c.execute("""
+                    SELECT AVG(CAST(progress AS REAL))
+                    FROM torrent_details 
+                    WHERE progress IS NOT NULL AND progress != '' AND progress != 'N/A'
+                """)
+                avg_progress_result = c.fetchone()
+                avg_progress = avg_progress_result[0] if avg_progress_result and avg_progress_result[0] else 0
+                
+                # Compte des téléchargés
+                c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
+                downloaded_count = c.fetchone()[0] or 0
+                
+                # Compte des téléchargements actifs (status in ACTIVE_STATUSES)
+                if ACTIVE_STATUSES:
+                    placeholders = ','.join('?' * len(ACTIVE_STATUSES))
+                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ACTIVE_STATUSES)
+                    active_count = c.fetchone()[0] or 0
+                else:
+                    active_count = 0
+                    
+                print(f"📊 Stats finales calculées: {downloaded_count} téléchargés, {active_count} actifs")
+                
+            except sqlite3.Error as db_error:
+                print(f"❌ Erreur DB lors des stats complémentaires: {db_error}")
+                # Valeurs par défaut
+                avg_size = 0
+                recent_7d = 0
+                avg_progress = 0
+                downloaded_count = 0
+                active_count = 0
         
         stats = {
             'total_torrents': total_torrents,
@@ -302,11 +407,19 @@ def dashboard():
             'status_data': status_data
         }
         
+        print(f"✅ Dashboard chargé avec succès: {len(stats)} statistiques")
         return render_template('dashboard.html', stats=stats, task_status=task_status)
         
     except Exception as e:
+        print(f"❌ Erreur critique dans dashboard(): {e}")
+        import traceback
+        traceback.print_exc()
+        
         flash(f"Erreur lors du chargement des statistiques: {str(e)}", 'error')
-        return render_template('dashboard.html', stats={}, task_status=task_status)
+        return render_template('dashboard.html', 
+                             stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
+                             task_status=task_status,
+                             critical_error=True)
 
 @app.route('/torrents', endpoint='torrents')
 def torrents_list():
@@ -758,50 +871,257 @@ def reinsert_torrent(torrent_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/media_info/<file_id>')
+def get_media_info(file_id):
+    """
+    Récupère les informations détaillées d'un fichier via /streaming/mediaInfos.
+    L'ID est celui obtenu après un appel à /unrestrict/link.
+    """
+    token = load_token()
+    if not token:
+        return jsonify({'success': False, 'error': 'Token non configuré'}), 401
+
+    url = f"https://api.real-debrid.com/rest/1.0/streaming/mediaInfos/{file_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()  # Lève une exception pour les codes 4xx/5xx
+        
+        media_data = response.json()
+        
+        # Simplifions la structure pour le front-end
+        details = media_data.get('details', {})
+        
+        # Vérifier le type des données pour éviter l'erreur 'list' object has no attribute 'values'
+        video_data = details.get('video', {})
+        audio_data = details.get('audio', {})
+        subtitles_data = details.get('subtitles', {})
+        
+        # Si c'est déjà une liste, l'utiliser directement, sinon extraire les valeurs du dict
+        if isinstance(video_data, list):
+            video_streams = video_data
+        else:
+            video_streams = list(video_data.values()) if video_data else []
+            
+        if isinstance(audio_data, list):
+            audio_streams = audio_data
+        else:
+            audio_streams = list(audio_data.values()) if audio_data else []
+            
+        if isinstance(subtitles_data, list):
+            subtitle_streams = subtitles_data
+        else:
+            subtitle_streams = list(subtitles_data.values()) if subtitles_data else []
+
+        return jsonify({
+            'success': True,
+            'filename': media_data.get('filename'),
+            'type': media_data.get('type'),
+            'duration': media_data.get('duration'),
+            'size': media_data.get('size'),
+            'video': video_streams,
+            'audio': audio_streams,
+            'subtitles': subtitle_streams,
+            'poster': media_data.get('poster_path'),
+            'backdrop': media_data.get('backdrop_path')
+        })
+
+    except requests.exceptions.HTTPError as e:
+        error_msg = f"Erreur API Real-Debrid: {e.response.status_code}"
+        try:
+            error_details = e.response.json()
+            error_msg += f" - {error_details.get('error', e.response.text)}"
+        except ValueError:
+            pass
+        return jsonify({'success': False, 'error': error_msg}), e.response.status_code
+    except Exception as e:
+        logging.error(f"Erreur dans get_media_info: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/torrent/stream/<torrent_id>', methods=['GET'])
 def get_stream_links(torrent_id):
-    """Récupérer les liens de streaming pour un torrent"""
+    """
+    Récupérer les liens de streaming et download pour un torrent
+    Basé sur l'analyse de l'API Real-Debrid : 
+    - Download : liens directs depuis torrent_info.links
+    - Streaming : file_id obtenu via débridage + construction du lien streaming
+    """
     try:
         token = load_token()
         if not token:
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
         
-        # Récupérer les infos du torrent depuis Real-Debrid
-        response = requests.get(
-            f'https://api.real-debrid.com/rest/1.0/torrents/info/{torrent_id}',
-            headers={'Authorization': f'Bearer {token}'}
-        )
+        print(f"🔍 Récupération des liens pour torrent: {torrent_id}")
         
-        if response.status_code == 200:
-            torrent_info = response.json()
-            
-            # Générer les liens de streaming pour les fichiers vidéo
-            stream_links = []
-            if 'files' in torrent_info:
-                for file_info in torrent_info['files']:
-                    if file_info.get('selected', 0) == 1:
-                        # Obtenir le lien de téléchargement
-                        download_response = requests.post(
-                            'https://api.real-debrid.com/rest/1.0/unrestrict/link',
-                            headers={'Authorization': f'Bearer {token}'},
-                            data={'link': file_info['link']}
-                        )
-                        
-                        if download_response.status_code == 200:
-                            download_info = download_response.json()
-                            stream_links.append({
-                                'filename': file_info['path'],
-                                'size': file_info['bytes'],
-                                'download_link': download_info['download'],
-                                'stream_link': download_info['download'].replace('http:', 'https:')
-                            })
-            
-            return jsonify({'success': True, 'links': stream_links})
-        else:
+        # Récupérer les infos du torrent depuis Real-Debrid avec timeout augmenté
+        try:
+            response = requests.get(
+                f'https://api.real-debrid.com/rest/1.0/torrents/info/{torrent_id}',
+                headers={'Authorization': f'Bearer {token}'},
+                timeout=30  # Timeout de 30 secondes (augmenté)
+            )
+            print(f"📡 Réponse torrent info: {response.status_code}")
+        except requests.exceptions.Timeout:
+            print(f"⏱️ Timeout lors de la récupération des infos torrent {torrent_id}")
+            return jsonify({'success': False, 'error': 'Timeout lors de la récupération des informations du torrent'})
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Erreur réseau torrent info: {e}")
+            return jsonify({'success': False, 'error': f'Erreur réseau: {str(e)}'})
+        
+        if response.status_code == 404:
+            return jsonify({'success': False, 'error': 'Torrent non trouvé sur Real-Debrid'})
+        elif response.status_code != 200:
             return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
+        
+        torrent_info = response.json()
+        print(f"✅ Torrent info récupéré: {torrent_info.get('filename', 'N/A')}")
+        
+        # Récupérer les liens directs de download depuis la structure
+        download_links = torrent_info.get('links', [])
+        files_info = torrent_info.get('files', [])
+        
+        if not download_links:
+            print("⚠️ Aucun lien de téléchargement trouvé")
+            return jsonify({
+                'success': True,
+                'torrent_info': {
+                    'id': torrent_id,
+                    'filename': torrent_info.get('filename', 'Unknown'),
+                    'status': torrent_info.get('status', 'unknown'),
+                    'progress': torrent_info.get('progress', 0)
+                },
+                'files': [],
+                'total_files': 0,
+                'message': 'Aucun lien de téléchargement disponible'
+            })
+        
+        # Générer les données complètes pour chaque fichier avec traitement parallèle amélioré
+        file_data = []
+        
+        for i, download_link in enumerate(download_links):
+            try:
+                # Informations du fichier (si disponibles)
+                file_info = files_info[i] if i < len(files_info) else {}
+                filename = file_info.get('path', f'Fichier {i+1}')
+                file_size = file_info.get('bytes', 0)
+                
+                print(f"🔄 Traitement fichier {i+1}: {filename}")
+                
+                # Étape 1: Débrider le lien pour obtenir le file_id avec timeout augmenté
+                try:
+                    unrestrict_response = requests.post(
+                        'https://api.real-debrid.com/rest/1.0/unrestrict/link',
+                        headers={'Authorization': f'Bearer {token}'},
+                        data={'link': download_link},
+                        timeout=20  # Timeout de 20 secondes pour débridage (augmenté)
+                    )
+                    print(f"📡 Débridage fichier {i+1}: {unrestrict_response.status_code}")
+                except requests.exceptions.Timeout:
+                    print(f"⏱️ Timeout lors du débridage fichier {i+1}")
+                    formatted_download = format_download_link(download_link)
+                    file_data.append({
+                        'index': i,
+                        'filename': filename,
+                        'size': file_size,
+                        'download_link': formatted_download,
+                        'direct_download': download_link,
+                        'streaming_link': None,
+                        'file_id': None,
+                        'mime_type': 'unknown',
+                        'error': 'Timeout lors du débridage'
+                    })
+                    continue
+                except requests.exceptions.RequestException as e:
+                    print(f"❌ Erreur réseau débridage fichier {i+1}: {e}")
+                    formatted_download = format_download_link(download_link)
+                    file_data.append({
+                        'index': i,
+                        'filename': filename,
+                        'size': file_size,
+                        'download_link': formatted_download,
+                        'direct_download': download_link,
+                        'streaming_link': None,
+                        'file_id': None,
+                        'mime_type': 'unknown',
+                        'error': f'Erreur réseau: {str(e)}'
+                    })
+                    continue
+                
+                if unrestrict_response.status_code == 200:
+                    unrestrict_data = unrestrict_response.json()
+                    file_id = unrestrict_data.get('id')
+                    direct_download = unrestrict_data.get('download', download_link)
+                    
+                    # Étape 2: Construire le lien streaming
+                    streaming_link = f"https://real-debrid.com/streaming-{file_id}" if file_id else None
+                    
+                    print(f"✅ Fichier {i+1} débridé: file_id={file_id}")
+                    
+                    # Formater le lien de téléchargement pour le downloader
+                    formatted_download = format_download_link(direct_download)
+                    
+                    file_data.append({
+                        'index': i,
+                        'filename': filename,
+                        'size': file_size,
+                        'download_link': formatted_download,  # Lien formaté pour le downloader Real-Debrid  
+                        'direct_download': direct_download,  # Lien direct brut
+                        'streaming_link': streaming_link,  # Lien de streaming construit
+                        'file_id': file_id,  # ID pour récupérer les métadonnées
+                        'mime_type': unrestrict_data.get('mimeType', 'unknown')
+                    })
+                else:
+                    # En cas d'échec du débridage, garder au moins le lien de base formaté
+                    print(f"⚠️ Échec débridage fichier {i+1}: {unrestrict_response.status_code}")
+                    formatted_download = format_download_link(download_link)
+                    file_data.append({
+                        'index': i,
+                        'filename': filename,
+                        'size': file_size,
+                        'download_link': formatted_download,
+                        'direct_download': download_link,
+                        'streaming_link': None,
+                        'file_id': None,
+                        'mime_type': 'unknown',
+                        'error': f'Échec débridage: {unrestrict_response.status_code}'
+                    })
+                        
+            except Exception as file_error:
+                # Log l'erreur mais continue avec les autres fichiers
+                print(f"❌ Erreur traitement fichier {i}: {file_error}")
+                formatted_download = format_download_link(download_link)
+                file_data.append({
+                    'index': i,
+                    'filename': f'Fichier {i+1}',
+                    'size': 0,
+                    'download_link': formatted_download,
+                    'direct_download': download_link,
+                    'streaming_link': None,
+                    'file_id': None,
+                    'mime_type': 'unknown',
+                    'error': str(file_error)
+                })
+        
+        print(f"✅ Traitement terminé: {len(file_data)} fichiers traités")
+        
+        return jsonify({
+            'success': True, 
+            'torrent_info': {
+                'id': torrent_id,
+                'filename': torrent_info.get('filename', 'Unknown'),
+                'status': torrent_info.get('status', 'unknown'),
+                'progress': torrent_info.get('progress', 0)
+            },
+            'files': file_data,
+            'total_files': len(file_data)
+        })
             
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"❌ Erreur critique dans get_stream_links: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Erreur interne: {str(e)}'})
 
 if __name__ == '__main__':
     import signal

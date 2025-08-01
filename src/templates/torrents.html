@@ -351,6 +351,91 @@
 @keyframes slideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes progress { 0% { transform: translateX(-100%); } 50% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+
+/* Styles pour les fichiers et informations média */
+.file-item {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease-in-out;
+}
+.file-item:hover {
+    border-color: #007bff;
+    box-shadow: 0 0 5px rgba(0,123,255,0.2);
+}
+.file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border-radius: 6px 6px 0 0;
+}
+.file-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60%;
+}
+.file-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.btn-action {
+    font-size: 1.2em;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    transition: all 0.2s ease;
+}
+.btn-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.media-info-container {
+    max-height: 0;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+    background: #fff;
+}
+.media-details h6 {
+    margin: 10px 0 8px 0;
+    font-size: 0.9em;
+    color: #343a40;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.media-details ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 15px 0;
+}
+.media-details li {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    border-left: 3px solid;
+}
+.loading-info, .error-info {
+    text-align: center;
+    padding: 15px;
+    font-style: italic;
+    font-size: 0.9em;
+}
+.loading-info {
+    color: #6c757d;
+}
+.error-info {
+    color: #dc3545;
+}
 </style>
 
 <script>
@@ -519,37 +604,149 @@ function showDetailsModal(torrentId) {
                 }
                 
                 // Liens de téléchargement et streaming
+                // Récupération des liens de streaming avec la nouvelle API
+                console.log('🔍 Récupération des liens de streaming pour torrent:', torrent.id);
+                
                 const linksContainer = document.getElementById('modalLinksContainer');
                 const linksDiv = document.getElementById('modalLinks');
                 
-                if (torrent.links && torrent.links.length > 0 && torrent.links[0] !== '') {
-                    linksContainer.style.display = 'block';
-                    linksDiv.innerHTML = torrent.links.map((link, index) => {
-                        const streamingLink = torrent.streaming_links && torrent.streaming_links[index];
+                // Afficher un indicateur de chargement pour les liens
+                linksContainer.style.display = 'block';
+                linksDiv.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #6c757d;">
+                        <div style="font-size: 1.5em; margin-bottom: 10px; animation: spin 2s linear infinite;">🔄</div>
+                        <div>Récupération des liens de streaming...</div>
+                    </div>
+                `;
+                
+                // Appel à notre nouvelle API pour récupérer les liens améliorés avec timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes timeout (augmenté)
+                
+                console.log('🚀 Démarrage fetch vers:', `/api/torrent/stream/${torrent.id}`);
+                
+                fetch(`/api/torrent/stream/${torrent.id}`, {
+                    signal: controller.signal
+                })
+                    .then(response => {
+                        console.log('📡 Réponse reçue:', response.status, response.ok);
+                        clearTimeout(timeoutId);
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(streamData => {
+                        console.log('📊 Données reçues:', streamData);
+                        console.log('🔍 Vérification conditions:', {
+                            success: streamData.success,
+                            files: streamData.files,
+                            filesLength: streamData.files ? streamData.files.length : 0
+                        });
                         
-                        return `<div style="margin-bottom: 12px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #dee2e6;">
-                            <div style="margin-bottom: 8px; font-weight: bold; color: #495057;">📁 Fichier ${index + 1}</div>
-                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                                <a href="${link}" target="_blank" 
-                                   style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9em;"
-                                   onmouseover="this.style.background='#0056b3'"
-                                   onmouseout="this.style.background='#007bff'">
-                                    ⬇️ Télécharger
-                                </a>
-                                ${streamingLink ? `
-                                    <a href="${streamingLink}" target="_blank" 
-                                       style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-size: 0.9em;"
-                                       onmouseover="this.style.background='#1e7e34'"
-                                       onmouseout="this.style.background='#28a745'">
-                                        🎬 Streaming
-                                    </a>
-                                ` : ''}
+                        if (streamData.success && streamData.files && streamData.files.length > 0) {
+                            console.log('✅ Liens récupérés:', streamData.files);
+                            
+                            linksDiv.innerHTML = streamData.files.map((file, index) => {
+                                const hasError = file.error;
+                                const hasStreaming = file.streaming_link && !hasError;
+                                const hasDownload = file.download_link;
+                                const hasMediaInfo = file.file_id && !hasError;
+                                
+                                // Déterminer le nom du fichier
+                                let displayName = file.filename || `Fichier ${index + 1}`;
+                                if (displayName.length > 60) {
+                                    displayName = displayName.substring(0, 60) + '...';
+                                }
+                                
+                                // Formatage de la taille
+                                let sizeText = 'Taille inconnue';
+                                if (file.size > 0) {
+                                    const sizeGB = (file.size / (1024**3)).toFixed(2);
+                                    sizeText = `${sizeGB} GB`;
+                                }
+                                
+                                return `
+                                    <div class="file-item" id="file-item-${index}" style="border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 8px; transition: all 0.2s ease-in-out; ${hasError ? 'border-color: #dc3545; background: #fff5f5;' : ''}">
+                                        <div class="file-header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: ${hasError ? '#ffeaea' : '#f8f9fa'}; border-radius: 6px 6px 0 0;">
+                                            <div style="flex: 1; min-width: 0;">
+                                                <div class="file-name" style="font-weight: 500; margin-bottom: 4px;" title="${file.filename || `Fichier ${index + 1}`}">
+                                                    📁 ${displayName}
+                                                </div>
+                                                <div style="font-size: 0.8em; color: #6c757d;">
+                                                    ${sizeText} • ${file.mime_type || 'Type inconnu'}
+                                                </div>
+                                                ${hasError ? `<div style="font-size: 0.8em; color: #dc3545; margin-top: 4px;">⚠️ ${file.error}</div>` : ''}
+                                            </div>
+                                            <div class="file-actions" style="display: flex; gap: 8px; align-items: center; margin-left: 15px;">
+                                                <a href="${hasStreaming ? file.streaming_link : '#'}" target="_blank" class="btn-action stream" 
+                                                   style="font-size: 1.2em; text-decoration: none; color: ${hasStreaming ? '#28a745' : '#6c757d'}; cursor: ${hasStreaming ? 'pointer' : 'not-allowed'}; padding: 6px 10px; border-radius: 4px; ${hasStreaming ? 'background: #d4edda; border: 1px solid #c3e6cb;' : 'background: #f8f9fa; border: 1px solid #dee2e6;'}" 
+                                                   title="${hasStreaming ? 'Lire en streaming' : hasError ? 'Streaming indisponible (erreur)' : 'Streaming non disponible'}"
+                                                   ${!hasStreaming ? 'onclick="return false;"' : ''}>
+                                                    🎬
+                                                </a>
+                                                <a href="${hasDownload ? file.download_link : '#'}" target="_blank" class="btn-action download" 
+                                                   style="font-size: 1.2em; text-decoration: none; color: ${hasDownload ? '#007bff' : '#6c757d'}; cursor: ${hasDownload ? 'pointer' : 'not-allowed'}; padding: 6px 10px; border-radius: 4px; ${hasDownload ? 'background: #e3f2fd; border: 1px solid #bbdefb;' : 'background: #f8f9fa; border: 1px solid #dee2e6;'}" 
+                                                   title="${hasDownload ? 'Télécharger' : 'Téléchargement non disponible'}"
+                                                   ${!hasDownload ? 'onclick="return false;"' : ''}>
+                                                    💾
+                                                </a>
+                                                <a href="${hasDownload ? file.download_link : '#'}" target="_blank" class="btn-action direct-download" 
+                                                   style="font-size: 1.2em; text-decoration: none; color: ${hasDownload ? '#ff6b35' : '#6c757d'}; cursor: ${hasDownload ? 'pointer' : 'not-allowed'}; padding: 6px 10px; border-radius: 4px; ${hasDownload ? 'background: #fff3e0; border: 1px solid #ffcc80;' : 'background: #f8f9fa; border: 1px solid #dee2e6;'}" 
+                                                   title="${hasDownload ? 'Accéder à la page Real-Debrid' : 'Page Real-Debrid non disponible'}"
+                                                   ${!hasDownload ? 'onclick="return false;"' : ''}>
+                                                    🌐
+                                                </a>
+                                                ${hasMediaInfo ? `
+                                                    <button onclick="fetchMediaInfo('${file.file_id}', ${index})" class="btn-action info" 
+                                                            style="font-size: 1.2em; color: #6c757d; cursor: pointer; background: #fff; border: 1px solid #dee2e6; padding: 6px 10px; border-radius: 4px;" 
+                                                            title="Informations média détaillées">
+                                                        ℹ️
+                                                    </button>
+                                                ` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="media-info-container" id="media-info-${index}" style="max-height: 0; overflow: hidden; transition: all 0.3s ease-in-out; background: #fff;"></div>
+                                    </div>
+                                `;
+                            }).join('');
+                        } else {
+                            console.log('❌ Aucun fichier trouvé dans la réponse');
+                            linksDiv.innerHTML = `
+                                <div style="text-align: center; padding: 20px; color: #6c757d;">
+                                    <div style="font-size: 2em; margin-bottom: 10px;">📭</div>
+                                    <div>Aucun fichier disponible</div>
+                                    <div style="font-size: 0.9em; margin-top: 5px;">
+                                        ${streamData.error || 'Ce torrent n\'a peut-être pas été téléchargé ou les liens ont expiré'}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    })
+                    .catch(streamError => {
+                        clearTimeout(timeoutId);
+                        console.error('Erreur récupération liens streaming:', streamError);
+                        
+                        let errorMessage = 'Erreur réseau';
+                        if (streamError.name === 'AbortError') {
+                            errorMessage = 'Timeout - La récupération des liens a pris trop de temps';
+                        } else if (streamError.message) {
+                            errorMessage = streamError.message;
+                        }
+                        
+                        linksDiv.innerHTML = `
+                            <div style="text-align: center; padding: 20px; color: #dc3545;">
+                                <div style="font-size: 2em; margin-bottom: 10px;">⚠️</div>
+                                <div>Erreur lors de la récupération des liens</div>
+                                <div style="font-size: 0.9em; margin-top: 5px;">
+                                    ${errorMessage}
+                                </div>
+                                <button onclick="location.reload()" class="btn btn-sm btn-primary" style="margin-top: 10px;">
+                                    🔄 Réessayer
+                                </button>
                             </div>
-                        </div>`;
-                    }).join('');
-                } else {
-                    linksContainer.style.display = 'none';
-                }
+                        `;
+                    });
                 
                 content.style.display = 'block';
             } else {
@@ -663,6 +860,161 @@ function copyToClipboardFallback(text) {
     }
     
     document.body.removeChild(textArea);
+}
+
+// NOUVELLE FONCTION POUR RÉCUPÉRER LES INFOS MÉDIA DÉTAILLÉES
+function fetchMediaInfo(fileId, index) {
+    const container = document.getElementById(`media-info-${index}`);
+    const fileItem = document.getElementById(`file-item-${index}`);
+    
+    // Si déjà ouvert, on le ferme
+    if (container.style.maxHeight !== '0px' && container.innerHTML !== '') {
+        container.style.maxHeight = '0px';
+        container.style.padding = '0';
+        fileItem.style.borderColor = '#e0e0e0';
+        fileItem.style.boxShadow = 'none';
+        setTimeout(() => {
+            container.innerHTML = '';
+        }, 300);
+        return;
+    }
+
+    // Afficher l'indicateur de chargement
+    container.innerHTML = `
+        <div class="loading-info" style="padding: 15px; text-align: center; color: #6c757d;">
+            <div style="font-size: 1.5em; margin-bottom: 8px; animation: spin 2s linear infinite;">🔄</div>
+            <div>Récupération des métadonnées média...</div>
+        </div>
+    `;
+    container.style.maxHeight = '200px';
+    container.style.padding = '0';
+    fileItem.style.borderColor = '#007bff';
+    fileItem.style.boxShadow = '0 0 5px rgba(0,123,255,0.3)';
+
+    // Appel à l'API pour récupérer les informations média
+    fetch(`/api/media_info/${fileId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let html = '<div class="media-details" style="padding: 15px;">';
+                
+                // Informations générales
+                if (data.filename || data.type || data.duration) {
+                    html += '<div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">';
+                    if (data.filename) {
+                        html += `<div style="margin-bottom: 5px;"><strong>📄 Nom:</strong> ${data.filename}</div>`;
+                    }
+                    if (data.type) {
+                        const typeEmoji = data.type === 'movie' ? '🎬' : data.type === 'show' ? '📺' : data.type === 'audio' ? '🎵' : '📄';
+                        html += `<div style="margin-bottom: 5px;"><strong>🎭 Type:</strong> ${typeEmoji} ${data.type}</div>`;
+                    }
+                    if (data.duration) {
+                        const hours = Math.floor(data.duration / 3600);
+                        const minutes = Math.floor((data.duration % 3600) / 60);
+                        html += `<div style="margin-bottom: 5px;"><strong>⏱️ Durée:</strong> ${hours}h${minutes.toString().padStart(2, '0')}m</div>`;
+                    }
+                    if (data.size) {
+                        const sizeGB = (data.size / (1024**3)).toFixed(2);
+                        html += `<div><strong>💾 Taille:</strong> ${sizeGB} GB</div>`;
+                    }
+                    html += '</div>';
+                }
+                
+                // Pistes vidéo
+                if (data.video && data.video.length > 0) {
+                    html += '<h6 style="margin: 10px 0 8px 0; color: #343a40; display: flex; align-items: center; gap: 6px;"><span>🎥</span> Pistes Vidéo</h6>';
+                    html += '<ul style="list-style: none; padding: 0; margin: 0 0 15px 0;">';
+                    data.video.forEach((track, idx) => {
+                        html += `<li style="background: #e8f4f8; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; font-size: 0.85em; border-left: 3px solid #007bff;">`;
+                        html += `<strong>Piste ${idx + 1}:</strong> `;
+                        if (track.width && track.height) {
+                            html += `${track.width}x${track.height} `;
+                        }
+                        if (track.codec) {
+                            html += `• ${track.codec.toUpperCase()} `;
+                        }
+                        if (track.colorspace) {
+                            html += `• ${track.colorspace}`;
+                        }
+                        html += `</li>`;
+                    });
+                    html += '</ul>';
+                }
+
+                // Pistes audio
+                if (data.audio && data.audio.length > 0) {
+                    html += '<h6 style="margin: 10px 0 8px 0; color: #343a40; display: flex; align-items: center; gap: 6px;"><span>🔊</span> Pistes Audio</h6>';
+                    html += '<ul style="list-style: none; padding: 0; margin: 0 0 15px 0;">';
+                    data.audio.forEach((track, idx) => {
+                        html += `<li style="background: #f0f8e8; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; font-size: 0.85em; border-left: 3px solid #28a745;">`;
+                        html += `<strong>${track.lang || `Piste ${idx + 1}`}:</strong> `;
+                        if (track.codec) {
+                            html += `${track.codec.toUpperCase()} `;
+                        }
+                        if (track.channels) {
+                            html += `• ${track.channels} ch `;
+                        }
+                        if (track.sampling) {
+                            html += `• ${track.sampling} Hz`;
+                        }
+                        html += `</li>`;
+                    });
+                    html += '</ul>';
+                }
+
+                // Sous-titres
+                if (data.subtitles && data.subtitles.length > 0) {
+                    html += '<h6 style="margin: 10px 0 8px 0; color: #343a40; display: flex; align-items: center; gap: 6px;"><span>💬</span> Sous-titres</h6>';
+                    html += '<ul style="list-style: none; padding: 0; margin: 0 0 10px 0;">';
+                    data.subtitles.forEach((sub, idx) => {
+                        html += `<li style="background: #fff3e0; padding: 8px 12px; margin-bottom: 4px; border-radius: 4px; font-size: 0.85em; border-left: 3px solid #ff9800;">`;
+                        html += `<strong>${sub.lang || `Sous-titre ${idx + 1}`}:</strong> `;
+                        if (sub.type) {
+                            html += `${sub.type.toUpperCase()}`;
+                        }
+                        html += `</li>`;
+                    });
+                    html += '</ul>';
+                }
+
+                // Message si aucune information détaillée
+                if (!data.video?.length && !data.audio?.length && !data.subtitles?.length) {
+                    html += '<div style="text-align: center; padding: 20px; color: #6c757d;">';
+                    html += '<div style="font-size: 1.5em; margin-bottom: 8px;">📋</div>';
+                    html += '<div>Aucune information de pistes détaillée disponible</div>';
+                    html += '<div style="font-size: 0.85em; margin-top: 5px;">Ce fichier pourrait ne pas être un média vidéo/audio</div>';
+                    html += '</div>';
+                }
+
+                html += '</div>';
+                container.innerHTML = html;
+                container.style.maxHeight = '400px';
+            } else {
+                container.innerHTML = `
+                    <div class="error-info" style="padding: 15px; text-align: center; color: #dc3545;">
+                        <div style="font-size: 1.5em; margin-bottom: 8px;">❌</div>
+                        <div><strong>Erreur:</strong> ${data.error}</div>
+                        <div style="font-size: 0.85em; margin-top: 5px; color: #6c757d;">
+                            Les informations média ne sont pas disponibles pour ce fichier
+                        </div>
+                    </div>
+                `;
+                container.style.maxHeight = '150px';
+            }
+        })
+        .catch(err => {
+            console.error('Erreur fetchMediaInfo:', err);
+            container.innerHTML = `
+                <div class="error-info" style="padding: 15px; text-align: center; color: #dc3545;">
+                    <div style="font-size: 1.5em; margin-bottom: 8px;">🌐</div>
+                    <div><strong>Erreur réseau</strong></div>
+                    <div style="font-size: 0.85em; margin-top: 5px; color: #6c757d;">
+                        Impossible de récupérer les informations média
+                    </div>
+                </div>
+            `;
+            container.style.maxHeight = '150px';
+        });
 }
 
 // Fermer le modal en cliquant à l'extérieur
