@@ -15,6 +15,7 @@ import json
 import logging
 import requests
 import urllib.parse
+import uuid
 
 # Import des fonctions existantes
 import sys
@@ -95,6 +96,9 @@ task_status = {
     "last_update": None
 }
 
+# Variable globale pour les opérations de suppression en masse
+batch_operations = {}
+
 def format_download_link(direct_link):
     """Transforme un lien direct en lien downloader Real-Debrid"""
     if not direct_link or not direct_link.startswith('https://real-debrid.com/d/'):
@@ -162,11 +166,11 @@ def dashboard():
             c = conn.cursor()
             
             try:
-                # Statistiques de base
-                c.execute("SELECT COUNT(*) FROM torrents")
+                # Statistiques de base (exclure les supprimés)
+                c.execute("SELECT COUNT(*) FROM torrents WHERE status != 'deleted'")
                 total_torrents = c.fetchone()[0]
                 
-                c.execute("SELECT COUNT(*) FROM torrent_details")
+                c.execute("SELECT COUNT(*) FROM torrent_details WHERE status != 'deleted'")
                 total_details = c.fetchone()[0]
                 
                 coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
@@ -180,31 +184,33 @@ def dashboard():
                                      db_error=True)
             
             try:
-                # Répartition par statut
+                # Répartition par statut (exclure les supprimés)
                 c.execute("""
                     SELECT status, COUNT(*) as count 
                     FROM torrent_details 
+                    WHERE status != 'deleted'
                     GROUP BY status 
                     ORDER BY count DESC 
                     LIMIT 8
                 """)
                 status_data = c.fetchall()
                 
-                # Torrents récents
+                # Torrents récents (exclure les supprimés)
                 c.execute("""
                     SELECT COUNT(*) FROM torrents 
                     WHERE datetime(added_on) >= datetime('now', '-24 hours')
+                    AND status != 'deleted'
                 """)
                 recent_24h = c.fetchone()[0] or 0
                 
-                # Taille totale
-                c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0")
+                # Taille totale (exclure les supprimés)
+                c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0 AND status != 'deleted'")
                 total_size = c.fetchone()[0] or 0
                 
-                # Erreurs (utilisation des constantes)
+                # Erreurs (utilisation des constantes, exclure les supprimés)
                 if ERROR_STATUSES:
                     placeholders = ','.join('?' * len(ERROR_STATUSES))
-                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ERROR_STATUSES)
+                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ERROR_STATUSES)
                     error_count = c.fetchone()[0] or 0
                 else:
                     error_count = 0
@@ -221,23 +227,24 @@ def dashboard():
             
             try:
                 # Statistiques complémentaires
-                # Récupération des activités récentes
+                # Récupération des activités récentes (exclure les supprimés)
                 c.execute("""
                     SELECT SUM(CASE WHEN datetime(added) > datetime('now', '-7 days') THEN 1 ELSE 0 END)
                     FROM torrent_details
+                    WHERE status != 'deleted'
                 """)
                 result = c.fetchone()
                 recent_7d = result[0] if result and result[0] else 0
                 
                 
-                # Compte des téléchargés
+                # Compte des téléchargés (exclure les supprimés)
                 c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
                 downloaded_count = c.fetchone()[0] or 0
                 
-                # Compte des téléchargements actifs (status in ACTIVE_STATUSES)
+                # Compte des téléchargements actifs (status in ACTIVE_STATUSES, exclure les supprimés)
                 if ACTIVE_STATUSES:
                     placeholders = ','.join('?' * len(ACTIVE_STATUSES))
-                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders})", ACTIVE_STATUSES)
+                    c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ACTIVE_STATUSES)
                     active_count = c.fetchone()[0] or 0
                 else:
                     active_count = 0
@@ -306,7 +313,7 @@ def torrents_list():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
         
-        # Construction de la requête de base
+        # Construction de la requête de base - exclure les supprimés SAUF si on filtre spécifiquement sur 'deleted'
         base_query = """
             SELECT t.id, t.filename, t.status, t.bytes, t.added_on,
                    COALESCE(td.name, t.filename) as display_name,
@@ -315,15 +322,21 @@ def torrents_list():
                    td.host, td.error
             FROM torrents t
             LEFT JOIN torrent_details td ON t.id = td.id
-            WHERE t.status != 'deleted'
         """
         
         # Conditions et paramètres
         conditions = []
         params = []
         
+        # Si on ne filtre PAS spécifiquement sur "deleted", exclure les supprimés
+        if status_filter != 'deleted':
+            conditions.append("t.status != 'deleted'")
+        
         if status_filter:
-            if status_filter == 'error':
+            if status_filter == 'deleted':
+                # Pour les torrents supprimés, chercher spécifiquement ce statut
+                conditions.append("(t.status = 'deleted' OR td.status = 'deleted')")
+            elif status_filter == 'error':
                 conditions.append("(t.status = 'error' OR td.status = 'error')")
             else:
                 conditions.append("(t.status = ? OR td.status = ?)")
@@ -333,9 +346,9 @@ def torrents_list():
             conditions.append("(t.filename LIKE ? OR td.name LIKE ?)")
             params.extend([f"%{search}%", f"%{search}%"])
         
-        # Ajout des conditions WHERE supplémentaires
+        # Ajout des conditions WHERE
         if conditions:
-            base_query += " AND " + " AND ".join(conditions)
+            base_query += " WHERE " + " AND ".join(conditions)
         
         # Requête pour le total
         count_query = f"SELECT COUNT(*) FROM ({base_query})"
@@ -413,33 +426,54 @@ def torrents_list():
                          available_statuses=available_statuses,
                          total_count=total_count)
 
-@app.route('/sync/<action>')
+@app.route('/sync/<action>', methods=['GET', 'POST'])
 def sync_action(action):
     """Lance une action de synchronisation"""
     
     if task_status["running"]:
-        flash("Une tâche est déjà en cours d'exécution", 'warning')
-        return redirect(url_for('dashboard'))
+        if request.method == 'POST':
+            # Pour les requêtes AJAX, retourner une erreur JSON
+            return jsonify({'success': False, 'error': 'Une tâche est déjà en cours'}), 400
+        else:
+            flash("Une tâche est déjà en cours d'exécution", 'warning')
+            return redirect(request.referrer or url_for('dashboard'))
     
     try:
         token = load_token()
     except:
-        flash("Token Real-Debrid non configuré", 'error')
-        return redirect(url_for('dashboard'))
+        if request.method == 'POST':
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'}), 401
+        else:
+            flash("Token Real-Debrid non configuré", 'error')
+            return redirect(request.referrer or url_for('dashboard'))
     
-    # Utiliser le nouveau système de logs avec run_sync_task
+    # Lancer la synchronisation
     if action == 'smart':
         run_sync_task("Sync intelligent", token, sync_smart)
+        action_name = "Synchronisation intelligente"
     elif action == 'fast':
         run_sync_task("Sync complet", token, sync_all_v2)
+        action_name = "Synchronisation complète"
     elif action == 'torrents':
         run_sync_task("Vue d'ensemble", token, sync_torrents_only)
+        action_name = "Vue d'ensemble"
     else:
-        flash("Action inconnue", 'error')
-        return redirect(url_for('dashboard'))
+        if request.method == 'POST':
+            return jsonify({'success': False, 'error': 'Action inconnue'}), 400
+        else:
+            flash("Action inconnue", 'error')
+            return redirect(request.referrer or url_for('dashboard'))
     
-    flash(f"Synchronisation {action} démarrée", 'success')
-    return redirect(url_for('dashboard'))
+    if request.method == 'POST':
+        # Pour les requêtes AJAX, retourner succès avec message descriptif
+        return jsonify({'success': True, 'message': f'{action_name} démarrée avec succès'})
+    else:
+        # Pour les requêtes GET (liens directs), pas de flash automatique et redirection conditionnelle
+        referrer = request.referrer
+        if referrer and '/torrents' in referrer:
+            return redirect('/torrents')
+        else:
+            return redirect(url_for('dashboard'))
 
 @app.route('/api/task_status')
 def api_task_status():
@@ -476,6 +510,237 @@ def debug_status():
         "current_time": time.time(),
         "server_running": True
     })
+
+@app.route('/api/torrents/delete_batch', methods=['POST'])
+def delete_torrents_batch():
+    """Suppression en masse avec gestion des limites API et erreurs"""
+    data = request.get_json()
+    torrent_ids = data.get('torrent_ids', [])
+    
+    if not torrent_ids or len(torrent_ids) == 0:
+        return jsonify({'success': False, 'error': 'Aucun torrent sélectionné'}), 400
+    
+    if len(torrent_ids) > 100:  # Limite de sécurité
+        return jsonify({'success': False, 'error': 'Maximum 100 torrents par lot'}), 400
+    
+    try:
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'}), 401
+        
+        # Démarrer le traitement en arrière-plan
+        result = process_batch_deletion(token, torrent_ids)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Suppression de {len(torrent_ids)} torrents démarrée',
+            'batch_id': result['batch_id'],
+            'total': len(torrent_ids)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def process_batch_deletion(token, torrent_ids):
+    """Traite la suppression par batch avec gestion d'erreurs"""
+    import time
+    
+    batch_id = str(uuid.uuid4())[:8]
+    logging.info(f"🚀 Démarrage suppression batch {batch_id}: {len(torrent_ids)} torrents")
+    
+    # Structure pour suivre les résultats
+    batch_results = {
+        'batch_id': batch_id,
+        'total': len(torrent_ids),
+        'processed': 0,
+        'success': 0,
+        'failed': 0,
+        'errors': [],
+        'status': 'running',
+        'start_time': time.time()
+    }
+    
+    # Stocker dans la variable globale pour le suivi
+    batch_operations[batch_id] = batch_results
+    
+    # Traitement asynchrone
+    def deletion_worker():
+        batch_size = 5  # 5 suppressions simultanées max
+        api_delay = 2   # 2 secondes entre les batches
+        max_retries = 3
+        
+        for i in range(0, len(torrent_ids), batch_size):
+            if batch_results['status'] == 'cancelled':
+                break
+                
+            batch_torrent_ids = torrent_ids[i:i + batch_size]
+            
+            # Traitement du batch actuel
+            for torrent_id in batch_torrent_ids:
+                success = False
+                last_error = None
+                
+                # Retry avec backoff exponentiel
+                for attempt in range(max_retries):
+                    try:
+                        response = requests.delete(
+                            f'https://api.real-debrid.com/rest/1.0/torrents/delete/{torrent_id}',
+                            headers={'Authorization': f'Bearer {token}'},
+                            timeout=10
+                        )
+                        
+                        if response.status_code == 204:
+                            # Succès - Mettre à jour la DB locale
+                            update_torrent_status_deleted(torrent_id)
+                            batch_results['success'] += 1
+                            success = True
+                            break
+                            
+                        elif response.status_code == 404:
+                            # Torrent déjà supprimé - Considérer comme succès
+                            update_torrent_status_deleted(torrent_id)
+                            batch_results['success'] += 1
+                            success = True
+                            break
+                            
+                        elif response.status_code == 429:
+                            # Rate limit - Attendre plus longtemps
+                            wait_time = api_delay * (2 ** attempt)
+                            logging.warning(f"Rate limit atteint, attente {wait_time}s")
+                            time.sleep(wait_time)
+                            continue
+                            
+                        else:
+                            last_error = f"HTTP {response.status_code}: {response.text}"
+                            
+                    except requests.exceptions.Timeout:
+                        last_error = "Timeout lors de la suppression"
+                        time.sleep(1 * (attempt + 1))  # Pause progressive
+                        
+                    except requests.exceptions.RequestException as e:
+                        last_error = f"Erreur réseau: {str(e)}"
+                        time.sleep(1 * (attempt + 1))
+                        
+                    except Exception as e:
+                        last_error = f"Erreur inattendue: {str(e)}"
+                        break  # Erreur non récupérable
+                
+                # Mise à jour des résultats
+                batch_results['processed'] += 1
+                
+                if not success:
+                    batch_results['failed'] += 1
+                    batch_results['errors'].append({
+                        'torrent_id': torrent_id,
+                        'error': last_error,
+                        'attempts': max_retries
+                    })
+                    logging.error(f"Échec suppression {torrent_id}: {last_error}")
+                
+                # Pause entre suppressions individuelles
+                time.sleep(0.5)
+            
+            # Pause entre les batches
+            if i + batch_size < len(torrent_ids):
+                logging.info(f"Pause {api_delay}s avant le prochain batch...")
+                time.sleep(api_delay)
+        
+        # Finalisation
+        batch_results['status'] = 'completed'
+        batch_results['end_time'] = time.time()
+        batch_results['duration'] = batch_results['end_time'] - batch_results['start_time']
+        
+        logging.info(f"Suppression terminée: {batch_results['success']}/{batch_results['total']} succès")
+    
+    # Lancer le worker en arrière-plan
+    threading.Thread(target=deletion_worker, daemon=True).start()
+    
+    return batch_results
+
+@app.route('/api/fix_deleted_status')
+def fix_deleted_status():
+    """Synchronise les statuts supprimés entre les tables torrents et torrent_details"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            
+            # Trouver les torrents marqués supprimés dans 'torrents' mais pas dans 'torrent_details'
+            cursor.execute("""
+                UPDATE torrent_details 
+                SET status = 'deleted' 
+                WHERE id IN (
+                    SELECT t.id FROM torrents t 
+                    WHERE t.status = 'deleted' 
+                    AND EXISTS (SELECT 1 FROM torrent_details td WHERE td.id = t.id AND td.status != 'deleted')
+                )
+            """)
+            
+            fixed_count = cursor.rowcount
+            conn.commit()
+            
+            print(f"✅ Corrigé le statut de {fixed_count} torrents dans torrent_details")
+            
+            return jsonify({
+                'success': True,
+                'fixed_count': fixed_count,
+                'message': f'{fixed_count} torrents corrigés'
+            })
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la correction des statuts: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+def update_torrent_status_deleted(torrent_id):
+    """Marque un torrent comme supprimé dans la DB locale"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            # Mettre à jour les deux tables
+            cursor.execute("""
+                UPDATE torrents 
+                SET status = 'deleted' 
+                WHERE id = ?
+            """, (torrent_id,))
+            cursor.execute("""
+                UPDATE torrent_details 
+                SET status = 'deleted' 
+                WHERE id = ?
+            """, (torrent_id,))
+            conn.commit()
+            print(f"✅ Torrent {torrent_id} marqué comme supprimé dans les deux tables")
+    except Exception as e:
+        logging.error(f"Erreur mise à jour DB pour {torrent_id}: {e}")
+        print(f"❌ Erreur mise à jour DB pour {torrent_id}: {e}")
+
+@app.route('/api/batch_status/<batch_id>')
+def get_batch_status(batch_id):
+    """Récupère le statut d'une opération par batch avec gestion d'erreurs"""
+    try:
+        if batch_id not in batch_operations:
+            return jsonify({
+                'success': False, 
+                'error': f'Batch {batch_id} non trouvé ou expiré'
+            }), 404
+        
+        batch_data = batch_operations[batch_id]
+        
+        # Ajouter des informations de debug
+        batch_data['last_check'] = time.time()
+        
+        return jsonify({
+            'success': True,
+            'batch': batch_data
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur récupération statut batch {batch_id}: {e}")
+        return jsonify({
+            'success': False, 
+            'error': f'Erreur serveur: {str(e)}'
+        }), 500
 
 @app.route('/api/torrent/<torrent_id>')
 def api_torrent_detail(torrent_id):
@@ -975,6 +1240,58 @@ def get_stream_links(torrent_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Erreur interne: {str(e)}'})
+
+@app.route('/api/refresh_stats')
+def refresh_stats():
+    """API pour rafraîchir les statistiques du dashboard"""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Statistiques de base (exclure les supprimés)
+            c.execute("SELECT COUNT(*) FROM torrents WHERE status != 'deleted'")
+            total_torrents = c.fetchone()[0]
+            
+            c.execute("SELECT COUNT(*) FROM torrent_details WHERE status != 'deleted'")
+            total_details = c.fetchone()[0]
+            
+            coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
+            
+            # Erreurs (exclure les supprimés)
+            if ERROR_STATUSES:
+                placeholders = ','.join('?' * len(ERROR_STATUSES))
+                c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ERROR_STATUSES)
+                error_count = c.fetchone()[0] or 0
+            else:
+                error_count = 0
+            
+            # Téléchargés (exclure les supprimés)
+            c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
+            downloaded_count = c.fetchone()[0] or 0
+            
+            # Actifs (exclure les supprimés)
+            if ACTIVE_STATUSES:
+                placeholders = ','.join('?' * len(ACTIVE_STATUSES))
+                c.execute(f"SELECT COUNT(*) FROM torrent_details WHERE status IN ({placeholders}) AND status != 'deleted'", ACTIVE_STATUSES)
+                active_count = c.fetchone()[0] or 0
+            else:
+                active_count = 0
+            
+            return jsonify({
+                'success': True,
+                'stats': {
+                    'total_torrents': total_torrents,
+                    'total_details': total_details,
+                    'coverage': round(coverage, 1),
+                    'error_count': error_count,
+                    'downloaded_count': downloaded_count,
+                    'active_count': active_count
+                }
+            })
+            
+    except Exception as e:
+        print(f"❌ Erreur lors du rafraîchissement des stats: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     import signal

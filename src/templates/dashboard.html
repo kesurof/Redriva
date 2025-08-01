@@ -88,6 +88,14 @@
                 <span>Mise à jour rapide de la liste des torrents</span>
             </div>
         </button>
+        
+        <button onclick="refreshStatistics()" class="action-btn warning">
+            <div class="action-icon">📊</div>
+            <div class="action-content">
+                <strong>Rafraîchir statistiques</strong>
+                <span>Corrige les statistiques après suppressions</span>
+            </div>
+        </button>
     </div>
 </div>
 
@@ -559,6 +567,32 @@ function showConfirmModal(title, message, onConfirm) {
         }
     };
     document.addEventListener('keydown', handleEscape);
+}
+
+// Fonction pour rafraîchir les statistiques
+function refreshStatistics() {
+    showConfirmModal(
+        'Rafraîchir les statistiques',
+        'Cette action va corriger les statistiques après les suppressions. Continuer ?',
+        () => {
+            showToast('info', 'Correction en cours', 'Mise à jour des statistiques...');
+            
+            fetch('/api/fix_deleted_status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('success', 'Statistiques corrigées', `${data.fixed_count} torrent(s) corrigé(s)`);
+                        // Recharger la page pour voir les nouvelles statistiques
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        throw new Error(data.error || 'Erreur inconnue');
+                    }
+                })
+                .catch(error => {
+                    showToast('error', 'Erreur', `Échec de la correction: ${error.message}`);
+                });
+        }
+    );
 }
 
 // Styles CSS pour les animations de sortie
