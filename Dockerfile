@@ -53,10 +53,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && apt-get clean
 
-# Crée un groupe et un utilisateur système dédiés pour l'application.
-# Exécuter en tant que non-root est une pratique de sécurité essentielle.
-RUN addgroup --system app && adduser --system --group app
-
 # Copie les dépendances pré-compilées depuis l'étape "builder"
 COPY --from=builder /wheels /wheels
 
@@ -68,14 +64,14 @@ RUN pip install --no-cache --no-deps /wheels/* \
 # Définit le répertoire de travail pour le code de l'application
 WORKDIR /app
 
-# Crée les répertoires nécessaires avec les bonnes permissions
-RUN mkdir -p /app/data /app/config && chown -R app:app /app
+# Crée les répertoires nécessaires - SSDV2 gérera les permissions
+RUN mkdir -p /app/data /app/config
 
 # Copie le code source de l'application dans le conteneur
-COPY --chown=app:app . .
+COPY . .
 
-# Bascule vers l'utilisateur non-root "app"
-USER app
+# Copie le fichier .env.example dans le dossier config
+COPY config/.env.example /app/config/.env.example
 
 # Expose le port 5000, sur lequel Gunicorn écoutera les connexions
 EXPOSE 5000
@@ -91,6 +87,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 
 # Commande par défaut pour lancer l'application au démarrage du conteneur.
 # Utilise Gunicorn, un serveur WSGI robuste pour la production.
-# 'src.web:app' signifie : dans le dossier 'src', trouve le fichier 'web.py',
-# et à l'intérieur, utilise l'objet Flask nommé 'app'.
 CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:5000 --workers ${GUNICORN_WORKERS} --timeout ${GUNICORN_TIMEOUT} --keep-alive ${GUNICORN_KEEPALIVE} --access-logfile - --error-logfile - src.web:app"]
