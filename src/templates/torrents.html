@@ -1524,6 +1524,24 @@ function updateBatchProgress(batch) {
     }
 }
 
+function refreshStatistics() {
+    // Fonction pour rafraîchir les statistiques après suppression
+    fetch('/api/refresh_stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Statistiques rafraîchies');
+                // Optionnel : mettre à jour les statistiques affichées sur la page
+                // sans recharger complètement la page
+            } else {
+                console.warn('⚠️ Erreur lors du rafraîchissement des statistiques:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erreur réseau lors du rafraîchissement des statistiques:', error);
+        });
+}
+
 function onBatchCompleted(batch) {
     console.log('✅ Suppression terminée:', batch);
     

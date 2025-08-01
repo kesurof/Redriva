@@ -458,7 +458,7 @@ async def fetch_all_torrents(token):
         int: Nombre total de torrents récupérés
     """
     headers = {"Authorization": f"Bearer {token}"}
-    limit = 2500
+    limit = 5000
     page = 1
     total = 0
     
@@ -1155,7 +1155,7 @@ def clean_obsolete_torrents(token):
     # Récupérer tous les IDs de torrents actuels côté Real-Debrid
     current_rd_ids = set()
     headers = {"Authorization": f"Bearer {token}"}
-    limit = 2500
+    limit = 5000
     
     try:
         import aiohttp
