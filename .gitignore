@@ -50,3 +50,12 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+# Scripts de build Docker locaux
+scripts/build-multiarch.sh
+docker-build-*
+*.tar
+
+# Cache Docker et buildx
+.docker/
+buildx-cache/
