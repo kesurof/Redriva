@@ -1,43 +1,18 @@
 # docker-compose.yml
-
 services:
   redriva:
-    # TIRE L'IMAGE DEPUIS DOCKER HUB
-    # Remplacez "kesurof" par votre nom d'utilisateur Docker Hub si nécessaire
-    image: kesurof/redriva:latest
-    
-    container_name: redriva_web
+    image: ghcr.io/kesurof/redriva:latest
+    container_name: redriva
     restart: unless-stopped
-    
     ports:
       - "5000:5000"
-      
-    # GESTION DE LA CONFIGURATION ET DES DONNÉES
-    # Les données et la configuration sont stockées sur la machine hôte,
-    # en dehors du conteneur.
     volumes:
       - ./data:/app/data
       - ./config:/app/config
-      
-    # Variables d'environnement pour Flask et l'application
-    environment:
-      - FLASK_HOST=0.0.0.0
-      - FLASK_PORT=5000
-      - FLASK_DEBUG=false
-      # Configuration Gunicorn par défaut (peut être surchargée via .env)
-      - GUNICORN_WORKERS=2
-      - GUNICORN_TIMEOUT=120
-      - GUNICORN_KEEPALIVE=5
-      
-    # Le token RD_TOKEN est lu depuis le fichier .env dans le dossier config
-    # Il n'est JAMAIS dans l'image Docker.
     env_file:
       - ./config/.env
-      
-    # Health check pour vérifier que l'application répond
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
