@@ -69,23 +69,23 @@
             <div class="action-icon">🧠</div>
             <div class="action-content">
                 <strong>Sync intelligent</strong>
-                <span>Analyse et traite selon les priorités</span>
+                <span>Mode recommandé - Analyse et traite selon les priorités</span>
             </div>
         </button>
         
-        <button onclick="executeSyncAction('/sync/fast', '🚀 Synchronisation rapide')" class="action-btn success">
+        <button onclick="executeSyncAction('/sync/fast', '🚀 Synchronisation complète')" class="action-btn success">
             <div class="action-icon">🚀</div>
             <div class="action-content">
-                <strong>Sync rapide</strong>
-                <span>Traitement accéléré des nouveautés</span>
+                <strong>Sync complet</strong>
+                <span>Première installation ou resync complet</span>
             </div>
         </button>
         
-        <button onclick="executeSyncAction('/sync/torrents', '📋 Synchronisation torrents')" class="action-btn warning">
+        <button onclick="executeSyncAction('/sync/torrents', '📋 Vue d\'ensemble')" class="action-btn info">
             <div class="action-icon">📋</div>
             <div class="action-content">
-                <strong>Torrents uniquement</strong>
-                <span>Met à jour la liste des torrents</span>
+                <strong>Vue d'ensemble</strong>
+                <span>Mise à jour rapide de la liste des torrents</span>
             </div>
         </button>
     </div>
@@ -289,6 +289,7 @@
 
 .action-btn.primary:hover { border-color: #007bff; }
 .action-btn.success:hover { border-color: #28a745; }
+.action-btn.info:hover { border-color: #17a2b8; }
 .action-btn.warning:hover { border-color: #ffc107; }
 .action-btn.danger:hover { border-color: #dc3545; }
 
@@ -456,6 +457,8 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Styles pour le bloc informations système enrichi */
 </style>
 
 <script>

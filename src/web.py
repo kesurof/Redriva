@@ -17,7 +17,9 @@ import requests
 import urllib.parse
 
 # Import des fonctions existantes
-sys.path.append(os.path.dirname(__file__))
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from main import (
     DB_PATH, load_token, sync_smart, sync_all_v2, sync_torrents_only,
     show_stats, diagnose_errors, get_db_stats, format_size, get_status_emoji,
@@ -85,11 +87,12 @@ def log_request_info():
     print(f"   Remote addr: {request.remote_addr}")
     print(f"   User agent: {request.headers.get('User-Agent', 'N/A')}")
 
-# Variables globales pour le statut des tâches
+# Variables globales pour le statut des tâches (améliorées)
 task_status = {
     "running": False, 
     "progress": "", 
-    "result": ""
+    "result": "",
+    "last_update": None
 }
 
 def format_download_link(direct_link):
@@ -102,28 +105,30 @@ def format_download_link(direct_link):
     return f"https://real-debrid.com/downloader?links={encoded_link}"
 
 def run_sync_task(task_name, token, task_func, *args):
-    """Exécute une tâche de sync en arrière-plan"""
-    global task_status
-    
+    """Version simplifiée sans capture d'output"""
     def execute_task():
-        task_status["running"] = True
-        task_status["progress"] = f"Démarrage de {task_name}..."
+        import time
         
         try:
+            task_status["running"] = True
+            task_status["progress"] = f"🚀 Démarrage de {task_name}..."
+            task_status["result"] = ""
+            task_status["last_update"] = time.time()
+            
+            # Exécution de la synchronisation
             if args:
                 result = task_func(token, *args)
             else:
                 result = task_func(token)
             
             task_status["result"] = f"✅ {task_name} terminée avec succès"
-            task_status["progress"] = "Terminé"
+            task_status["running"] = False
+            task_status["last_update"] = time.time()
             
         except Exception as e:
-            task_status["result"] = f"❌ Erreur: {str(e)}"
-            task_status["progress"] = "Erreur"
-        
-        finally:
+            task_status["result"] = f"❌ Erreur dans {task_name}: {str(e)}"
             task_status["running"] = False
+            task_status["last_update"] = time.time()
     
     # Lancer la tâche en arrière-plan
     thread = threading.Thread(target=execute_task)
@@ -426,9 +431,9 @@ def sync_action(action):
     if action == 'smart':
         run_sync_task("Sync intelligent", token, sync_smart)
     elif action == 'fast':
-        run_sync_task("Sync rapide", token, sync_all_v2)
+        run_sync_task("Sync complet", token, sync_all_v2)
     elif action == 'torrents':
-        run_sync_task("Sync torrents", token, sync_torrents_only)
+        run_sync_task("Vue d'ensemble", token, sync_torrents_only)
     else:
         flash("Action inconnue", 'error')
         return redirect(url_for('dashboard'))
@@ -438,8 +443,39 @@ def sync_action(action):
 
 @app.route('/api/task_status')
 def api_task_status():
-    """API pour obtenir le statut des tâches (AJAX)"""
-    return jsonify(task_status)
+    """API de statut simplifiée"""
+    import time
+    
+    response = {
+        "running": task_status["running"],
+        "progress": task_status.get("progress", ""),
+        "result": task_status.get("result", ""),
+        "last_update": task_status.get("last_update"),
+        "timestamp": time.time()
+    }
+    
+    return jsonify(response)
+
+@app.route('/api/health')
+def api_health():
+    """Route de santé pour tester la connectivité"""
+    import time
+    return jsonify({
+        "status": "ok",
+        "timestamp": time.time(),
+        "server": "Redriva Web Interface",
+        "version": "2.0"
+    })
+
+@app.route('/api/debug/status')
+def debug_status():
+    """Route de debug pour surveiller l'état interne"""
+    import time
+    return jsonify({
+        "task_status": task_status,
+        "current_time": time.time(),
+        "server_running": True
+    })
 
 @app.route('/api/torrent/<torrent_id>')
 def api_torrent_detail(torrent_id):

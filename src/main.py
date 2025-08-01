@@ -810,62 +810,6 @@ async def fetch_all_torrent_details_v2(token, torrent_ids, resumable=False):
     
     return total_processed
 
-def sync_all(token):
-    """
-    Synchronisation complète classique (version originale)
-    
-    Étapes:
-    1. Récupère tous les torrents de base
-    2. Récupère tous les détails
-    
-    Usage: Pour première synchronisation complète
-    Temps estimé: 4-6 heures pour 4000+ torrents
-    """
-    logging.info("📥 Synchronisation complète classique...")
-    
-    # Étape 1: Tous les torrents
-    total = asyncio.run(fetch_all_torrents(token))
-    logging.info(f"✅ {total} torrents récupérés")
-    
-    # Étape 2: Tous les détails
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute("SELECT id FROM torrents")
-        torrent_ids = [row[0] for row in c.fetchall()]
-    
-    logging.info(f"🔄 Récupération des détails pour {len(torrent_ids)} torrents...")
-    processed = asyncio.run(fetch_all_torrent_details(token, torrent_ids))
-    logging.info(f"✅ Synchronisation complète terminée ! {processed} détails traités")
-
-def sync_all_v2(token):
-    """
-    Synchronisation rapide optimisée (sync-fast)
-    
-    Version améliorée de sync_all avec:
-    - Contrôle dynamique de concurrence
-    - Pool de connexions optimisé
-    - Reprise automatique possible
-    - Statistiques temps réel
-    
-    Usage: Synchronisation complète optimisée
-    Temps estimé: 7-10 minutes pour 4000+ torrents
-    """
-    logging.info("🚀 Synchronisation rapide démarrée...")
-    
-    # Étape 1: Récupérer tous les torrents (identique)
-    total = asyncio.run(fetch_all_torrents(token))
-    logging.info(f"✅ {total} torrents synchronisés")
-    
-    # Étape 2: Récupération optimisée des détails
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        c.execute("SELECT id FROM torrents")
-        torrent_ids = [row[0] for row in c.fetchall()]
-    
-    logging.info(f"🔄 Récupération optimisée des détails pour {len(torrent_ids)} torrents...")
-    processed = asyncio.run(fetch_all_torrent_details_v2(token, torrent_ids, resumable=True))
-    logging.info(f"🎯 Synchronisation rapide terminée ! {processed} détails traités")
-
 def get_smart_update_summary():
     """
     Analyse intelligente des torrents nécessitant une mise à jour
@@ -1157,6 +1101,50 @@ def sync_torrents_only(token):
     else:
         logging.info("ℹ️  Aucun torrent trouvé ou synchronisé")
 
+def sync_all_v2(token):
+    """
+    Synchronisation complète optimisée (SYNC RAPIDE)
+    
+    Effectue une synchronisation complète des torrents et détails avec optimisations:
+    - Récupération de tous les torrents de base
+    - Récupération de tous les détails manquants
+    - Optimisé pour première utilisation ou sync complet
+    
+    Usage: python src/main.py --sync-fast
+    Temps typique: 7-10 minutes
+    """
+    logging.info("🚀 Synchronisation complète optimisée en cours...")
+    
+    # Étape 1: Synchroniser tous les torrents de base
+    logging.info("📥 Étape 1/2: Récupération des torrents de base...")
+    total_torrents = asyncio.run(fetch_all_torrents(token))
+    
+    if total_torrents == 0:
+        logging.warning("⚠️ Aucun torrent trouvé")
+        print("⚠️ Aucun torrent trouvé dans votre compte Real-Debrid")
+        return
+    
+    logging.info(f"✅ {total_torrents} torrents de base récupérés")
+    
+    # Étape 2: Récupérer tous les détails manquants
+    logging.info("📋 Étape 2/2: Récupération des détails...")
+    
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id FROM torrents WHERE id NOT IN (SELECT id FROM torrent_details)")
+        missing_ids = [row[0] for row in c.fetchall()]
+    
+    if missing_ids:
+        logging.info(f"🔄 Récupération des détails pour {len(missing_ids)} torrents...")
+        processed = asyncio.run(fetch_all_torrent_details_v2(token, missing_ids))
+        logging.info(f"✅ Détails récupérés pour {processed} torrents")
+        print(f"🚀 Synchronisation complète terminée: {total_torrents} torrents, {processed} détails")
+    else:
+        logging.info("✅ Tous les détails sont déjà à jour")
+        print(f"🚀 Synchronisation complète terminée: {total_torrents} torrents, tous les détails à jour")
+    
+    display_final_summary()
+
 async def fetch_all_torrent_details(token, torrent_ids, max_concurrent=MAX_CONCURRENT):
     """
     Version classique de récupération des détails (pour compatibilité)
@@ -1294,9 +1282,9 @@ def show_stats():
         detail_status = c.fetchall()
         
         # === TAILLES ET VOLUMES ===
-        c.execute("SELECT SUM(bytes), AVG(bytes), MIN(bytes), MAX(bytes) FROM torrents WHERE bytes > 0")
+        c.execute("SELECT SUM(bytes), MIN(bytes), MAX(bytes) FROM torrents WHERE bytes > 0")
         size_stats = c.fetchone()
-        total_size, avg_size, min_size, max_size = size_stats if size_stats and size_stats[0] else (0, 0, 0, 0)
+        total_size, min_size, max_size = size_stats if size_stats and size_stats[0] else (0, 0, 0)
         
         # === ACTIVITÉ RÉCENTE ===
         c.execute("""
@@ -1367,8 +1355,7 @@ def show_stats():
         if total_size and total_size > 0:
             print(f"\n💾 VOLUMES DE DONNÉES")
             print(f"   📦 Volume total       : {format_size(total_size)}")
-            print(f"   📊 Taille moyenne     : {format_size(avg_size) if avg_size else 'N/A'}")
-            print(f"   🔻 Plus petit         : {format_size(min_size) if min_size else 'N/A'}")
+            print(f"    Plus petit         : {format_size(min_size) if min_size else 'N/A'}")
             print(f"   🔺 Plus gros          : {format_size(max_size) if max_size else 'N/A'}")
         
         # Activité récente
@@ -1741,27 +1728,24 @@ def show_interactive_menu():
         
         print("\n🔄 SYNCHRONISATION")
         print("  4. 🧠 Sync intelligent (recommandé)")
-        print("  5. 🚀 Sync rapide complet")
-        print("  6. 📋 Torrents uniquement (ultra-rapide)")
-        print("  7. 📖 Sync classique complet")
-        print("  8. ⏮️  Reprendre sync interrompu")
+        print("  5. 🚀 Sync complet")
+        print("  6. 📋 Vue d'ensemble (ultra-rapide)")
+        print("  7. ⏮️  Reprendre sync interrompu")
         
         print("\n🔧 MAINTENANCE")
-        print("  9. 🔄 Détails uniquement")
-        print(" 10. ❌ Retry torrents en erreur")
-        print(" 11. ⬇️  Mise à jour téléchargements actifs")
-        print(" 12. 🗑️  Vider la base de données")
-        print(" 13. 🔍 Diagnostic du token")
+        print("  8. 🔄 Détails uniquement")
+        print("  9. 🗑️  Vider la base de données")
+        print(" 10. 🔍 Diagnostic du token")
         
         print("\n❓ AIDE & SORTIE")
-        print(" 14. 💡 Guide de choix rapide")
-        print(" 15. 🏃 Mode commande (passer aux arguments)")
+        print(" 11. 💡 Guide de choix rapide")
+        print(" 12. 🏃 Mode commande (passer aux arguments)")
         print("  0. 🚪 Quitter")
         
         print("\n" + "─" * 60)
         
         try:
-            choice = input("👉 Votre choix (0-15) : ").strip()
+            choice = input("👉 Votre choix (0-12) : ").strip()
             
             if choice == "0":
                 print("\n👋 Au revoir ! Merci d'utiliser Redriva.")
@@ -1812,26 +1796,13 @@ def show_interactive_menu():
             elif choice == "7":
                 token = get_token()
                 if token:
-                    confirm = input("\n⚠️  Sync classique (peut prendre plusieurs heures). Continuer ? (o/N): ")
-                    if confirm.lower() in ['o', 'oui', 'y', 'yes']:
-                        sync_all(token)
-                        input("\n✅ Appuyez sur Entrée pour continuer...")
-                    else:
-                        print("❌ Annulé.")
-                        input("📋 Appuyez sur Entrée pour continuer...")
-                else:
-                    input("\n❌ Token manquant. Appuyez sur Entrée pour continuer...")
-                    
-            elif choice == "8":
-                token = get_token()
-                if token:
                     print("\n⏮️  Reprise de la synchronisation...")
                     sync_resume(token)
                     input("\n✅ Appuyez sur Entrée pour continuer...")
                 else:
                     input("\n❌ Token manquant. Appuyez sur Entrée pour continuer...")
                     
-            elif choice == "9":
+            elif choice == "8":
                 token = get_token()
                 if token:
                     print("\n🔄 Mise à jour des détails uniquement...")
@@ -1840,25 +1811,7 @@ def show_interactive_menu():
                 else:
                     input("\n❌ Token manquant. Appuyez sur Entrée pour continuer...")
                     
-            elif choice == "10":
-                token = get_token()
-                if token:
-                    print("\n❌ Retry des torrents en erreur...")
-                    sync_details_only(token, status_filter="error")
-                    input("\n✅ Appuyez sur Entrée pour continuer...")
-                else:
-                    input("\n❌ Token manquant. Appuyez sur Entrée pour continuer...")
-                    
-            elif choice == "11":
-                token = get_token()
-                if token:
-                    print("\n⬇️  Mise à jour des téléchargements actifs...")
-                    sync_details_only(token, status_filter="downloading")
-                    input("\n✅ Appuyez sur Entrée pour continuer...")
-                else:
-                    input("\n❌ Token manquant. Appuyez sur Entrée pour continuer...")
-                    
-            elif choice == "12":
+            elif choice == "9":
                 confirm = input("\n⚠️  ATTENTION : Vider complètement la base de données ? (tapez 'SUPPRIMER'): ")
                 if confirm == "SUPPRIMER":
                     clear_database()
@@ -1867,16 +1820,16 @@ def show_interactive_menu():
                     print("❌ Annulé.")
                     input("📋 Appuyez sur Entrée pour continuer...")
                     
-            elif choice == "13":
+            elif choice == "10":
                 print("\n🔍 Diagnostic du token en cours...")
                 diagnose_token()
                 input("\n🔧 Appuyez sur Entrée pour continuer...")
                 
-            elif choice == "14":
+            elif choice == "11":
                 show_quick_guide()
                 input("\n💡 Appuyez sur Entrée pour continuer...")
                 
-            elif choice == "15":
+            elif choice == "12":
                 print("\n🏃 Passage en mode commande...")
                 print("💡 Utilisez: python src/main.py --help pour voir toutes les options")
                 print("📋 Exemple: python src/main.py --sync-smart")
@@ -1921,7 +1874,7 @@ def show_quick_guide():
     print("│ 🔧 MAINTENANCE :                                        │")
     print("│    → Choix 1 : Stats complètes + recommandations      │")
     print("│    → Choix 3 : Diagnostic si problèmes                │")
-    print("│    → Choix 10: Retry erreurs si nécessaire            │")
+    print("│    → Choix 8 : Détails uniquement si nécessaire       │")
     print("└─────────────────────────────────────────────────────────┘")
     
     print("\n⚡ VITESSES APPROXIMATIVES :")
@@ -1929,7 +1882,6 @@ def show_quick_guide():
     print("  🧠 Sync smart (4)  : 30s - 2 minutes")
     print("  🚀 Sync rapide (5) : 7-10 minutes")
     print("  📋 Torrents (6)    : 10-30 secondes")
-    print("  📖 Sync classique  : 4-6 heures (non recommandé)")
     
     print("\n❓ EN CAS DE DOUTE :")
     print("  👉 Commencez par le choix 2 (stats compactes)")
@@ -1990,9 +1942,7 @@ def main():
     
     # === ARGUMENTS DE LIGNE DE COMMANDE ===
     
-    # Arguments classiques
-    parser.add_argument('--sync-all', action='store_true', 
-                       help="🔄 Synchronisation complète classique (4-6h)")
+    # Arguments de base
     parser.add_argument('--details-only', action='store_true', 
                        help="📝 Synchroniser uniquement les détails des torrents existants")
     parser.add_argument('--status', 
@@ -2004,15 +1954,17 @@ def main():
     parser.add_argument('--clear', action='store_true', 
                        help="🗑️ Vider complètement la base de données")
     
-    # Arguments optimisés (nouvelles fonctionnalités)
-    parser.add_argument('--sync-fast', action='store_true', 
-                       help="🚀 Synchronisation rapide optimisée (7-10min)")
+    # Arguments de synchronisation (architecture simplifiée)
     parser.add_argument('--sync-smart', action='store_true', 
-                       help="🧠 Synchronisation intelligente - changements uniquement (30s-2min)")
+                       help="🧠 Sync intelligent - Mode recommandé (30s-2min)")
+    parser.add_argument('--sync-fast', action='store_true', 
+                       help="🚀 Sync complet - Synchronisation complète optimisée (7-10min)")
+    parser.add_argument('--torrents-only', action='store_true', 
+                       help="📋 Vue d'ensemble - Liste des torrents uniquement (10-30s)")
     parser.add_argument('--resume', action='store_true', 
                        help="⏮️  Reprendre une synchronisation interrompue")
-    parser.add_argument('--torrents-only', action='store_true', 
-                       help="📋 Synchroniser uniquement les torrents de base sans détails (10-30s)")
+    
+    # Arguments de diagnostic
     parser.add_argument('--diagnose-errors', action='store_true', 
                        help="🔍 Diagnostic détaillé des torrents en erreur avec suggestions")
     parser.add_argument('--diagnose-token', action='store_true', 
@@ -2066,9 +2018,6 @@ def main():
             
         elif args.details_only:
             sync_details_only(token, args.status)
-            
-        elif args.sync_all:
-            sync_all(token)
             
         else:
             # Aucun argument reconnu, afficher l'aide

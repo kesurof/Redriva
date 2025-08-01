@@ -8,10 +8,11 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
         .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
-        .header { background: #2c3e50; color: white; padding: 1rem 0; margin-bottom: 2rem; }
+        .header { background: #2c3e50; color: white; padding: 1rem 0; margin-bottom: 0; }
         .nav { display: flex; gap: 20px; align-items: center; }
         .nav a { color: white; text-decoration: none; padding: 8px 16px; border-radius: 4px; }
         .nav a:hover { background: rgba(255,255,255,0.1); }
+        
         .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
         .stat-card { text-align: center; padding: 20px; border-radius: 8px; color: white; }
@@ -72,39 +73,151 @@
     </div>
 
     <script>
-        // Mise à jour du statut des tâches
+        // Variables globales pour le suivi
+        let lastKnownTimestamp = 0;
+        let isPolling = true;
+        let pollInterval = null;
+
+        function getStatusEmoji(status) {
+            const emojis = {
+                'downloaded': '✅',
+                'downloading': '⬇️',
+                'error': '❌',
+                'deleted': '❓',
+                'queued': '🔄',
+                'waiting': '⏳',
+                'magnet_conversion': '🧲'
+            };
+            return emojis[status] || '📁';
+        }
+        
+        // Mise à jour simplifiée du statut
         function updateTaskStatus() {
-            fetch('/api/task_status')
-                .then(response => response.json())
-                .then(data => {
-                    const statusDiv = document.getElementById('taskStatus');
-                    const progressDiv = document.getElementById('taskProgress');
-                    const resultDiv = document.getElementById('taskResult');
-                    
+            if (!isPolling) return;
+            
+            fetch('/api/task_status', {
+                method: 'GET',
+                cache: 'no-cache'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('📊 Status reçu:', data);
+                
+                // Mise à jour de tous les indicateurs de statut
+                const indicators = document.querySelectorAll('.status-indicator');
+                indicators.forEach(indicator => {
                     if (data.running) {
-                        if (statusDiv) statusDiv.classList.add('active');
-                        if (progressDiv) progressDiv.textContent = data.progress;
-                        if (resultDiv) resultDiv.textContent = '';
-                    } else if (data.result) {
-                        if (progressDiv) progressDiv.textContent = '';
-                        if (resultDiv) resultDiv.textContent = data.result;
-                        if (statusDiv) {
-                            setTimeout(() => statusDiv.classList.remove('active'), 3000);
-                        }
+                        indicator.className = 'status-indicator running';
+                        indicator.textContent = 'En cours...';
                     } else {
-                        if (statusDiv) statusDiv.classList.remove('active');
+                        indicator.className = 'status-indicator ready';
+                        indicator.textContent = 'Prêt';
                     }
-                })
-                .catch(error => console.log('Erreur de mise à jour du statut:', error));
+                });
+                
+                const statusDiv = document.getElementById('taskStatus');
+                const progressDiv = document.getElementById('taskProgress');
+                const resultDiv = document.getElementById('taskResult');
+                
+                // Mise à jour de l'affichage du statut
+                if (data.running) {
+                    if (statusDiv) statusDiv.classList.add('active');
+                    if (progressDiv) progressDiv.textContent = data.progress;
+                    if (resultDiv) resultDiv.textContent = '';
+                    
+                    // Augmenter la fréquence pendant l'exécution
+                    if (pollInterval) {
+                        clearInterval(pollInterval);
+                        pollInterval = setInterval(updateTaskStatus, 1000); // 1 seconde
+                    }
+                    
+                } else {
+                    // Tâche terminée
+                    if (progressDiv) progressDiv.textContent = '';
+                    if (resultDiv) resultDiv.textContent = data.result;
+                    
+                    if (statusDiv) {
+                        setTimeout(() => {
+                            statusDiv.classList.remove('active');
+                        }, 3000);
+                    }
+                    
+                    // Revenir à la fréquence normale
+                    if (pollInterval) {
+                        clearInterval(pollInterval);
+                        pollInterval = setInterval(updateTaskStatus, 5000); // 5 secondes
+                    }
+                }
+                
+                // Mettre à jour le timestamp
+                lastKnownTimestamp = data.timestamp;
+                
+            })
+            .catch(error => {
+                console.error('❌ Erreur de polling:', error);
+                
+                // En cas d'erreur, réduire la fréquence
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = setInterval(updateTaskStatus, 10000); // 10 secondes
+                }
+            });
         }
 
-        // Mise à jour toutes les 2 secondes
-        setInterval(() => {
+        // Démarrage du polling intelligent
+        function startPolling() {
+            console.log('🚀 Démarrage du polling intelligent');
+            
+            // Premier appel immédiat
             updateTaskStatus();
-        }, 2000);
-        
-        // Premier appel immédiat
-        updateTaskStatus();
+            
+            // Interval de base (5 secondes)
+            pollInterval = setInterval(updateTaskStatus, 5000);
+        }
+
+        // Arrêt du polling
+        function stopPolling() {
+            console.log('🛑 Arrêt du polling');
+            isPolling = false;
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+
+        // Gestion de la visibilité de la page
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                console.log('📱 Page cachée - réduction polling');
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = setInterval(updateTaskStatus, 30000); // 30 secondes
+                }
+            } else {
+                console.log('📱 Page visible - reprise polling normal');
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = setInterval(updateTaskStatus, 5000); // 5 secondes
+                }
+                updateTaskStatus(); // Appel immédiat
+            }
+        });
+
+        // Démarrage automatique
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🎯 DOM chargé - initialisation polling');
+            startPolling();
+        });
+
+        // Nettoyage avant fermeture
+        window.addEventListener('beforeunload', function() {
+            stopPolling();
+        });
     </script>
     
     {% block scripts %}{% endblock %}

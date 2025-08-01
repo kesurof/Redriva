@@ -450,8 +450,7 @@ python src/main.py --stats
 
 💾 VOLUMES DE DONNÉES
    📦 Volume total       : 15.2 TB
-   📊 Taille moyenne     : 3.7 GB
-   🔻 Plus petit         : 112.6 MB
+    Plus petit         : 112.6 MB
    🔺 Plus gros          : 45.5 GB
 
 ⏰ ACTIVITÉ RÉCENTE
