@@ -44,8 +44,10 @@ ARG BUILDPLATFORM
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Installe wget pour les health checks et nettoie le cache avec optimisations
-RUN apt-get update && apt-get install -y --no-install-recommends wget \
+# Installe wget et curl pour les health checks et outils réseau, puis nettoie le cache
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get autoremove -y \
     && apt-get clean
