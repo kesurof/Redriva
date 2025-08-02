@@ -536,24 +536,46 @@ async function detectServices() {
             if (services.sonarr) {
                 document.getElementById('sonarr-host').value = services.sonarr.host;
                 document.getElementById('sonarr-port').value = services.sonarr.port;
+                
+                // ✅ AJOUT : Pré-remplir l'API key si détectée
+                if (services.sonarr.api_key) {
+                    document.getElementById('sonarr-api-key').value = services.sonarr.api_key;
+                }
+                
+                // ✅ AJOUT : Activer le service automatiquement
+                document.getElementById('sonarr-enabled').checked = true;
                 detected = true;
             }
             
             if (services.radarr) {
                 document.getElementById('radarr-host').value = services.radarr.host;
                 document.getElementById('radarr-port').value = services.radarr.port;
+                
+                // ✅ AJOUT : Pré-remplir l'API key si détectée  
+                if (services.radarr.api_key) {
+                    document.getElementById('radarr-api-key').value = services.radarr.api_key;
+                }
+                
+                // ✅ AJOUT : Activer le service automatiquement
+                document.getElementById('radarr-enabled').checked = true;
                 detected = true;
             }
             
             if (detected) {
-                showToast('Services détectés et configurés automatiquement', 'success');
+                showToast('Services détectés et configurés automatiquement (IP + API keys)', 'success');
+                
+                // ✅ AJOUT : Proposition de sauvegarde automatique
+                if (confirm('Voulez-vous sauvegarder automatiquement cette configuration détectée ?')) {
+                    await saveConfiguration();
+                }
             } else {
                 showToast('Aucun service détecté', 'info');
             }
         }
     } catch (error) {
         hideLoading();
-        console.error('Erreur auto-détection:', error);
+        showToast('Erreur lors de la détection automatique', 'error');
+        console.error('Erreur détection:', error);
     }
 }
 

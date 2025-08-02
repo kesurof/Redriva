@@ -130,32 +130,57 @@ class WebSymlinkChecker:
         })
     
     def scan_directory_structure(self, base_path: str) -> List[Dict]:
-        """Analyse la structure des répertoires avec comptage des symlinks"""
+        """Analyse la structure des répertoires avec comptage des symlinks (PREMIER NIVEAU SEULEMENT)"""
         directories = []
         
         try:
-            for root, dirs, files in os.walk(base_path):
+            if not os.path.exists(base_path):
+                logger.error(f"Chemin inexistant: {base_path}")
+                return directories
+            
+            # Scanner UNIQUEMENT le premier niveau
+            for item in os.listdir(base_path):
                 if self.stop_requested:
                     break
+                    
+                item_path = os.path.join(base_path, item)
+                
+                # Ignorer les fichiers, on ne veut que les dossiers
+                if not os.path.isdir(item_path):
+                    continue
+                
+                # Ignorer les dossiers cachés
+                if item.startswith('.'):
+                    continue
                 
                 symlink_count = 0
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    if os.path.islink(file_path):
-                        symlink_count += 1
+                try:
+                    # Compter récursivement les symlinks dans ce dossier
+                    for root, dirs, files in os.walk(item_path):
+                        if self.stop_requested:
+                            break
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            if os.path.islink(file_path):
+                                symlink_count += 1
+                                
+                except (PermissionError, OSError) as e:
+                    logger.warning(f"Erreur accès {item_path}: {e}")
+                    symlink_count = -1  # Indicateur d'erreur
                 
-                if symlink_count > 0:
-                    rel_path = os.path.relpath(root, base_path)
-                    directories.append({
-                        'path': root,
-                        'name': rel_path if rel_path != '.' else os.path.basename(base_path),
-                        'symlink_count': symlink_count
-                    })
+                directories.append({
+                    'name': item,
+                    'path': item_path,
+                    'symlink_count': symlink_count
+                })
         
         except Exception as e:
-            logger.error(f"Erreur lors du scan de {base_path}: {e}")
+            logger.error(f"Erreur scan structure: {e}")
         
-        return sorted(directories, key=lambda x: x['symlink_count'], reverse=True)
+        # Trier par nombre de symlinks (décroissant)
+        directories.sort(key=lambda x: x['symlink_count'] if x['symlink_count'] >= 0 else 0, reverse=True)
+        
+        return directories
     
     def phase1_scan(self, selected_paths: List[str]) -> Tuple[List[str], List[Dict]]:
         """Phase 1: Vérification basique des liens symboliques"""
@@ -322,6 +347,105 @@ class WebSymlinkChecker:
         
         return deleted
     
+    def get_container_ip(self, container_id: str, network: str = None) -> Optional[str]:
+        """Récupère l'IP d'un conteneur Docker avec réseau spécifique"""
+        try:
+            if network:
+                cmd = f"docker inspect {container_id} --format='{{{{.NetworkSettings.Networks.{network}.IPAddress}}}}'"
+            else:
+                # Fallback - première IP trouvée
+                cmd = f"docker inspect {container_id} --format='{{{{range .NetworkSettings.Networks}}{{{{.IPAddress}}}}{{{{end}}}}'"
+            
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception as e:
+            logger.error(f"Erreur IP container {container_id}: {e}")
+        return None
+
+    def get_api_key(self, service: str, custom_path: str = None) -> Optional[str]:
+        """Récupère la clé API d'un service depuis sa configuration"""
+        try:
+            if custom_path:
+                config_path = custom_path
+            else:
+                # Chemins par défaut basés sur votre structure
+                settings_storage = os.environ.get('SETTINGS_STORAGE', '/opt/seedbox/docker')
+                current_user = os.environ.get('USER', 'kesurof')
+                config_path = f"{settings_storage}/docker/{current_user}/{service}/config/config.xml"
+            
+            if not os.path.exists(config_path):
+                logger.warning(f"Config {service} introuvable: {config_path}")
+                return None
+                
+            cmd = f"sed -n 's/.*<ApiKey>\\(.*\\)<\\/ApiKey>.*/\\1/p' '{config_path}'"
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            return result.stdout.strip() if result.returncode == 0 else None
+            
+        except Exception as e:
+            logger.error(f"Erreur API key {service}: {e}")
+            return None
+
+    def detect_docker_services(self) -> Dict:
+        """Auto-détection avancée des services Sonarr/Radarr via Docker"""
+        services = {'sonarr': None, 'radarr': None}
+        
+        try:
+            import subprocess
+            import json
+            
+            # Lister les conteneurs Docker actifs
+            result = subprocess.run(
+                ['docker', 'ps', '--format', 'json'],
+                capture_output=True, text=True, timeout=10
+            )
+            
+            if result.returncode != 0:
+                logger.warning("Docker non disponible ou erreur")
+                return services
+            
+            # Parser les conteneurs
+            for line in result.stdout.strip().split('\n'):
+                if not line:
+                    continue
+                    
+                container = json.loads(line)
+                name = container.get('Names', '').lower()
+                image = container.get('Image', '').lower()
+                ports = container.get('Ports', '')
+                container_id = container.get('ID', '')
+                
+                # Détection Sonarr
+                if ('sonarr' in name or 'sonarr' in image) and '8989' in ports:
+                    ip = self.get_container_ip(container_id, 'traefik_proxy') or self.get_container_ip(container_id)
+                    api_key = self.get_api_key('sonarr')
+                    
+                    services['sonarr'] = {
+                        'host': ip or 'localhost',
+                        'port': 8989,
+                        'api_key': api_key,
+                        'container_name': name,
+                        'auto_detected': True
+                    }
+                
+                # Détection Radarr
+                if ('radarr' in name or 'radarr' in image) and '7878' in ports:
+                    ip = self.get_container_ip(container_id, 'traefik_proxy') or self.get_container_ip(container_id)
+                    api_key = self.get_api_key('radarr')
+                    
+                    services['radarr'] = {
+                        'host': ip or 'localhost',
+                        'port': 7878,
+                        'api_key': api_key,
+                        'container_name': name,
+                        'auto_detected': True
+                    }
+                        
+        except Exception as e:
+            logger.error(f"Erreur détection Docker: {e}")
+        
+        return services
+
     def trigger_media_scans(self, config: Dict):
         """Déclenche les scans Sonarr/Radarr si configurés"""
         if config.get('sonarr_enabled'):
@@ -858,54 +982,19 @@ def register_symlink_routes(app: Flask):
     
     @app.route('/api/symlink/services/detect', methods=['POST'])
     def detect_services():
-        """Auto-détection des services Docker"""
+        """Auto-détection des services Sonarr/Radarr via Docker"""
         try:
-            services = {}
+            checker = WebSymlinkChecker()
+            services = checker.detect_docker_services()
             
-            # Commande Docker pour lister les conteneurs
-            result = subprocess.run([
-                'docker', 'ps', '--format', 'table {{.Names}}\t{{.Image}}\t{{.Ports}}'
-            ], capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')[1:]  # Skip header
-                
-                for line in lines:
-                    parts = line.split('\t')
-                    if len(parts) >= 3:
-                        name, image, ports = parts[0], parts[1], parts[2]
-                        
-                        # Détection Sonarr
-                        if 'sonarr' in name.lower() or 'sonarr' in image.lower():
-                            port_match = _extract_port(ports, '8989')
-                            if port_match:
-                                services['sonarr'] = {
-                                    'host': 'localhost',
-                                    'port': port_match,
-                                    'detected': True
-                                }
-                        
-                        # Détection Radarr
-                        if 'radarr' in name.lower() or 'radarr' in image.lower():
-                            port_match = _extract_port(ports, '7878')
-                            if port_match:
-                                services['radarr'] = {
-                                    'host': 'localhost',
-                                    'port': port_match,
-                                    'detected': True
-                                }
-            
-            return jsonify({'success': True, 'services': services})
+            return jsonify({
+                'success': True,
+                'services': services,
+                'message': 'Détection terminée'
+            })
             
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
-
-def _extract_port(ports_str: str, default_port: str) -> Optional[str]:
-    """Extrait le port mappé depuis la chaîne de ports Docker"""
-    import re
-    # Format: 0.0.0.0:8989->8989/tcp
-    match = re.search(r'0\.0\.0\.0:(\d+)->' + default_port, ports_str)
-    return match.group(1) if match else None
 
 # Initialisation au chargement du module
 init_symlink_database()
