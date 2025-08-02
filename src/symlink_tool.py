@@ -394,6 +394,12 @@ class WebSymlinkChecker:
             import subprocess
             import json
             
+            # ✅ CORRECTION : Vérifier Docker disponible d'abord
+            docker_check = subprocess.run(['which', 'docker'], capture_output=True)
+            if docker_check.returncode != 0:
+                logger.info("Docker CLI non disponible - auto-détection désactivée")
+                return services
+            
             # Lister les conteneurs Docker actifs
             result = subprocess.run(
                 ['docker', 'ps', '--format', 'json'],
@@ -404,43 +410,54 @@ class WebSymlinkChecker:
                 logger.warning("Docker non disponible ou erreur")
                 return services
             
+            # ✅ CORRECTION : Vérifier que la sortie n'est pas vide
+            if not result.stdout.strip():
+                logger.info("Aucun conteneur Docker détecté")
+                return services
+            
             # Parser les conteneurs
             for line in result.stdout.strip().split('\n'):
-                if not line:
+                if not line.strip():
+                    continue
+                
+                try:
+                    # ✅ CORRECTION : Gestion des erreurs JSON
+                    container = json.loads(line)
+                    name = container.get('Names', '').lower()
+                    image = container.get('Image', '').lower()
+                    ports = container.get('Ports', '')
+                    container_id = container.get('ID', '')
+                    
+                    # Détection Sonarr
+                    if ('sonarr' in name or 'sonarr' in image) and '8989' in ports:
+                        ip = self.get_container_ip(container_id, 'traefik_proxy') or self.get_container_ip(container_id)
+                        api_key = self.get_api_key('sonarr')
+                        
+                        services['sonarr'] = {
+                            'host': ip or 'localhost',
+                            'port': 8989,
+                            'api_key': api_key,
+                            'container_name': name,
+                            'auto_detected': True
+                        }
+                    
+                    # Détection Radarr
+                    if ('radarr' in name or 'radarr' in image) and '7878' in ports:
+                        ip = self.get_container_ip(container_id, 'traefik_proxy') or self.get_container_ip(container_id)
+                        api_key = self.get_api_key('radarr')
+                        
+                        services['radarr'] = {
+                            'host': ip or 'localhost',
+                            'port': 7878,
+                            'api_key': api_key,
+                            'container_name': name,
+                            'auto_detected': True
+                        }
+                        
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Erreur parsing JSON Docker: {line[:50]}... - {e}")
                     continue
                     
-                container = json.loads(line)
-                name = container.get('Names', '').lower()
-                image = container.get('Image', '').lower()
-                ports = container.get('Ports', '')
-                container_id = container.get('ID', '')
-                
-                # Détection Sonarr
-                if ('sonarr' in name or 'sonarr' in image) and '8989' in ports:
-                    ip = self.get_container_ip(container_id, 'traefik_proxy') or self.get_container_ip(container_id)
-                    api_key = self.get_api_key('sonarr')
-                    
-                    services['sonarr'] = {
-                        'host': ip or 'localhost',
-                        'port': 8989,
-                        'api_key': api_key,
-                        'container_name': name,
-                        'auto_detected': True
-                    }
-                
-                # Détection Radarr
-                if ('radarr' in name or 'radarr' in image) and '7878' in ports:
-                    ip = self.get_container_ip(container_id, 'traefik_proxy') or self.get_container_ip(container_id)
-                    api_key = self.get_api_key('radarr')
-                    
-                    services['radarr'] = {
-                        'host': ip or 'localhost',
-                        'port': 7878,
-                        'api_key': api_key,
-                        'container_name': name,
-                        'auto_detected': True
-                    }
-                        
         except Exception as e:
             logger.error(f"Erreur détection Docker: {e}")
         

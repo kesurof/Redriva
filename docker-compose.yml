@@ -8,8 +8,9 @@ services:
       - "5000:5000"
     volumes:
       - ./data:/app/data
-      - ./config:/app/config
+      - ./config:/app/config  
       - ./medias:/app/medias:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro 
     env_file:
       - ./config/.env
     healthcheck:
