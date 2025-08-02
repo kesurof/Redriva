@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gosu \
     ffmpeg \
+    docker.io \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get autoremove -y \
     && apt-get clean
