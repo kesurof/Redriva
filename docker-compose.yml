@@ -9,6 +9,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config
+      - ./medias:/app/medias:rw
     env_file:
       - ./config/.env
     healthcheck:

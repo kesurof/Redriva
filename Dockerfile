@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     curl \
     gosu \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get autoremove -y \
     && apt-get clean

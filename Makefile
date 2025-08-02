@@ -9,25 +9,25 @@ setup: ## Configuration initiale
 	./setup.sh
 
 dev: ## Démarrage en mode développement
-	docker-compose up --build
+	docker compose up --build
 
 prod: ## Démarrage en production
-	docker-compose up -d
+	docker compose up -d
 
 logs: ## Affichage des logs
-	docker-compose logs -f
+	docker compose logs -f
 
 stop: ## Arrêt des conteneurs
-	docker-compose down
+	docker compose down
 
 restart: ## Redémarrage
-	docker-compose restart
+	docker compose restart
 
 status: ## Statut des conteneurs
-	docker-compose ps
+	docker compose ps
 
 pull: ## Téléchargement de la dernière image
-	docker-compose pull
+	docker compose pull
 
 update: pull restart ## Mise à jour complète
 
@@ -42,10 +42,10 @@ info: ## Informations système
 	@echo "======================"
 	@echo "🐳 Docker:"
 	@docker --version
-	@docker-compose --version
+	@docker compose --version
 	@echo ""
 	@echo "📦 Images:"
 	@docker images ghcr.io/kesurof/redriva --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" 2>/dev/null || echo "Aucune image Redriva trouvée"
 	@echo ""
 	@echo "🔧 Conteneurs:"
-	@docker-compose ps
+	@docker compose ps

@@ -31,6 +31,9 @@ from main import (
     fetch_torrent_detail, upsert_torrent_detail
 )
 
+# Import du nouveau module symlink
+from symlink_tool import register_symlink_routes, init_symlink_database
+
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
@@ -163,6 +166,7 @@ def dashboard():
                                  no_token=True)
         
         create_tables()
+        init_symlink_database()  # Initialiser la base symlink
         print("✅ Tables créées/vérifiées")
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -1420,6 +1424,10 @@ def get_processing_torrents():
 if __name__ == '__main__':
     import signal
     import sys
+    
+    # Enregistrer les routes symlink
+    register_symlink_routes(app)
+    print("🔗 Routes Symlink Manager enregistrées")
     
     def signal_handler(sig, frame):
         print("\n🛑 Interruption reçue, arrêt du serveur...")
