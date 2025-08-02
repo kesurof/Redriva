@@ -37,6 +37,24 @@ from symlink_tool import register_symlink_routes, init_symlink_database
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# INITIALISATION SYMLINK MANAGER (au niveau module pour Gunicorn)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+try:
+    # Initialiser la base de données symlink
+    init_symlink_database()
+    print("✅ Base de données Symlink initialisée")
+    
+    # Enregistrer les routes symlink
+    register_symlink_routes(app)
+    print("🔗 Routes Symlink Manager enregistrées")
+    
+except Exception as e:
+    print(f"❌ Erreur initialisation Symlink Manager: {e}")
+    import traceback
+    traceback.print_exc()
+
 # Configuration adaptée pour Docker et environnements locaux
 app.config['HOST'] = os.getenv('FLASK_HOST', '0.0.0.0')  # 0.0.0.0 pour Docker, configurable via env
 app.config['PORT'] = int(os.getenv('FLASK_PORT', '5000'))  # Port configurable via env
@@ -1424,10 +1442,6 @@ def get_processing_torrents():
 if __name__ == '__main__':
     import signal
     import sys
-    
-    # Enregistrer les routes symlink
-    register_symlink_routes(app)
-    print("🔗 Routes Symlink Manager enregistrées")
     
     def signal_handler(sig, frame):
         print("\n🛑 Interruption reçue, arrêt du serveur...")
