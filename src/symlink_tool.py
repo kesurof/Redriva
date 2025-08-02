@@ -475,8 +475,18 @@ class WebSymlinkChecker:
         """Déclenche un scan Sonarr"""
         try:
             import requests
-            url = f"http://{config['sonarr_host']}:{config['sonarr_port']}/api/v3/command"
-            headers = {'X-Api-Key': config['sonarr_api_key']}
+            
+            # ✅ CORRECTION : Assurer que le port est bien une chaîne
+            host = config.get('sonarr_host', 'localhost')
+            port = str(config.get('sonarr_port', 8989))  # Convertir en string
+            api_key = config.get('sonarr_api_key', '')
+            
+            if not api_key:
+                logger.warning("API key Sonarr manquante, scan ignoré")
+                return
+                
+            url = f"http://{host}:{port}/api/v3/command"
+            headers = {'X-Api-Key': api_key}  # ✅ API key seulement
             data = {'name': 'RescanSeries'}
             
             response = requests.post(url, json=data, headers=headers, timeout=30)
@@ -491,8 +501,18 @@ class WebSymlinkChecker:
         """Déclenche un scan Radarr"""
         try:
             import requests
-            url = f"http://{config['radarr_host']}:{config['radarr_port']}/api/v3/command"
-            headers = {'X-Api-Key': config['radarr_api_key']}
+            
+            # ✅ CORRECTION : Assurer que le port est bien une chaîne  
+            host = config.get('radarr_host', 'localhost')
+            port = str(config.get('radarr_port', 7878))  # Convertir en string
+            api_key = config.get('radarr_api_key', '')
+            
+            if not api_key:
+                logger.warning("API key Radarr manquante, scan ignoré")
+                return
+                
+            url = f"http://{host}:{port}/api/v3/command"
+            headers = {'X-Api-Key': api_key}  # ✅ API key seulement
             data = {'name': 'RescanMovie'}
             
             response = requests.post(url, json=data, headers=headers, timeout=30)

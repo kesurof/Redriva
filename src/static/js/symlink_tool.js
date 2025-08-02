@@ -448,6 +448,16 @@ function populateConfigForm(config) {
     document.getElementById('radarr-host').value = config.radarr_host || '';
     document.getElementById('radarr-port').value = config.radarr_port || 7878;
     document.getElementById('radarr-api-key').value = config.radarr_api_key || '';
+    document.getElementById('sonarr-enabled').checked = config.sonarr_enabled || false;
+    document.getElementById('sonarr-host').value = config.sonarr_host || '';
+    document.getElementById('sonarr-port').value = config.sonarr_port || 8989;
+    document.getElementById('sonarr-api-key').value = config.sonarr_api_key || '';
+    
+    // Radarr
+    document.getElementById('radarr-enabled').checked = config.radarr_enabled || false;
+    document.getElementById('radarr-host').value = config.radarr_host || '';
+    document.getElementById('radarr-port').value = config.radarr_port || 7878;
+    document.getElementById('radarr-api-key').value = config.radarr_api_key || '';
 }
 
 async function saveConfiguration() {
