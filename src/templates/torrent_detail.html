@@ -3,169 +3,180 @@
 {% block title %}{{ torrent.filename|default('Torrent') }} - Redriva Web{% endblock %}
 
 {% block content %}
-<div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h2>📋 Détails du torrent</h2>
-        <div>
+<!-- Header avec Material Design -->
+<div class="card detail-header-card">
+    <div class="detail-header">
+        <div class="detail-title">
+            <h2>📋 Détails du torrent</h2>
+            <div class="detail-subtitle">{{ torrent.filename|default('Torrent inconnu') | truncate(50) }}</div>
+        </div>
+        <div class="detail-actions">
             <a href="/torrents" class="btn btn-secondary">← Retour</a>
             {% if torrent.status == 'error' %}
                 <button onclick="retryTorrent('{{ torrent.id }}')" class="btn btn-warning">🔄 Retry</button>
             {% endif %}
         </div>
     </div>
+</div>
     
-    <!-- Informations générales -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
-        <div>
-            <h3>ℹ️ Informations générales</h3>
-            <table class="table">
-                <tr>
-                    <td><strong>ID:</strong></td>
-                    <td>{{ torrent.id }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Nom:</strong></td>
-                    <td style="word-break: break-word;">{{ torrent.filename|default('N/A') }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Hash:</strong></td>
-                    <td style="font-family: monospace; font-size: 12px;">{{ torrent.hash|default('N/A') }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Taille:</strong></td>
-                    <td>
+    <!-- Informations principales en grid responsive -->
+    <div class="detail-grid">
+        <!-- Informations générales -->
+        <div class="card info-card">
+            <h3 class="card-title">ℹ️ Informations générales</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">ID:</span>
+                    <span class="info-value">{{ torrent.id }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Nom:</span>
+                    <span class="info-value">{{ torrent.filename|default('N/A') }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Hash:</span>
+                    <span class="info-value hash-value">{{ torrent.hash|default('N/A') }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Taille:</span>
+                    <span class="info-value">
                         {% if torrent.bytes %}
-                            {{ "%.2f"|format(torrent.bytes / 1024 / 1024 / 1024) }} GB
-                            <small>({{ "{:,}".format(torrent.bytes) }} bytes)</small>
+                            <strong>{{ "%.2f"|format(torrent.bytes / 1024 / 1024 / 1024) }} GB</strong>
+                            <small class="bytes-detail">({{ "{:,}".format(torrent.bytes) }} bytes)</small>
                         {% else %}
                             N/A
                         {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td><strong>Date ajout:</strong></td>
-                    <td>{{ torrent.added|default('N/A') }}</td>
-                </tr>
-            </table>
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Date ajout:</span>
+                    <span class="info-value">{{ torrent.added|default('N/A') }}</span>
+                </div>
+            </div>
         </div>
         
-        <div>
-            <h3>📊 État et statut</h3>
-            <table class="table">
-                <tr>
-                    <td><strong>Statut:</strong></td>
-                    <td>
+        <!-- État et statut -->
+        <div class="card status-card">
+            <h3 class="card-title">📊 État et statut</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Statut:</span>
+                    <span class="info-value">
                         {% set status = torrent.status|default('unknown') %}
                         {% if status == 'downloaded' %}
-                            <span class="badge badge-success">✅ Downloaded</span>
+                            <span class="status-badge status-success">✅ Downloaded</span>
                         {% elif status == 'downloading' %}
-                            <span class="badge badge-warning">⬇️ Downloading</span>
+                            <span class="status-badge status-warning">⬇️ Downloading</span>
                         {% elif status == 'error' %}
-                            <span class="badge badge-danger">❌ Error</span>
+                            <span class="status-badge status-danger">❌ Error</span>
                         {% elif status == 'magnet_error' %}
-                            <span class="badge badge-danger">🧲 Magnet Error</span>
+                            <span class="status-badge status-danger">🧲 Magnet Error</span>
                         {% elif status == 'waiting_files_selection' %}
-                            <span class="badge badge-info">⏳ Waiting Files</span>
+                            <span class="status-badge status-info">⏳ Waiting Files</span>
                         {% else %}
-                            <span class="badge badge-secondary">❓ {{ status }}</span>
+                            <span class="status-badge status-secondary">❓ {{ status }}</span>
                         {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td><strong>Progression:</strong></td>
-                    <td>
+                    </span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Progression:</span>
+                    <div class="info-value">
                         {% if torrent.progress is defined %}
-                            {{ torrent.progress }}%
-                            <div style="background: #e9ecef; border-radius: 10px; height: 8px; margin-top: 5px;">
-                                <div style="background: #28a745; height: 100%; width: {{ torrent.progress }}%; border-radius: 10px;"></div>
+                            <div class="progress-info">
+                                <span class="progress-text">{{ torrent.progress }}%</span>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" style="width: {{ torrent.progress }}%;"></div>
+                                </div>
                             </div>
                         {% else %}
                             N/A
                         {% endif %}
-                    </td>
-                </tr>
-                <tr>
-                    <td><strong>Vitesse:</strong></td>
-                    <td>{{ torrent.speed|default('N/A') }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Seeders:</strong></td>
-                    <td>{{ torrent.seeders|default('N/A') }}</td>
-                </tr>
-            </table>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Vitesse:</span>
+                    <span class="info-value">{{ torrent.speed|default('N/A') }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Seeders:</span>
+                    <span class="info-value">{{ torrent.seeders|default('N/A') }}</span>
+                </div>
+            </div>
         </div>
     </div>
-</div>
 
 <!-- Liens de téléchargement -->
 {% if torrent.links %}
-<div class="card">
-    <h3>🔗 Liens de téléchargement ({{ torrent.links|length }})</h3>
-    <div style="max-height: 400px; overflow-y: auto;">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th style="width: 60%;">Fichier</th>
-                    <th style="width: 20%;">Taille</th>
-                    <th style="width: 20%;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for link in torrent.links %}
-                <tr>
-                    <td style="word-break: break-word;">
-                        <strong>{{ link.filename|default('Fichier') }}</strong>
-                    </td>
-                    <td>
+<div class="card files-card">
+    <h3 class="card-title">🔗 Fichiers disponibles ({{ torrent.links|length }})</h3>
+    <div class="files-container">
+        {% for link in torrent.links %}
+        <div class="file-item-card">
+            <div class="file-header">
+                <div class="file-info">
+                    <div class="file-name">{{ link.filename|default('Fichier') }}</div>
+                    <div class="file-size">
                         {% if link.filesize %}
                             {{ "%.1f"|format(link.filesize / 1024 / 1024) }} MB
                         {% else %}
-                            N/A
+                            Taille inconnue
                         {% endif %}
-                    </td>
-                    <td>
-                        {% if link.download %}
-                            <a href="{{ link.download }}" target="_blank" class="btn btn-sm btn-success">⬇️ Télécharger</a>
-                        {% else %}
-                            <span class="text-muted">Pas de lien</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                    </div>
+                </div>
+                <div class="file-actions">
+                    {% if link.download %}
+                        <a href="{{ link.download }}" target="_blank" class="btn btn-sm btn-success file-action-btn">
+                            💾 Télécharger
+                        </a>
+                    {% else %}
+                        <span class="file-unavailable">Indisponible</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 {% endif %}
 
 <!-- Historique des erreurs -->
 {% if torrent.error_details %}
-<div class="card">
-    <h3>⚠️ Détails des erreurs</h3>
-    <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #dc3545;">
-        <pre style="margin: 0; white-space: pre-wrap; font-size: 13px;">{{ torrent.error_details }}</pre>
+<div class="card error-card">
+    <h3 class="card-title">⚠️ Détails des erreurs</h3>
+    <div class="error-container">
+        <pre class="error-details">{{ torrent.error_details }}</pre>
     </div>
 </div>
 {% endif %}
 
 <!-- Actions rapides -->
-<div class="card">
-    <h3>🛠️ Actions</h3>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button onclick="refreshTorrent()" class="btn btn-primary">🔄 Actualiser</button>
+<div class="card actions-card">
+    <h3 class="card-title">🛠️ Actions rapides</h3>
+    <div class="actions-grid">
+        <button onclick="refreshTorrent()" class="btn btn-primary action-btn">
+            🔄 Actualiser
+        </button>
         
         {% if torrent.status in ['error', 'magnet_error'] %}
-            <button onclick="retryTorrent('{{ torrent.id }}')" class="btn btn-warning">🔄 Relancer</button>
+            <button onclick="retryTorrent('{{ torrent.id }}')" class="btn btn-warning action-btn">
+                🔄 Relancer
+            </button>
         {% endif %}
         
         {% if torrent.status == 'downloading' %}
-            <button onclick="pauseTorrent('{{ torrent.id }}')" class="btn btn-secondary">⏸️ Pause</button>
+            <button onclick="pauseTorrent('{{ torrent.id }}')" class="btn btn-secondary action-btn">
+                ⏸️ Pause
+            </button>
         {% endif %}
         
-        <button onclick="copyTorrentInfo()" class="btn btn-info">📋 Copier infos</button>
+        <button onclick="copyTorrentInfo()" class="btn btn-info action-btn">
+            📋 Copier infos
+        </button>
         
         {% if torrent.links %}
-            <button onclick="downloadAllLinks()" class="btn btn-success">⬇️ Tout télécharger</button>
+            <button onclick="downloadAllLinks()" class="btn btn-success action-btn">
+                ⬇️ Tout télécharger
+            </button>
         {% endif %}
     </div>
 </div>
@@ -237,7 +248,6 @@ function downloadAllLinks() {
 }
 
 function showLoading(show) {
-    // Simple loading indicator
     const existing = document.getElementById('loading-overlay');
     if (existing) existing.remove();
     
@@ -246,53 +256,624 @@ function showLoading(show) {
         overlay.id = 'loading-overlay';
         overlay.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.3); z-index: 9999;
+            background: rgba(0,0,0,0.6); z-index: 9999;
             display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+            animation: fadeIn 0.3s ease;
         `;
-        overlay.innerHTML = '<div style="background: white; padding: 20px; border-radius: 8px;">⏳ Chargement...</div>';
+        overlay.innerHTML = `
+            <div style="
+                background: white; 
+                padding: 32px 40px; 
+                border-radius: 16px; 
+                box-shadow: 0 16px 64px rgba(0,0,0,0.2);
+                text-align: center;
+                animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            ">
+                <div style="
+                    font-size: 2em; 
+                    margin-bottom: 16px; 
+                    animation: spin 2s linear infinite;
+                ">⏳</div>
+                <div style="
+                    color: #333; 
+                    font-weight: 600; 
+                    font-size: 16px;
+                ">Chargement...</div>
+            </div>
+        `;
         document.body.appendChild(overlay);
     }
 }
 
 function showToast(message, type) {
     const toast = document.createElement('div');
+    
+    // Définir les couleurs selon le type
+    const colors = {
+        success: { border: '#4CAF50', bg: 'linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%)', color: '#2e7d32' },
+        error: { border: '#f44336', bg: 'linear-gradient(135deg, #ffebee 0%, #fde7e7 100%)', color: '#c62828' },
+        warning: { border: '#FF9800', bg: 'linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%)', color: '#ef6c00' },
+        info: { border: '#2196F3', bg: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', color: '#1565c0' }
+    };
+    
+    const style = colors[type] || colors.info;
+    
+    toast.textContent = message;
     toast.style.cssText = `
         position: fixed; top: 20px; right: 20px; z-index: 1000;
-        padding: 12px 20px; border-radius: 4px; color: white;
-        background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#17a2b8'};
-        animation: slideIn 0.3s ease;
+        padding: 16px 24px; border-radius: 12px; font-size: 14px; font-weight: 500;
+        background: ${style.bg}; color: ${style.color};
+        border-left: 4px solid ${style.border};
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        min-width: 300px; max-width: 400px;
+        transform: translateX(420px); opacity: 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        animation: slideIn 0.4s ease;
     `;
-    toast.textContent = message;
+    
     document.body.appendChild(toast);
     
+    // Animation d'entrée
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
+        toast.style.transform = 'translateX(0)';
+        toast.style.opacity = '1';
+    }, 100);
+    
+    // Animation de sortie
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.4s ease';
+        setTimeout(() => toast.remove(), 400);
     }, 3000);
 }
 
-// Style pour les badges et animations
+// Style pour les badges et animations - Material Design Complet
 document.head.insertAdjacentHTML('beforeend', `
 <style>
+/* Material Design Cards - Style harmonisé avec l'application */
+.card {
+    background: white;
+    border: none;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* Cards avec couleurs d'accent spécifiques */
+.detail-header-card {
+    border-left: 4px solid #2196F3;
+}
+
+.info-card {
+    border-left: 4px solid #4CAF50;
+}
+
+.status-card {
+    border-left: 4px solid #FF9800;
+}
+
+.files-card {
+    border-left: 4px solid #9C27B0;
+}
+
+.error-card {
+    border-left: 4px solid #f44336;
+}
+
+.actions-card {
+    border-left: 4px solid #607D8B;
+}
+
+/* Header modernisé */
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+}
+
+.detail-title h2 {
+    margin: 0 0 8px 0;
+    color: #333;
+    font-weight: 600;
+    font-size: 1.5em;
+}
+
+.detail-subtitle {
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Grid responsive pour les informations */
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Titres des cards */
+.card-title {
+    margin: 0 0 20px 0;
+    color: #333;
+    font-size: 1.1em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #f5f5f5;
+}
+
+/* Tables d'informations modernisées */
+.info-table {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #555;
+    min-width: 120px;
+    font-size: 14px;
+}
+
+.info-value {
+    flex: 1;
+    text-align: right;
+    color: #333;
+    word-break: break-word;
+    font-size: 14px;
+}
+
+.hash-value {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.bytes-detail {
+    display: block;
+    color: #666;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+/* Status badges modernisés */
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.status-success {
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    color: #2e7d32;
+    border: 1px solid #4caf50;
+}
+
+.status-warning {
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    color: #ef6c00;
+    border: 1px solid #ff9800;
+}
+
+.status-danger {
+    background: linear-gradient(135deg, #ffebee 0%, #fde7e7 100%);
+    color: #c62828;
+    border: 1px solid #f44336;
+}
+
+.status-info {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1565c0;
+    border: 1px solid #2196f3;
+}
+
+.status-secondary {
+    background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
+    color: #616161;
+    border: 1px solid #9e9e9e;
+}
+
+/* Barre de progression modernisée */
+.progress-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.progress-text {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.progress-bar-container {
+    background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+    border-radius: 12px;
+    height: 12px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar {
+    background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+    height: 100%;
+    border-radius: 12px;
+    transition: width 0.3s ease;
+    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+}
+
+/* Fichiers modernisés */
+.files-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.file-item-card {
+    background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.file-item-card:hover {
+    border-color: #9c27b0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(156, 39, 176, 0.15);
+}
+
+.file-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.file-info {
+    flex: 1;
+}
+
+.file-name {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
+.file-size {
+    color: #666;
+    font-size: 13px;
+}
+
+.file-actions {
+    flex-shrink: 0;
+}
+
+.file-action-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.file-unavailable {
+    color: #9e9e9e;
+    font-style: italic;
+    font-size: 13px;
+    padding: 8px 16px;
+    background: #f5f5f5;
+    border-radius: 6px;
+}
+
+/* Container d'erreurs */
+.error-container {
+    background: linear-gradient(135deg, #ffebee 0%, #fde7e7 100%);
+    border: 2px solid #f44336;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.error-details {
+    margin: 0;
+    white-space: pre-wrap;
+    font-size: 13px;
+    color: #c62828;
+    font-family: 'Courier New', monospace;
+    line-height: 1.5;
+}
+
+/* Grid d'actions */
+.actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.action-btn {
+    padding: 12px 20px;
+    font-weight: 500;
+    border-radius: 8px;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Boutons avec Material Design */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: pointer;
+    border: none;
+    padding: 12px 24px;
+    font-size: 14px;
+    line-height: 1.5;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+    box-shadow: 0 8px 20px rgba(33, 150, 243, 0.4);
+    color: white;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+    box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4);
+    color: white;
+}
+
+.btn-warning {
+    background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #F57C00 0%, #E65100 100%);
+    box-shadow: 0 8px 20px rgba(255, 152, 0, 0.4);
+    color: white;
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+    box-shadow: 0 8px 20px rgba(108, 117, 125, 0.4);
+    color: white;
+}
+
+.btn-info {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+}
+
+.btn-info:hover {
+    background: linear-gradient(135deg, #138496 0%, #0c6674 100%);
+    box-shadow: 0 8px 20px rgba(23, 162, 184, 0.4);
+    color: white;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #f44336 0%, #D32F2F 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #D32F2F 0%, #C62828 100%);
+    box-shadow: 0 8px 20px rgba(244, 67, 54, 0.4);
+    color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .detail-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+    
+    .detail-actions {
+        justify-content: stretch;
+    }
+    
+    .detail-actions .btn {
+        flex: 1;
+        padding: 14px 20px;
+        font-size: 16px;
+    }
+    
+    .info-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    
+    .info-label {
+        min-width: auto;
+        font-weight: 700;
+    }
+    
+    .info-value {
+        text-align: left;
+    }
+    
+    .actions-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .action-btn {
+        padding: 16px 20px;
+        font-size: 16px;
+    }
+    
+    .file-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    
+    .file-actions {
+        align-self: stretch;
+    }
+    
+    .file-action-btn {
+        width: 100%;
+        padding: 12px 20px;
+        font-size: 16px;
+    }
+    
+    .card {
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .card {
+        padding: 16px;
+        border-radius: 8px;
+    }
+    
+    .detail-subtitle {
+        font-size: 13px;
+    }
+    
+    .info-row {
+        padding: 10px 0;
+    }
+    
+    .card-title {
+        font-size: 1em;
+        margin-bottom: 16px;
+    }
+}
+
+/* Animations pour les interactions */
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
 }
+
 @keyframes slideOut {
     from { transform: translateX(0); opacity: 1; }
     to { transform: translateX(100%); opacity: 0; }
 }
-.badge {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: bold;
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
-.badge-success { background: #28a745; color: white; }
-.badge-warning { background: #ffc107; color: black; }
-.badge-danger { background: #dc3545; color: white; }
-.badge-info { background: #17a2b8; color: white; }
-.badge-secondary { background: #6c757d; color: white; }
+
+/* Animation d'apparition des cards */
+.card {
+    animation: fadeIn 0.5s ease forwards;
+}
+
+.card:nth-child(1) { animation-delay: 0.1s; }
+.card:nth-child(2) { animation-delay: 0.2s; }
+.card:nth-child(3) { animation-delay: 0.3s; }
+.card:nth-child(4) { animation-delay: 0.4s; }
+
+/* Animation de rotation pour le loader */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
 </style>
 `);
 </script>

@@ -71,35 +71,37 @@
 </style>
 
 <!-- En-tête avec actions -->
-<div class="card">
+<div class="card filters-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <div>
-            <h2>📋 Gestion des torrents</h2>
+            <h2 style="margin: 0; color: #333; font-weight: 600; display: flex; align-items: center; gap: 12px;">
+                📋 Gestion des torrents
+            </h2>
         </div>
     </div>
     
     <!-- Filtres et recherche -->
-    <div class="filters-container" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <form method="GET" action="/torrents" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+    <div class="filters-container" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 12px; margin-bottom: 0; border: 2px solid #e0e0e0;">
+        <form method="GET" action="/torrents" style="display: flex; gap: 20px; flex-wrap: wrap; align-items: center;">
             <!-- Préserver les paramètres actuels -->
             <input type="hidden" name="sort" value="{{ sort_by }}">
             <input type="hidden" name="dir" value="{{ sort_dir }}">
             
             <!-- Recherche -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <label for="search" style="font-weight: bold;">Recherche:</label>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <label for="search" style="font-weight: 600; color: #333; font-size: 14px;">Recherche:</label>
                 <input type="text" 
                        id="search" 
                        name="search" 
                        value="{{ search }}" 
                        placeholder="Nom du torrent..." 
-                       style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-width: 200px;">
+                       style="padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; min-width: 200px; font-size: 14px; transition: all 0.3s ease; background: white;">
             </div>
             
             <!-- Filtre par statut -->
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <label for="status" style="font-weight: bold;">Statut:</label>
-                <select id="status" name="status" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <label for="status" style="font-weight: 600; color: #333; font-size: 14px;">Statut:</label>
+                <select id="status" name="status" style="padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; background: white; transition: all 0.3s ease;">
                     <option value="">Tous les statuts</option>
                     {% for status_info in available_statuses %}
                     <option value="{{ status_info[0] }}" {% if status_filter == status_info[0] %}selected{% endif %}>
@@ -109,25 +111,25 @@
                 </select>
             </div>
             
-            <button type="submit" class="btn btn-secondary">🔍 Filtrer</button>
-            <a href="/torrents" class="btn btn-light">🗑️ Effacer</a>
+            <button type="submit" class="btn btn-primary">🔍 Filtrer</button>
+            <a href="/torrents" class="btn btn-secondary">🗑️ Effacer</a>
         </form>
     </div>
 </div>
 
 <!-- Statistiques rapides -->
-<div class="stats-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-        <a href="{{ url_for('torrents') }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: transform 0.2s;">
-            <div style="font-size: 1.5em; font-weight: bold; color: #667eea;">{{ total_count }}</div>
-            <div style="font-size: 0.9em; color: #666;">Total</div>
+<div class="card stats-card">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px;">
+        <a href="{{ url_for('torrents') }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; border-radius: 12px; background: white; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border-left: 4px solid #3498db;">
+            <div style="font-size: 2em; font-weight: 700; color: #3498db; margin-bottom: 8px;">{{ total_count }}</div>
+            <div style="font-size: 14px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total</div>
         </a>
         {% for status_info in available_statuses %}
-        <a href="{{ url_for('torrents', status=status_info[0]) }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: transform 0.2s;">
-            <div style="font-size: 1.2em; font-weight: bold; color: {% if status_info[0] == 'downloaded' %}#28a745{% elif 'error' in status_info[0] %}#dc3545{% else %}#6c757d{% endif %};">
+        <a href="{{ url_for('torrents', status=status_info[0]) }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; border-radius: 12px; background: white; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border-left: 4px solid {% if status_info[0] == 'downloaded' %}#4CAF50{% elif 'error' in status_info[0] %}#f44336{% else %}#9e9e9e{% endif %};">
+            <div style="font-size: 1.8em; font-weight: 700; color: {% if status_info[0] == 'downloaded' %}#4CAF50{% elif 'error' in status_info[0] %}#f44336{% else %}#9e9e9e{% endif %}; margin-bottom: 8px;">
                 {{ status_info[1] }}
             </div>
-            <div style="font-size: 0.8em; color: #666;">{{ status_info[0] }}</div>
+            <div style="font-size: 13px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{{ status_info[0] }}</div>
         </a>
         {% endfor %}
     </div>
@@ -147,13 +149,13 @@
 </div>
 
 <!-- Table des torrents -->
-<div class="card">
+<div class="card torrents-card">
     {% if torrents %}
     <div class="table-responsive">
-        <table class="table table-striped table-hover" style="margin: 0;">
-            <thead style="background: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-                <tr>
-                    <th style="width: 3%;">
+        <table class="table table-striped table-hover" style="margin: 0; border-radius: 12px; overflow: hidden;">
+            <thead style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); position: sticky; top: 0; z-index: 10;">
+                <tr style="border: none;">
+                    <th style="width: 3%; padding: 16px; font-weight: 600; color: #333; border: none;">
                         <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Sélectionner tout">
                     </th>
                     <th style="width: 5%;">
@@ -427,21 +429,111 @@
 {% block scripts %}
 {{ super() }}
 <style>
-.btn { text-decoration: none; }
-.btn:hover { opacity: 0.8; }
-.table-responsive { overflow-x: auto; }
-.card { background: white; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 20px; padding: 20px; }
-.stat-item:hover { transform: scale(1.05); background: rgba(0,0,0,0.05); border-radius: 8px; }
-.modal { animation: fadeIn 0.3s ease; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.modal-content { animation: slideIn 0.3s ease; }
-@keyframes slideIn { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+/* Material Design Cards - Style harmonisé avec symlink_tool */
+.card { 
+    background: white; 
+    border: none;
+    border-radius: 12px; 
+    margin-bottom: 20px; 
+    padding: 24px; 
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border-left: 4px solid #3498db;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+/* Cards avec couleurs d'accent spécifiques */
+.card.filters-card {
+    border-left-color: #2196F3;
+}
+
+.card.stats-card {
+    border-left-color: #4CAF50;
+}
+
+.card.torrents-card {
+    border-left-color: #FF9800;
+}
+
+.table-responsive { 
+    overflow-x: auto; 
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Tables modernisées */
+.table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table th {
+    font-weight: 600;
+    color: #333;
+    border: none;
+    padding: 16px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.table td {
+    border: none;
+    padding: 16px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: all 0.3s ease;
+}
+
+.table tbody tr:hover {
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.05) 0%, rgba(33, 150, 243, 0.02) 100%);
+    transform: scale(1.001);
+}
+
+.table tbody tr:hover td {
+    border-bottom-color: #2196F3;
+}
+
+/* Statistiques modernisées */
+.stat-item:hover { 
+    transform: scale(1.05) translateY(-2px); 
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%); 
+    border-radius: 8px; 
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+}
+/* Modals avec Material Design */
+.modal { 
+    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+@keyframes fadeIn { 
+    from { opacity: 0; } 
+    to { opacity: 1; } 
+}
+
+.modal-content { 
+    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 16px;
+    border: none;
+    box-shadow: 0 16px 64px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(8px);
+}
+
+@keyframes slideIn { 
+    from { transform: translateY(-60px) scale(0.95); opacity: 0; } 
+    to { transform: translateY(0) scale(1); opacity: 1; } 
+}
 @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes progress { 0% { transform: translateX(-100%); } 50% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
 
-/* Styles pour les toasts (réutilisés du dashboard) */
+/* Styles pour les toasts - Material Design harmonisé */
 .toast-container {
     position: fixed;
     top: 20px;
@@ -449,22 +541,25 @@
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .toast {
     background: white;
-    padding: 12px 16px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border-left: 4px solid #007bff;
-    max-width: 300px;
-    transform: translateX(350px);
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    border-left: 4px solid #e0e0e0;
+    min-width: 300px;
+    max-width: 350px;
+    transform: translateX(380px);
     opacity: 0;
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    color: #333;
+    font-weight: 500;
 }
 
 .toast.show {
@@ -473,27 +568,43 @@
 }
 
 .toast.toast-success {
-    border-left-color: #28a745;
-    background: #d4edda;
-    color: #155724;
+    border-left-color: #4CAF50;
+    background: linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%);
+    color: #2e7d32;
 }
 
 .toast.toast-error {
-    border-left-color: #dc3545;
-    background: #f8d7da;
-    color: #721c24;
+    border-left-color: #f44336;
+    background: linear-gradient(135deg, #ffebee 0%, #fde7e7 100%);
+    color: #c62828;
 }
 
 .toast.toast-warning {
-    border-left-color: #ffc107;
-    background: #fff3cd;
-    color: #856404;
+    border-left-color: #FF9800;
+    background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    color: #ef6c00;
 }
 
 .toast.toast-info {
-    border-left-color: #17a2b8;
-    background: #d1ecf1;
-    color: #0c5460;
+    border-left-color: #2196F3;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    color: #1565c0;
+}
+
+/* Formulaires modernisés - harmonisés avec symlink_tool */
+input[type="text"], input[type="search"], select {
+    border: 2px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    padding: 12px 16px !important;
+    transition: all 0.3s ease !important;
+    font-size: 14px !important;
+    background: white !important;
+}
+
+input[type="text"]:focus, input[type="search"]:focus, select:focus {
+    outline: none !important;
+    border-color: #2196F3 !important;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1) !important;
 }
 
 /* Responsive */
@@ -509,103 +620,152 @@
     }
 }
 
-/* Styles pour les fichiers et informations média */
+/* Styles pour les fichiers et informations média - Material Design */
 .file-item {
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    margin-bottom: 8px;
-    transition: all 0.2s ease-in-out;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
+
 .file-item:hover {
-    border-color: #007bff;
-    box-shadow: 0 0 5px rgba(0,123,255,0.2);
+    border-color: #2196F3;
+    box-shadow: 0 4px 20px rgba(33, 150, 243, 0.15);
+    transform: translateY(-1px);
 }
+
 .file-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px;
-    background-color: #f8f9fa;
-    border-radius: 6px 6px 0 0;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #e0e0e0;
 }
+
 .file-name {
-    font-weight: 500;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 60%;
+    color: #333;
+    font-size: 15px;
 }
+
 .file-actions {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
 }
+
 .btn-action {
-    font-size: 1.2em;
+    font-size: 1.3em;
     text-decoration: none;
     cursor: pointer;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid;
-    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid #e0e0e0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
+    color: #666;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
+
 .btn-action:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    border-color: #2196F3;
+    color: #2196F3;
 }
+
 .media-info-container {
     max-height: 0;
     overflow: hidden;
-    transition: all 0.3s ease-in-out;
-    background: #fff;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
 }
+
 .media-details h6 {
-    margin: 10px 0 8px 0;
-    font-size: 0.9em;
-    color: #343a40;
+    margin: 16px 0 12px 0;
+    font-size: 16px;
+    color: #333;
+    font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 8px;
 }
+
 .media-details ul {
     list-style: none;
     padding: 0;
-    margin: 0 0 15px 0;
-}
-.media-details li {
-    padding: 8px 12px;
-    margin-bottom: 4px;
-    border-radius: 4px;
-    font-size: 0.85em;
-    border-left: 3px solid;
-}
-.loading-info, .error-info {
-    text-align: center;
-    padding: 15px;
-    font-style: italic;
-    font-size: 0.9em;
-}
-.loading-info {
-    color: #6c757d;
-}
-.error-info {
-    color: #dc3545;
+    margin: 0 0 20px 0;
 }
 
-/* Styles pour la sélection en masse */
+.media-details li {
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-size: 14px;
+    border-left: 4px solid #e0e0e0;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.media-details li:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.loading-info, .error-info {
+    text-align: center;
+    padding: 24px;
+    font-style: italic;
+    font-size: 16px;
+    border-radius: 12px;
+    margin: 16px;
+}
+
+.loading-info {
+    color: #666;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.error-info {
+    color: #c62828;
+    background: linear-gradient(135deg, #ffebee 0%, #fde7e7 100%);
+}
+
+/* Styles pour la sélection en masse - Material Design */
 .torrent-checkbox {
-    transform: scale(1.2);
+    transform: scale(1.3);
     margin: 0;
     cursor: pointer;
+    accent-color: #2196F3;
+    border-radius: 4px;
 }
 
 #selectAll {
-    transform: scale(1.2);
+    transform: scale(1.3);
     cursor: pointer;
+    accent-color: #2196F3;
+    border-radius: 4px;
 }
 
 #selectionActions {
-    animation: slideDown 0.3s ease;
+    animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border: 2px solid #FF9800;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 16px rgba(255, 152, 0, 0.2);
 }
 
 @keyframes slideDown {
@@ -636,41 +796,132 @@
     color: white;
 }
 
+/* Boutons avec Material Design - harmonisé avec symlink_tool */
 .btn {
-    display: inline-block;
-    font-weight: 400;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 500;
     text-align: center;
     white-space: nowrap;
     vertical-align: middle;
     cursor: pointer;
-    border: 1px solid transparent;
-    padding: 0.375rem 0.75rem;
-    font-size: 1rem;
+    border: none;
+    padding: 12px 24px;
+    font-size: 14px;
     line-height: 1.5;
-    border-radius: 0.25rem;
+    border-radius: 8px;
     text-decoration: none;
-    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .btn:hover {
-    opacity: 0.9;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+}
+
+.btn-sm {
+    padding: 8px 16px;
+    font-size: 12px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #f44336 0%, #D32F2F 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #D32F2F 0%, #C62828 100%);
+    box-shadow: 0 8px 20px rgba(244, 67, 54, 0.4);
+    color: white;
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #495057 0%, #343a40 100%);
+    box-shadow: 0 8px 20px rgba(108, 117, 125, 0.4);
+    color: white;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+    box-shadow: 0 8px 20px rgba(33, 150, 243, 0.4);
+    color: white;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+    box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4);
+    color: white;
 }
 </style>
 
 <script>
-// Système de notifications toast
+// Système de notifications toast - Material Design
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
+    
+    // Définir les couleurs selon le type
+    const colors = {
+        success: { border: '#4CAF50', bg: 'linear-gradient(135deg, #f1f8e9 0%, #e8f5e8 100%)', color: '#2e7d32' },
+        error: { border: '#f44336', bg: 'linear-gradient(135deg, #ffebee 0%, #fde7e7 100%)', color: '#c62828' },
+        warning: { border: '#FF9800', bg: 'linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%)', color: '#ef6c00' },
+        info: { border: '#2196F3', bg: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)', color: '#1565c0' }
+    };
+    
+    const style = colors[type] || colors.info;
+    
     toast.innerHTML = message;
     toast.style.cssText = `
         position: fixed; top: 20px; right: 20px; z-index: 2000;
-        padding: 12px 20px; border-radius: 6px; color: white; font-size: 14px;
-        background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#17a2b8'};
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        animation: slideInRight 0.3s ease, slideOutRight 0.3s ease 2.7s forwards;
+        padding: 16px 20px; border-radius: 12px; font-size: 14px; font-weight: 500;
+        background: ${style.bg}; color: ${style.color};
+        border-left: 4px solid ${style.border};
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        min-width: 300px; max-width: 350px;
+        transform: translateX(380px); opacity: 0;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     `;
+    
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    
+    // Animation d'entrée
+    setTimeout(() => {
+        toast.style.transform = 'translateX(0)';
+        toast.style.opacity = '1';
+    }, 100);
+    
+    // Animation de sortie
+    setTimeout(() => {
+        toast.style.transform = 'translateX(380px)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 400);
+    }, 3000);
 }
 
 // Indicateur de chargement global
