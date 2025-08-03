@@ -47,9 +47,15 @@ class SymlinkDatabase:
         if db_path is None:
             # Utilise une variable d'environnement ou un chemin par défaut pour Docker
             default_db_path = os.getenv('REDRIVA_DB_PATH', '/app/data/redriva.db')
+            # Pour le développement local, utiliser le chemin relatif
+            if not os.path.exists(os.path.dirname(default_db_path)):
+                default_db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'redriva.db')
             self.db_path = default_db_path
         else:
             self.db_path = db_path
+        
+        # Créer le répertoire parent si nécessaire
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self.init_tables()
     
     def init_tables(self):

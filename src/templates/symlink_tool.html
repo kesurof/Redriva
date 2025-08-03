@@ -9,16 +9,16 @@
 </div>
 
 <!-- Navigation par onglets -->
-<div class="card">
-    <div class="nav-tabs">
-        <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
-        <button class="tab-btn" onclick="switchTab('scanner')">🔍 Scanner</button>
-        <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+<div class="tabs-container">
+    <div class="tabs-nav">
+        <button class="tab-item active" data-tab="resume" onclick="switchTab('resume')">📊 Résumé</button>
+        <button class="tab-item" data-tab="scanner" onclick="switchTab('scanner')">🔍 Scanner</button>
+        <button class="tab-item" data-tab="config" onclick="switchTab('config')">⚙️ Configuration</button>
     </div>
 </div>
 
-<!-- Onglet Dashboard -->
-<div id="dashboard-tab" class="tab-content active">
+<!-- Onglet Résumé -->
+<div id="resume-tab" class="tab-pane active">
     <div class="card">
         <h3>📈 Statistiques récentes</h3>
         <div class="stats-grid">
@@ -135,7 +135,7 @@
 </div>
 
 <!-- Onglet Scanner -->
-<div id="scanner-tab" class="tab-content">
+<div id="scanner-tab" class="tab-pane">
     <div class="card">
         <h3>🔍 Nouveau scan</h3>
         
@@ -202,8 +202,8 @@
     </div>
 </div>
 
-<!-- Onglet Settings -->
-<div id="settings-tab" class="tab-content">
+<!-- Onglet Configuration -->
+<div id="config-tab" class="tab-pane">
     <div class="card">
         <h3>⚙️ Configuration</h3>
         
@@ -289,34 +289,52 @@
 <div id="notifications" class="notifications-container"></div>
 
 <style>
-/* Styles pour les onglets */
-.nav-tabs {
-    display: flex;
-    gap: 10px;
+/* Styles pour les onglets modernes */
+.tabs-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 20px;
-    border-bottom: 2px solid #ddd;
+    overflow: hidden;
 }
 
-.tab-btn {
+.tabs-nav {
+    display: flex;
     background: #f8f9fa;
-    border: 1px solid #ddd;
-    padding: 10px 20px;
+    border-bottom: 1px solid #e9ecef;
+    position: relative;
+}
+
+.tab-item {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 15px 20px;
     cursor: pointer;
-    border-radius: 8px 8px 0 0;
-    transition: all 0.2s;
+    font-size: 16px;
+    font-weight: 500;
+    color: #6c757d;
+    transition: all 0.3s ease;
+    position: relative;
+    border-bottom: 3px solid transparent;
 }
 
-.tab-btn.active {
-    background: #3498db;
-    color: white;
-    border-color: #3498db;
+.tab-item:hover {
+    background: #e9ecef;
+    color: #495057;
 }
 
-.tab-content {
+.tab-item.active {
+    color: #3498db;
+    background: white;
+    border-bottom-color: #3498db;
+}
+
+.tab-pane {
     display: none;
 }
 
-.tab-content.active {
+.tab-pane.active {
     display: block;
 }
 
@@ -524,8 +542,19 @@
         flex-direction: column;
     }
     
-    .nav-tabs {
+    .tabs-nav {
         flex-direction: column;
+    }
+    
+    .tab-item {
+        text-align: left;
+        border-bottom: 1px solid #e9ecef;
+        border-right: 3px solid transparent;
+    }
+    
+    .tab-item.active {
+        border-bottom-color: #e9ecef;
+        border-right-color: #3498db;
     }
 }
 </style>
@@ -541,18 +570,20 @@ let selectedDirectories = [];
 // Gestion des onglets
 function switchTab(tabName) {
     // Masquer tous les onglets
-    document.querySelectorAll('.tab-content').forEach(tab => {
+    document.querySelectorAll('.tab-pane').forEach(tab => {
         tab.classList.remove('active');
     });
     
-    // Masquer tous les boutons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+    // Désactiver tous les boutons
+    document.querySelectorAll('.tab-item').forEach(btn => {
         btn.classList.remove('active');
     });
     
     // Afficher l'onglet sélectionné
     document.getElementById(tabName + '-tab').classList.add('active');
-    event.target.classList.add('active');
+    
+    // Activer le bouton correspondant
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
     
     // Sauvegarder l'onglet actuel
     localStorage.setItem('symlink-active-tab', tabName);
@@ -560,10 +591,10 @@ function switchTab(tabName) {
 
 // Restaurer l'onglet au chargement
 document.addEventListener('DOMContentLoaded', function() {
-    const activeTab = localStorage.getItem('symlink-active-tab') || 'dashboard';
-    const tabButton = document.querySelector(`[onclick="switchTab('${activeTab}')"]`);
+    const activeTab = localStorage.getItem('symlink-active-tab') || 'resume';
+    const tabButton = document.querySelector(`[data-tab="${activeTab}"]`);
     if (tabButton) {
-        tabButton.click();
+        switchTab(activeTab);
     }
 });
 
