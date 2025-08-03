@@ -31,8 +31,21 @@ from main import (
     fetch_torrent_detail, upsert_torrent_detail
 )
 
-# Import du nouveau module symlink
-from symlink_tool import register_symlink_routes, init_symlink_database
+# Import du nouveau module symlink avec gestion d'erreur
+try:
+    from symlink_tool import register_symlink_routes, init_symlink_database
+    SYMLINK_AVAILABLE = True
+    print("✅ Module symlink_tool importé avec succès")
+except ImportError as e:
+    print(f"⚠️ Module symlink_tool non disponible: {e}")
+    SYMLINK_AVAILABLE = False
+    # Fonctions de fallback
+    def register_symlink_routes(app):
+        @app.route('/symlink')
+        def symlink_unavailable():
+            return "Symlink Manager non disponible", 503
+    def init_symlink_database():
+        pass
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -41,19 +54,22 @@ app.secret_key = os.urandom(24)
 # INITIALISATION SYMLINK MANAGER (au niveau module pour Gunicorn)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-try:
-    # Initialiser la base de données symlink
-    init_symlink_database()
-    print("✅ Base de données Symlink initialisée")
-    
-    # Enregistrer les routes symlink
-    register_symlink_routes(app)
-    print("🔗 Routes Symlink Manager enregistrées")
-    
-except Exception as e:
-    print(f"❌ Erreur initialisation Symlink Manager: {e}")
-    import traceback
-    traceback.print_exc()
+if SYMLINK_AVAILABLE:
+    try:
+        # Initialiser la base de données symlink
+        init_symlink_database()
+        print("✅ Base de données Symlink initialisée")
+        
+        # Enregistrer les routes symlink
+        register_symlink_routes(app)
+        print("🔗 Routes Symlink Manager enregistrées")
+        
+    except Exception as e:
+        print(f"❌ Erreur initialisation Symlink Manager: {e}")
+        import traceback
+        traceback.print_exc()
+else:
+    print("⚠️ Symlink Manager désactivé - module non disponible")
 
 # Configuration adaptée pour Docker et environnements locaux
 app.config['HOST'] = os.getenv('FLASK_HOST', '0.0.0.0')  # 0.0.0.0 pour Docker, configurable via env

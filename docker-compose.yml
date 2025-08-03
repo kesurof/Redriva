@@ -11,6 +11,11 @@ services:
       - ./config:/app/config  
       - ./medias:/app/medias:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro 
+    environment:
+      # Variables Symlink Manager (optionnelles, peuvent être surchargées dans .env)
+      - REDRIVA_MEDIA_PATH=/app/medias
+      - REDRIVA_WORKERS=4
+      - REDRIVA_DB_PATH=/app/data/redriva.db
     env_file:
       - ./config/.env
     healthcheck:

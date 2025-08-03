@@ -92,10 +92,19 @@ docker run --rm kesurof/redriva:latest python -c "import src.main; print('OK')"
 | `GUNICORN_TIMEOUT` | Timeout Gunicorn (sec) | `120` |
 | `GUNICORN_KEEPALIVE` | Keep-alive Gunicorn (sec) | `5` |
 
+#### Variables Symlink Manager
+
+| Variable | Description | Défaut |
+|----------|-------------|---------|
+| `REDRIVA_MEDIA_PATH` | Chemin vers les médias | `/app/medias` |
+| `REDRIVA_WORKERS` | Workers pour les scans | `4` |
+| `REDRIVA_DB_PATH` | Chemin base de données | `/app/data/redriva.db` |
+
 #### Volumes Docker
 
 - `./data:/app/data` - Base de données SQLite et données persistantes
 - `./config:/app/config` - Fichiers de configuration (.env)
+- `./medias:/app/medias` - Répertoire des médias pour Symlink Manager
 
 #### Health Check
 

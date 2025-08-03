@@ -1,0 +1,975 @@
+{% extends "base.html" %}
+
+{% block title %}Symlink Manager - Redriva{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>🔗 Symlink Manager</h2>
+    <p>Gestionnaire de liens symboliques pour vos médias</p>
+</div>
+
+<!-- Navigation par onglets -->
+<div class="card">
+    <div class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+        <button class="tab-btn" onclick="switchTab('scanner')">🔍 Scanner</button>
+        <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+    </div>
+</div>
+
+<!-- Onglet Dashboard -->
+<div id="dashboard-tab" class="tab-content active">
+    <div class="card">
+        <h3>📈 Statistiques récentes</h3>
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <h4>Scans effectués</h4>
+                <div class="stat-value" id="total-scans">{{ recent_scans|length }}</div>
+            </div>
+            <div class="stat-card success">
+                <h4>Dernier scan</h4>
+                <div class="stat-value" id="last-scan">
+                    {% if recent_scans %}
+                        {{ recent_scans[0].started_at[:10] }}
+                    {% else %}
+                        Aucun
+                    {% endif %}
+                </div>
+            </div>
+            <div class="stat-card warning">
+                <h4>Problèmes détectés</h4>
+                <div class="stat-value" id="total-issues">
+                    {% set total_issues = 0 %}
+                    {% for scan in recent_scans %}
+                        {% if scan.results and scan.results.summary %}
+                            {% set total_issues = total_issues + scan.results.summary.total_broken %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ total_issues }}
+                </div>
+            </div>
+            <div class="stat-card danger">
+                <h4>Liens cassés</h4>
+                <div class="stat-value" id="broken-links">
+                    {% set broken_links = 0 %}
+                    {% for scan in recent_scans %}
+                        {% if scan.results and scan.results.summary %}
+                            {% set broken_links = broken_links + scan.results.summary.total_broken %}
+                        {% endif %}
+                    {% endfor %}
+                    {{ broken_links }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>📋 Historique des scans</h3>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Statut</th>
+                        <th>Date de début</th>
+                        <th>Durée</th>
+                        <th>Répertoires</th>
+                        <th>Problèmes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for scan in recent_scans %}
+                    <tr>
+                        <td><code>{{ scan.id[:8] }}</code></td>
+                        <td>
+                            {% if scan.status == 'completed' %}
+                                <span class="badge badge-success">✅ Terminé</span>
+                            {% elif scan.status == 'running' %}
+                                <span class="badge badge-primary">🔄 En cours</span>
+                            {% elif scan.status == 'error' %}
+                                <span class="badge badge-danger">❌ Erreur</span>
+                            {% elif scan.status == 'cancelled' %}
+                                <span class="badge badge-warning">🛑 Annulé</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ scan.started_at }}</td>
+                        <td>
+                            {% if scan.completed_at %}
+                                {{ ((scan.completed_at | int) - (scan.started_at | int)) }}s
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if scan.config and scan.config.directories %}
+                                {{ scan.config.directories|length }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if scan.results and scan.results.summary %}
+                                {{ scan.results.summary.total_broken }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" onclick="viewScanDetails('{{ scan.id }}')">
+                                👁️ Voir
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            <em>Aucun scan effectué</em>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Onglet Scanner -->
+<div id="scanner-tab" class="tab-content">
+    <div class="card">
+        <h3>🔍 Nouveau scan</h3>
+        
+        <div class="form-section">
+            <h4>1. Sélection des répertoires</h4>
+            <button class="btn btn-primary" onclick="loadDirectories()">
+                📁 Charger les répertoires
+            </button>
+            <div id="directories-loading" style="display: none;">
+                <p>🔄 Chargement...</p>
+            </div>
+            <div id="directories-list" class="directories-grid">
+                <!-- Les répertoires seront chargés ici -->
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h4>2. Configuration du scan</h4>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="scan-mode">Mode d'exécution:</label>
+                    <select id="scan-mode" class="form-control">
+                        <option value="dry-run">🧪 Test (dry-run)</option>
+                        <option value="real">🚀 Réel (modifications)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="scan-depth">Profondeur du scan:</label>
+                    <select id="scan-depth" class="form-control">
+                        <option value="basic">⚡ Basique (rapide)</option>
+                        <option value="full">🔍 Complet (avec ffprobe)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h4>3. Lancement</h4>
+            <button class="btn btn-success btn-lg" onclick="startScan()" id="start-scan-btn">
+                🚀 Démarrer le scan
+            </button>
+            <button class="btn btn-danger btn-lg" onclick="cancelScan()" id="cancel-scan-btn" style="display: none;">
+                🛑 Annuler
+            </button>
+        </div>
+
+        <!-- Zone de progression -->
+        <div id="scan-progress" class="progress-section" style="display: none;">
+            <h4>📊 Progression</h4>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div id="progress-text" class="progress-text">0%</div>
+            <div id="progress-details" class="progress-details">
+                Initialisation...
+            </div>
+        </div>
+
+        <!-- Résultats -->
+        <div id="scan-results" class="results-section" style="display: none;">
+            <h4>📋 Résultats</h4>
+            <div id="results-content"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Onglet Settings -->
+<div id="settings-tab" class="tab-content">
+    <div class="card">
+        <h3>⚙️ Configuration</h3>
+        
+        <form id="config-form">
+            <div class="form-section">
+                <h4>📁 Chemins et performance</h4>
+                <div class="form-group">
+                    <label for="media-path">Chemin des médias:</label>
+                    <input type="text" id="media-path" class="form-control" 
+                           value="{{ config.media_path }}" 
+                           placeholder="Exemple: /app/medias ou /mnt/medias">
+                </div>
+                <div class="form-group">
+                    <label for="workers">Nombre de workers:</label>
+                    <input type="number" id="workers" class="form-control" 
+                           value="{{ config.workers }}" 
+                           min="1" max="16">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h4>📺 Intégration Sonarr</h4>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="sonarr-enabled" 
+                               {% if config.sonarr_enabled %}checked{% endif %}>
+                        Activer l'intégration Sonarr
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="sonarr-url">URL Sonarr:</label>
+                    <input type="url" id="sonarr-url" class="form-control" 
+                           value="{{ config.sonarr_url }}" 
+                           placeholder="http://localhost:8989">
+                </div>
+                <div class="form-group">
+                    <label for="sonarr-api-key">Clé API Sonarr:</label>
+                    <input type="text" id="sonarr-api-key" class="form-control" 
+                           value="{{ config.sonarr_api_key }}" 
+                           placeholder="Votre clé API Sonarr">
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h4>🎬 Intégration Radarr</h4>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="radarr-enabled" 
+                               {% if config.radarr_enabled %}checked{% endif %}>
+                        Activer l'intégration Radarr
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="radarr-url">URL Radarr:</label>
+                    <input type="url" id="radarr-url" class="form-control" 
+                           value="{{ config.radarr_url }}" 
+                           placeholder="http://localhost:7878">
+                </div>
+                <div class="form-group">
+                    <label for="radarr-api-key">Clé API Radarr:</label>
+                    <input type="text" id="radarr-api-key" class="form-control" 
+                           value="{{ config.radarr_api_key }}" 
+                           placeholder="Votre clé API Radarr">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="detectServices()">
+                    🔍 Auto-détecter les services
+                </button>
+                <button type="button" class="btn btn-warning" onclick="testServices()">
+                    🧪 Tester les connexions
+                </button>
+                <button type="submit" class="btn btn-success">
+                    💾 Sauvegarder
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Zone de notifications -->
+<div id="notifications" class="notifications-container"></div>
+
+<style>
+/* Styles pour les onglets */
+.nav-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #ddd;
+}
+
+.tab-btn {
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    transition: all 0.2s;
+}
+
+.tab-btn.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Styles pour les formulaires */
+.form-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* Styles pour les répertoires */
+.directories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.directory-card {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.directory-card:hover {
+    border-color: #3498db;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+}
+
+.directory-card.selected {
+    border-color: #2ecc71;
+    background: #d4edda;
+}
+
+.directory-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.directory-path {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 5px;
+}
+
+.directory-size {
+    font-size: 11px;
+    color: #28a745;
+}
+
+/* Styles pour la progression */
+.progress-section {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    text-align: center;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.progress-details {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #6c757d;
+}
+
+/* Styles pour les résultats */
+.results-section {
+    margin-top: 30px;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.result-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.result-card {
+    text-align: center;
+    padding: 15px;
+    border-radius: 8px;
+    color: white;
+}
+
+.result-card.files { background: #3498db; }
+.result-card.symlinks { background: #9b59b6; }
+.result-card.broken { background: #e74c3c; }
+.result-card.issues { background: #f39c12; }
+
+/* Styles pour les notifications */
+.notifications-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.notification {
+    background: #2c3e50;
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: slideIn 0.3s ease;
+}
+
+.notification.success { background: #2ecc71; }
+.notification.error { background: #e74c3c; }
+.notification.warning { background: #f39c12; }
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Styles pour les badges */
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 12px;
+    text-transform: uppercase;
+}
+
+.badge-success { background: #d4edda; color: #155724; }
+.badge-primary { background: #cce7ff; color: #004085; }
+.badge-danger { background: #f8d7da; color: #721c24; }
+.badge-warning { background: #fff3cd; color: #856404; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .directories-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .nav-tabs {
+        flex-direction: column;
+    }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Variables globales
+let currentScanId = null;
+let scanPollingInterval = null;
+let selectedDirectories = [];
+
+// Gestion des onglets
+function switchTab(tabName) {
+    // Masquer tous les onglets
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Masquer tous les boutons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Afficher l'onglet sélectionné
+    document.getElementById(tabName + '-tab').classList.add('active');
+    event.target.classList.add('active');
+    
+    // Sauvegarder l'onglet actuel
+    localStorage.setItem('symlink-active-tab', tabName);
+}
+
+// Restaurer l'onglet au chargement
+document.addEventListener('DOMContentLoaded', function() {
+    const activeTab = localStorage.getItem('symlink-active-tab') || 'dashboard';
+    const tabButton = document.querySelector(`[onclick="switchTab('${activeTab}')"]`);
+    if (tabButton) {
+        tabButton.click();
+    }
+});
+
+// Gestion des notifications
+function showNotification(message, type = 'info') {
+    const container = document.getElementById('notifications');
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    
+    container.appendChild(notification);
+    
+    // Suppression automatique après 5 secondes
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 5000);
+}
+
+// Chargement des répertoires
+async function loadDirectories() {
+    const loadingDiv = document.getElementById('directories-loading');
+    const listDiv = document.getElementById('directories-list');
+    
+    loadingDiv.style.display = 'block';
+    listDiv.innerHTML = '';
+    
+    try {
+        const response = await fetch('/api/symlink/directories');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayDirectories(data.directories);
+        } else {
+            showNotification('Erreur lors du chargement des répertoires: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Erreur de connexion: ' + error.message, 'error');
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
+}
+
+// Affichage des répertoires
+function displayDirectories(directories) {
+    const listDiv = document.getElementById('directories-list');
+    
+    if (directories.length === 0) {
+        listDiv.innerHTML = '<p class="text-center">Aucun répertoire trouvé dans le chemin des médias.</p>';
+        return;
+    }
+    
+    directories.forEach(dir => {
+        const card = document.createElement('div');
+        card.className = 'directory-card';
+        card.onclick = () => toggleDirectory(dir.path, card);
+        
+        card.innerHTML = `
+            <div class="directory-name">📁 ${dir.name}</div>
+            <div class="directory-path">${dir.path}</div>
+            <div class="directory-size">${dir.size} éléments</div>
+        `;
+        
+        listDiv.appendChild(card);
+    });
+}
+
+// Sélection/désélection des répertoires
+function toggleDirectory(path, card) {
+    const index = selectedDirectories.indexOf(path);
+    
+    if (index === -1) {
+        selectedDirectories.push(path);
+        card.classList.add('selected');
+    } else {
+        selectedDirectories.splice(index, 1);
+        card.classList.remove('selected');
+    }
+    
+    console.log('Répertoires sélectionnés:', selectedDirectories);
+}
+
+// Démarrage d'un scan
+async function startScan() {
+    if (selectedDirectories.length === 0) {
+        showNotification('Veuillez sélectionner au moins un répertoire', 'warning');
+        return;
+    }
+    
+    const mode = document.getElementById('scan-mode').value;
+    const depth = document.getElementById('scan-depth').value;
+    
+    const config = {
+        directories: selectedDirectories,
+        mode: mode,
+        depth: depth,
+        workers: parseInt(document.getElementById('workers').value) || 4
+    };
+    
+    try {
+        const response = await fetch('/api/symlink/scan/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            currentScanId = data.scan_id;
+            showScanProgress();
+            startScanPolling();
+            showNotification('Scan démarré avec succès', 'success');
+        } else {
+            showNotification('Erreur lors du démarrage: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Erreur de connexion: ' + error.message, 'error');
+    }
+}
+
+// Affichage de la zone de progression
+function showScanProgress() {
+    document.getElementById('scan-progress').style.display = 'block';
+    document.getElementById('scan-results').style.display = 'none';
+    document.getElementById('start-scan-btn').style.display = 'none';
+    document.getElementById('cancel-scan-btn').style.display = 'inline-block';
+}
+
+// Polling du statut du scan
+function startScanPolling() {
+    if (scanPollingInterval) {
+        clearInterval(scanPollingInterval);
+    }
+    
+    scanPollingInterval = setInterval(async () => {
+        if (!currentScanId) return;
+        
+        try {
+            const response = await fetch(`/api/symlink/scan/status/${currentScanId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                updateScanProgress(data.status);
+                
+                if (['completed', 'error', 'cancelled'].includes(data.status.status)) {
+                    stopScanPolling();
+                    showScanResults(data.status);
+                }
+            }
+        } catch (error) {
+            console.error('Erreur polling:', error);
+        }
+    }, 2000);
+}
+
+// Mise à jour de la progression
+function updateScanProgress(status) {
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+    const progressDetails = document.getElementById('progress-details');
+    
+    if (status.progress !== undefined) {
+        progressFill.style.width = status.progress + '%';
+        progressText.textContent = status.progress + '%';
+    }
+    
+    if (status.current_task) {
+        progressDetails.textContent = status.current_task;
+    }
+}
+
+// Arrêt du polling
+function stopScanPolling() {
+    if (scanPollingInterval) {
+        clearInterval(scanPollingInterval);
+        scanPollingInterval = null;
+    }
+    
+    document.getElementById('start-scan-btn').style.display = 'inline-block';
+    document.getElementById('cancel-scan-btn').style.display = 'none';
+}
+
+// Annulation d'un scan
+async function cancelScan() {
+    if (!currentScanId) return;
+    
+    try {
+        const response = await fetch(`/api/symlink/scan/cancel/${currentScanId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Scan annulé', 'warning');
+            stopScanPolling();
+            currentScanId = null;
+        } else {
+            showNotification('Erreur lors de l\'annulation: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Erreur de connexion: ' + error.message, 'error');
+    }
+}
+
+// Affichage des résultats
+function showScanResults(status) {
+    document.getElementById('scan-progress').style.display = 'none';
+    document.getElementById('scan-results').style.display = 'block';
+    
+    const resultsContent = document.getElementById('results-content');
+    
+    if (status.status === 'completed' && status.results) {
+        const results = status.results;
+        const summary = results.summary || {};
+        
+        resultsContent.innerHTML = `
+            <div class="result-summary">
+                <div class="result-card files">
+                    <h4>Fichiers</h4>
+                    <div class="stat-value">${summary.total_files || 0}</div>
+                </div>
+                <div class="result-card symlinks">
+                    <h4>Symlinks</h4>
+                    <div class="stat-value">${summary.total_symlinks || 0}</div>
+                </div>
+                <div class="result-card broken">
+                    <h4>Liens cassés</h4>
+                    <div class="stat-value">${summary.total_broken || 0}</div>
+                </div>
+                <div class="result-card issues">
+                    <h4>Problèmes</h4>
+                    <div class="stat-value">${summary.directories_with_issues || 0}</div>
+                </div>
+            </div>
+            <div class="results-details">
+                <h5>Détails par répertoire:</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Répertoire</th>
+                                <th>Fichiers</th>
+                                <th>Symlinks</th>
+                                <th>Cassés</th>
+                                <th>Statut</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.entries(results.directories || {}).map(([path, data]) => `
+                                <tr>
+                                    <td><code>${path}</code></td>
+                                    <td>${data.files_count || 0}</td>
+                                    <td>${data.symlinks_count || 0}</td>
+                                    <td>${data.broken_symlinks ? data.broken_symlinks.length : 0}</td>
+                                    <td>
+                                        ${data.status === 'scanned' ? '✅ Scanné' : 
+                                          data.status === 'error' ? '❌ Erreur' : 
+                                          data.status === 'not_found' ? '❓ Introuvable' : data.status}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        showNotification('Scan terminé avec succès', 'success');
+    } else if (status.status === 'error') {
+        resultsContent.innerHTML = `
+            <div class="alert alert-danger">
+                <h5>❌ Erreur pendant le scan</h5>
+                <p>${status.error || 'Erreur inconnue'}</p>
+            </div>
+        `;
+        showNotification('Erreur pendant le scan', 'error');
+    } else if (status.status === 'cancelled') {
+        resultsContent.innerHTML = `
+            <div class="alert alert-warning">
+                <h5>🛑 Scan annulé</h5>
+                <p>Le scan a été interrompu par l'utilisateur.</p>
+            </div>
+        `;
+    }
+    
+    currentScanId = null;
+}
+
+// Sauvegarde de la configuration
+document.getElementById('config-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const config = {
+        media_path: document.getElementById('media-path').value,
+        workers: parseInt(document.getElementById('workers').value),
+        sonarr_enabled: document.getElementById('sonarr-enabled').checked,
+        sonarr_url: document.getElementById('sonarr-url').value,
+        sonarr_api_key: document.getElementById('sonarr-api-key').value,
+        radarr_enabled: document.getElementById('radarr-enabled').checked,
+        radarr_url: document.getElementById('radarr-url').value,
+        radarr_api_key: document.getElementById('radarr-api-key').value
+    };
+    
+    try {
+        const response = await fetch('/api/symlink/config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Configuration sauvegardée', 'success');
+        } else {
+            showNotification('Erreur de sauvegarde: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Erreur de connexion: ' + error.message, 'error');
+    }
+});
+
+// Test des services
+async function testServices() {
+    const config = {
+        sonarr_enabled: document.getElementById('sonarr-enabled').checked,
+        sonarr_url: document.getElementById('sonarr-url').value,
+        sonarr_api_key: document.getElementById('sonarr-api-key').value,
+        radarr_enabled: document.getElementById('radarr-enabled').checked,
+        radarr_url: document.getElementById('radarr-url').value,
+        radarr_api_key: document.getElementById('radarr-api-key').value
+    };
+    
+    try {
+        const response = await fetch('/api/symlink/test/services', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const results = data.results;
+            
+            Object.entries(results).forEach(([service, result]) => {
+                const type = result.success ? 'success' : 'error';
+                const message = `${service.toUpperCase()}: ${result.message}`;
+                showNotification(message, type);
+            });
+        } else {
+            showNotification('Erreur lors du test: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Erreur de connexion: ' + error.message, 'error');
+    }
+}
+
+// Auto-détection des services
+async function detectServices() {
+    try {
+        const response = await fetch('/api/symlink/services/detect', {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const detected = data.detected;
+            
+            if (detected.sonarr) {
+                document.getElementById('sonarr-url').value = detected.sonarr.url;
+                document.getElementById('sonarr-enabled').checked = true;
+                showNotification(`Sonarr détecté: ${detected.sonarr.container}`, 'success');
+            }
+            
+            if (detected.radarr) {
+                document.getElementById('radarr-url').value = detected.radarr.url;
+                document.getElementById('radarr-enabled').checked = true;
+                showNotification(`Radarr détecté: ${detected.radarr.container}`, 'success');
+            }
+            
+            if (!detected.sonarr && !detected.radarr) {
+                showNotification('Aucun service détecté', 'warning');
+            }
+        } else {
+            showNotification('Erreur lors de la détection: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showNotification('Erreur de connexion: ' + error.message, 'error');
+    }
+}
+
+// Visualisation des détails d'un scan
+function viewScanDetails(scanId) {
+    // Implémentation pour afficher les détails d'un scan
+    showNotification(`Affichage des détails du scan ${scanId}`, 'info');
+}
+</script>
+{% endblock %}
