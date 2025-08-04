@@ -263,8 +263,17 @@ def dashboard():
                          OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
                 """)
                 unavailable_files = c.fetchone()[0] or 0
+                
+                # Torrents avec détails manquants (incomplete)
+                c.execute("""
+                    SELECT COUNT(*) 
+                    FROM torrents t
+                    LEFT JOIN torrent_details td ON t.id = td.id
+                    WHERE t.status != 'deleted' AND td.id IS NULL
+                """)
+                incomplete_torrents = c.fetchone()[0] or 0
                     
-                print(f"📊 Stats avancées calculées: {error_count} erreurs, {unavailable_files} fichiers indisponibles")
+                print(f"📊 Stats avancées calculées: {error_count} erreurs, {unavailable_files} fichiers indisponibles, {incomplete_torrents} détails manquants")
                 
             except sqlite3.Error as db_error:
                 print(f"❌ Erreur DB lors des stats avancées: {db_error}")
@@ -274,6 +283,7 @@ def dashboard():
                 total_size = 0
                 error_count = 0
                 unavailable_files = 0
+                incomplete_torrents = 0
             
             try:
                 # Statistiques complémentaires
@@ -325,6 +335,7 @@ def dashboard():
             'active_count': active_count,
             'downloaded_count': downloaded_count,
             'unavailable_files': unavailable_files,
+            'incomplete_torrents': incomplete_torrents,
             'status_data': status_data
         }
         
@@ -397,6 +408,9 @@ def torrents_list():
             elif status_filter == 'unavailable':
                 # Nouveau filtre pour fichiers indisponibles (réutilise la logique existante)
                 conditions.append("(td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%' OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')")
+            elif status_filter == 'incomplete':
+                # Nouveau filtre pour torrents avec détails manquants
+                conditions.append("td.id IS NULL")
             else:
                 conditions.append("(t.status = ? OR td.status = ?)")
                 params.extend([status_filter, status_filter])
@@ -435,6 +449,21 @@ def torrents_list():
             ORDER BY count DESC
         """)
         available_statuses = c.fetchall()
+        
+        # Ajout du count pour les torrents sans détails
+        c.execute("""
+            SELECT COUNT(*) 
+            FROM torrents t
+            LEFT JOIN torrent_details td ON t.id = td.id
+            WHERE td.id IS NULL
+        """)
+        incomplete_count = c.fetchone()[0]
+        
+        # Ajout de l'option "incomplete" si elle n'existe pas déjà et qu'il y a des torrents sans détails
+        if incomplete_count > 0:
+            available_statuses = list(available_statuses)
+            available_statuses.append(('incomplete', incomplete_count))
+            available_statuses = tuple(available_statuses)
     
     # Calcul de la pagination
     total_pages = (total_count + per_page - 1) // per_page

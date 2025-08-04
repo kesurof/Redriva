@@ -134,6 +134,26 @@
                 </div>
             </div>
         </div>
+        
+        <div class="card warning-card interactive" onclick="navigateToTorrents('incomplete')" title="Voir les torrents avec détails manquants">
+            <h3 class="card-title">⚠️ Détails manquants</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Torrents sans détails:</span>
+                    <span class="info-value stats-number">{{ stats.incomplete_torrents|default(0) }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Statut:</span>
+                    <span class="info-value">Pas de données RD</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Action:</span>
+                    <span class="info-value">
+                        <span class="action-link">Analyser les manquants →</span>
+                    </span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

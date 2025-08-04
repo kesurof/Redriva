@@ -105,7 +105,11 @@
                     <option value="">Tous les statuts</option>
                     {% for status_info in available_statuses %}
                     <option value="{{ status_info[0] }}" {% if status_filter == status_info[0] %}selected{% endif %}>
-                        {{ status_info[0] }} ({{ status_info[1] }})
+                        {% if status_info[0] == 'incomplete' %}
+                            ⚠️ Détails manquants ({{ status_info[1] }})
+                        {% else %}
+                            {{ status_info[0] }} ({{ status_info[1] }})
+                        {% endif %}
                     </option>
                     {% endfor %}
                 </select>
@@ -125,11 +129,17 @@
             <div style="font-size: 14px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total</div>
         </a>
         {% for status_info in available_statuses %}
-        <a href="{{ url_for('torrents', status=status_info[0]) }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; border-radius: 12px; background: white; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border-left: 4px solid {% if status_info[0] == 'downloaded' %}#4CAF50{% elif 'error' in status_info[0] %}#f44336{% else %}#9e9e9e{% endif %};">
-            <div style="font-size: 1.8em; font-weight: 700; color: {% if status_info[0] == 'downloaded' %}#4CAF50{% elif 'error' in status_info[0] %}#f44336{% else %}#9e9e9e{% endif %}; margin-bottom: 8px;">
+        <a href="{{ url_for('torrents', status=status_info[0]) }}" class="stat-item" style="text-align: center; text-decoration: none; color: inherit; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 20px; border-radius: 12px; background: white; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08); border-left: 4px solid {% if status_info[0] == 'downloaded' %}#4CAF50{% elif status_info[0] == 'incomplete' %}#ff9800{% elif 'error' in status_info[0] %}#f44336{% else %}#9e9e9e{% endif %};">
+            <div style="font-size: 1.8em; font-weight: 700; color: {% if status_info[0] == 'downloaded' %}#4CAF50{% elif status_info[0] == 'incomplete' %}#ff9800{% elif 'error' in status_info[0] %}#f44336{% else %}#9e9e9e{% endif %}; margin-bottom: 8px;">
                 {{ status_info[1] }}
             </div>
-            <div style="font-size: 13px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{{ status_info[0] }}</div>
+            <div style="font-size: 13px; color: #666; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                {% if status_info[0] == 'incomplete' %}
+                    ⚠️ Détails manquants
+                {% else %}
+                    {{ status_info[0] }}
+                {% endif %}
+            </div>
         </a>
         {% endfor %}
     </div>
