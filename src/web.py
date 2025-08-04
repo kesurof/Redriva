@@ -262,14 +262,15 @@ def dashboard():
                 else:
                     error_count = 0
                 
-                # Fichiers indisponibles (erreurs 503, 404, 24 - réutilise l'existant)
+                # Fichiers indisponibles (erreurs 503, 404, 24, unavailable_file - réutilise l'existant)
                 c.execute("""
                     SELECT COUNT(DISTINCT td.id) 
                     FROM torrent_details td
                     LEFT JOIN torrents t ON td.id = t.id
                     WHERE t.status != 'deleted' 
                     AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
-                         OR td.error LIKE '%unavailable_file%')
+                         OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%'
+                         OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
                 """)
                 unavailable_files = c.fetchone()[0] or 0
                     
@@ -406,7 +407,7 @@ def torrents_list():
                 conditions.append("(t.status = 'error' OR td.status = 'error')")
             elif status_filter == 'unavailable':
                 # Nouveau filtre pour fichiers indisponibles (réutilise la logique existante)
-                conditions.append("(td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' OR td.error LIKE '%unavailable_file%')")
+                conditions.append("(td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%' OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')")
             else:
                 conditions.append("(t.status = ? OR td.status = ?)")
                 params.extend([status_filter, status_filter])
@@ -1351,7 +1352,8 @@ def refresh_stats():
                 LEFT JOIN torrents t ON td.id = t.id
                 WHERE t.status != 'deleted' 
                 AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
-                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%health_check_error%')
+                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%'
+                     OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
             """)
             unavailable_files = c.fetchone()[0] or 0
             
@@ -1439,11 +1441,16 @@ def check_all_files_health():
                     
                     if response.status_code != 200:
                         # Marquer comme indisponible
-                        error_msg = f"health_check_error_{response.status_code}"
-                        if response.status_code == 503:
-                            error_msg = "503_service_unavailable"
-                        elif response.status_code == 404:
-                            error_msg = "404_file_not_found"
+                        try:
+                            # Essayer de parser la réponse JSON de Real-Debrid
+                            error_data = response.json()
+                            if 'error' in error_data and 'error_code' in error_data:
+                                error_msg = f"rd_error_{error_data['error_code']}_{error_data['error']}"
+                            else:
+                                error_msg = f"http_error_{response.status_code}"
+                        except:
+                            # Fallback si pas de JSON valide
+                            error_msg = f"http_error_{response.status_code}"
                         
                         c.execute("""
                             UPDATE torrent_details 
@@ -1495,7 +1502,8 @@ def cleanup_unavailable_files():
                 LEFT JOIN torrents t ON td.id = t.id
                 WHERE t.status != 'deleted' 
                 AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
-                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%health_check_error%')
+                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%'
+                     OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
             """)
             unavailable_torrents = c.fetchall()
             
