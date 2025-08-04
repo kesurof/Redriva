@@ -1734,97 +1734,7 @@ def diagnose_errors():
         print(f"   🎯 Retry forcé          : python src/main.py --details-only --status error")
         print(f"   📊 Vérifier l'état      : python src/main.py --stats")
 
-def diagnose_token():
-    """
-    Diagnostique le token pour identifier les problèmes de configuration
-    
-    Analyse:
-    - Variables d'environnement
-    - Fichiers de configuration
-    - Validation du format
-    - Test Header Injection
-    
-    Usage: Fonction utilitaire pour debug
-    """
-    import re
-    
-    print("\n🔍 DIAGNOSTIC DU TOKEN REAL-DEBRID")
-    print("=" * 60)
-    
-    load_env_file()
-    
-    # Test variable d'environnement
-    env_token = os.getenv('RD_TOKEN')
-    if env_token:
-        print(f"📌 TOKEN VARIABLE D'ENVIRONNEMENT")
-        print(f"   Longueur: {len(env_token)} caractères")
-        print(f"   Représentation: {repr(env_token)}")
-        print(f"   Contient \\n: {'OUI' if '\\n' in env_token else 'NON'}")
-        print(f"   Contient \\r: {'OUI' if '\\r' in env_token else 'NON'}")
-        print(f"   Après strip(): {repr(env_token.strip())}")
-        
-        # Validation format
-        is_valid = re.match(r'^[A-Za-z0-9_-]+$', env_token.strip())
-        print(f"   Format valide: {'✅ OUI' if is_valid else '❌ NON'}")
-    else:
-        print("📌 TOKEN VARIABLE D'ENVIRONNEMENT: Absent")
-    
-    # Test fichier config
-    config_file = os.path.join(os.path.dirname(__file__), "../config/rd_token.conf")
-    if os.path.exists(config_file):
-        print(f"\n📁 TOKEN FICHIER CONFIG")
-        
-        # Lecture en mode binaire pour voir tous les caractères
-        with open(config_file, 'rb') as f:
-            file_content = f.read()
-        
-        print(f"   Taille fichier: {len(file_content)} bytes")
-        print(f"   Contenu brut: {repr(file_content)}")
-        
-        try:
-            text_content = file_content.decode('utf-8')
-            print(f"   Contenu texte: {repr(text_content)}")
-            print(f"   Après strip(): {repr(text_content.strip())}")
-                
-        except UnicodeDecodeError as e:
-            print(f"   ❌ Erreur d'encodage: {e}")
-    else:
-        print(f"\n📁 TOKEN FICHIER CONFIG: {config_file} n'existe pas")
-    
-    # Test token final (simulation de load_token)
-    print(f"\n🔬 TEST LOAD_TOKEN()")
-    
-    try:
-        token = load_token()
-        print(f"   ✅ Token chargé avec succès")
-        print(f"   Longueur: {len(token)} caractères")
-        print(f"   Représentation: {repr(token)}")
-        
-        # Test validation regex
-        is_valid = re.match(r'^[A-Za-z0-9_-]+$', token)
-        print(f"   Format valide: {'✅ OUI' if is_valid else '❌ NON'}")
-        
-        # Test de l'erreur Header Injection
-        print(f"\n🚨 TEST HEADER INJECTION")
-        test_header_value = f"Bearer {token}"
-        
-        dangerous_chars = ['\n', '\r', '\r\n']
-        header_safe = True
-        
-        for dangerous_char in dangerous_chars:
-            if dangerous_char in test_header_value:
-                print(f"   ❌ Caractère dangereux détecté: {repr(dangerous_char)}")
-                header_safe = False
-        
-        if header_safe:
-            print(f"   ✅ Header Authorization sûr")
-        else:
-            print(f"   ❌ Header Authorization DANGEREUX")
-        
-    except SystemExit:
-        print("   ❌ Échec du chargement du token")
-    
-    print(f"\n" + "=" * 60)
+
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                    SECTION 8: INTERFACE UTILISATEUR (MENU)                ║
@@ -1962,13 +1872,12 @@ def show_interactive_menu():
                     input("📋 Appuyez sur Entrée pour continuer...")
                     
             elif choice == "10":
-                print("\n🔍 Diagnostic du token en cours...")
-                diagnose_token()
-                input("\n🔧 Appuyez sur Entrée pour continuer...")
+                print("\n❌ Option non disponible")
+                input("� Appuyez sur Entrée pour continuer...")
                 
             elif choice == "11":
-                show_quick_guide()
-                input("\n💡 Appuyez sur Entrée pour continuer...")
+                print("\n❌ Option non disponible")
+                input("� Appuyez sur Entrée pour continuer...")
                 
             elif choice == "12":
                 print("\n🏃 Passage en mode commande...")
@@ -1988,46 +1897,7 @@ def show_interactive_menu():
     
     return True  # Retourne True si le programme doit se terminer
 
-def show_quick_guide():
-    """
-    Guide de choix rapide pour aider les utilisateurs à choisir les bonnes options
-    
-    Recommandations par cas d'usage:
-    - 🥇 Première utilisation
-    - 📅 Usage quotidien  
-    - 🔧 Maintenance
-    - ⚡ Vitesses approximatives
-    - ❓ En cas de doute
-    """
-    print("\n" + "╔" + "═" * 58 + "╗")
-    print("║" + " " * 18 + "💡 GUIDE DE CHOIX" + " " * 18 + "║")
-    print("╚" + "═" * 58 + "╝")
-    
-    print("\n🎯 UTILISATION RECOMMANDÉE :")
-    print("┌─────────────────────────────────────────────────────────┐")
-    print("│ 🥇 PREMIÈRE FOIS :                                     │")
-    print("│    → Choix 5 : Sync rapide complet (7-10 min)         │")
-    print("│                                                         │")
-    print("│ 📅 USAGE QUOTIDIEN :                                   │")
-    print("│    → Choix 2 : Stats compactes (<1s)                  │")
-    print("│    → Choix 4 : Sync intelligent (30s-2min)            │")
-    print("│                                                         │")
-    print("│ 🔧 MAINTENANCE :                                        │")
-    print("│    → Choix 1 : Stats complètes + recommandations      │")
-    print("│    → Choix 3 : Diagnostic si problèmes                │")
-    print("│    → Choix 8 : Détails uniquement si nécessaire       │")
-    print("└─────────────────────────────────────────────────────────┘")
-    
-    print("\n⚡ VITESSES APPROXIMATIVES :")
-    print("  📊 Stats (1-2)     : <1 seconde")
-    print("  🧠 Sync smart (4)  : 30s - 2 minutes")
-    print("  🚀 Sync rapide (5) : 7-10 minutes")
-    print("  📋 Torrents (6)    : 10-30 secondes")
-    
-    print("\n❓ EN CAS DE DOUTE :")
-    print("  👉 Commencez par le choix 2 (stats compactes)")
-    print("  👉 Puis choix 4 (sync intelligent)")
-    print("  👉 Choix 1 pour analyse détaillée si besoin")
+
 
 def get_token():
     """
@@ -2108,8 +1978,6 @@ def main():
     # Arguments de diagnostic
     parser.add_argument('--diagnose-errors', action='store_true', 
                        help="🔍 Diagnostic détaillé des torrents en erreur avec suggestions")
-    parser.add_argument('--diagnose-token', action='store_true', 
-                       help="🔍 Diagnostic complet du token Real-Debrid (debug)")
     parser.add_argument('--menu', action='store_true', 
                        help="🎮 Afficher le menu interactif")
     
@@ -2141,9 +2009,6 @@ def main():
                 
         elif args.diagnose_errors:
             diagnose_errors()
-            
-        elif args.diagnose_token:
-            diagnose_token()
             
         elif args.torrents_only:
             sync_torrents_only(token)

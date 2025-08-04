@@ -121,13 +121,6 @@ def internal_error(error):
                          task_status=task_status,
                          error_500=True), 500
 
-@app.before_request
-def log_request_info():
-    """Log toutes les requêtes pour diagnostic"""
-    print(f"🔍 Requête: {request.method} {request.path}")
-    print(f"   Remote addr: {request.remote_addr}")
-    print(f"   User agent: {request.headers.get('User-Agent', 'N/A')}")
-
 # Variables globales pour le statut des tâches (améliorées)
 task_status = {
     "running": False, 
@@ -185,8 +178,6 @@ def run_sync_task(task_name, token, task_func, *args):
 def dashboard():
     """Page d'accueil avec statistiques générales et gestion d'erreurs renforcée"""
     try:
-        print("🔍 Début de la fonction dashboard()")
-        
         # Vérifier le token avant tout
         try:
             token = load_token()
@@ -201,7 +192,6 @@ def dashboard():
         
         create_tables()
         init_symlink_database()  # Initialiser la base symlink
-        print("✅ Tables créées/vérifiées")
         
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
@@ -338,7 +328,6 @@ def dashboard():
             'status_data': status_data
         }
         
-        print(f"✅ Dashboard chargé avec succès: {len(stats)} statistiques")
         return render_template('dashboard.html', stats=stats, task_status=task_status)
         
     except Exception as e:
@@ -569,16 +558,6 @@ def api_health():
         "timestamp": time.time(),
         "server": "Redriva Web Interface",
         "version": "2.0"
-    })
-
-@app.route('/api/debug/status')
-def debug_status():
-    """Route de debug pour surveiller l'état interne"""
-    import time
-    return jsonify({
-        "task_status": task_status,
-        "current_time": time.time(),
-        "server_running": True
     })
 
 @app.route('/api/torrents/delete_batch', methods=['POST'])
@@ -1140,8 +1119,6 @@ def get_stream_links(torrent_id):
         if not token:
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
         
-        print(f"🔍 Récupération des liens pour torrent: {torrent_id}")
-        
         # Récupérer les infos du torrent depuis Real-Debrid avec timeout augmenté
         try:
             response = requests.get(
@@ -1149,7 +1126,7 @@ def get_stream_links(torrent_id):
                 headers={'Authorization': f'Bearer {token}'},
                 timeout=30  # Timeout de 30 secondes (augmenté)
             )
-            print(f"📡 Réponse torrent info: {response.status_code}")
+            logging.debug(f"Réponse torrent info: {response.status_code}")
         except requests.exceptions.Timeout:
             print(f"⏱️ Timeout lors de la récupération des infos torrent {torrent_id}")
             return jsonify({'success': False, 'error': 'Timeout lors de la récupération des informations du torrent'})
@@ -1163,7 +1140,6 @@ def get_stream_links(torrent_id):
             return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
         
         torrent_info = response.json()
-        print(f"✅ Torrent info récupéré: {torrent_info.get('filename', 'N/A')}")
         
         # Récupérer les liens directs de download depuis la structure
         download_links = torrent_info.get('links', [])
@@ -1204,7 +1180,7 @@ def get_stream_links(torrent_id):
                         data={'link': download_link},
                         timeout=20  # Timeout de 20 secondes pour débridage (augmenté)
                     )
-                    print(f"📡 Débridage fichier {i+1}: {unrestrict_response.status_code}")
+                    logging.debug(f"Débridage fichier {i+1}: {unrestrict_response.status_code}")
                 except requests.exceptions.Timeout:
                     print(f"⏱️ Timeout lors du débridage fichier {i+1}")
                     formatted_download = format_download_link(download_link)
@@ -1290,8 +1266,6 @@ def get_stream_links(torrent_id):
                     'mime_type': 'unknown',
                     'error': str(file_error)
                 })
-        
-        print(f"✅ Traitement terminé: {len(file_data)} fichiers traités")
         
         return jsonify({
             'success': True, 
@@ -1417,7 +1391,7 @@ def check_all_files_health():
                     'unavailable': 0
                 })
             
-            print(f"🔍 Vérification de la santé de {len(torrents_to_check)} fichiers...")
+            logging.info(f"Vérification de la santé de {len(torrents_to_check)} fichiers...")
             unavailable_count = 0
             
             # Vérifier chaque lien via l'API Real-Debrid
@@ -1535,7 +1509,7 @@ def cleanup_unavailable_files():
                     #     pass  # Ignorer les erreurs de suppression RD
                     
                     cleaned_count += 1
-                    print(f"🧹 Nettoyé: {name}")
+                    logging.info(f"Nettoyé: {name}")
                     
                 except Exception as cleanup_error:
                     print(f"❌ Erreur nettoyage {torrent_id}: {cleanup_error}")
@@ -1547,9 +1521,9 @@ def cleanup_unavailable_files():
                 from symguard_integration import notify_arr_missing_content
                 # Cette fonction devrait être implémentée pour notifier les *arr
                 # notify_arr_missing_content(unavailable_torrents)
-                print("📡 Notification Sonarr/Radarr envoyée (si configuré)")
+                logging.info("Notification Sonarr/Radarr envoyée (si configuré)")
             except ImportError:
-                print("ℹ️ Module symlink non disponible, pas de notification *arr")
+                logging.info("Module symlink non disponible, pas de notification *arr")
             
             return jsonify({
                 'success': True,
