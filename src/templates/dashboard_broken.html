@@ -3,7 +3,139 @@
 {% block title %}Dashboard - Redriva Web{% endblock %}
 
 {% block content %}
-<!-- Messages de notification -->
+
+<!-- Overlay de confirmation -->
+<div id="confirmModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <h3 id="confirmTitle">Confirmer l'action</h3>
+        <p id="confirmMessage">Êtes-vous sûr de vouloir effectuer cette action ?</p>
+        <div class="modal-actions">
+            <button id="confirmBtn" class="btn btn-primary">Confirmer</button>
+            <button id="cancelBtn" class="btn">Annuler</button>
+        </div>
+    </div>
+</div>
+
+<!-- En-tête du dashboard -->
+<div class="card">
+    <h2 style="margin: 0; color: #333; font-weight: 600; display: flex; align-items: center; gap: 12px;">
+        🚀 Dashboard Redriva
+    </h2>
+    <p style="margin: 8px 0 0 0; color: #6c757d;">Tableau de bord de gestion et surveillance</p>
+</div>
+
+<!-- Navigation par onglets -->
+<div class="tabs-container">
+    <div class="tabs-nav">
+        <button class="tab-item active" data-tab="overview" onclick="switchTab('overview')">📊 Vue d'ensemble</button>
+        <button class="tab-item" data-tab="actions" onclick="switchTab('actions')">🔄 Actions</button>
+        <button class="tab-item" data-tab="system" onclick="switchTab('system')">ℹ️ Système</button>
+    </div>
+</div>
+
+<!-- Onglet Vue d'ensemble -->
+<div id="overview-tab" class="tab-pane active">
+    <!-- Cartes statistiques Material Design -->
+    <div class="detail-grid">
+        <div class="card info-card interactive" onclick="navigateToTorrents('')" title="Voir tous les torrents">
+            <h3 class="card-title">📁 Torrents totaux</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Total dans la base:</span>
+                    <span class="info-value stats-number">{{ stats.total_torrents|default(0) }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Statut:</span>
+                    <span class="info-value">Base opérationnelle</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Action:</span>
+                    <span class="info-value">
+                        <span class="action-link">Voir tous les torrents →</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card status-card interactive" onclick="showDetailsModal()" title="Voir les détails de couverture">
+            <h3 class="card-title">📋 Couverture des détails</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Pourcentage:</span>
+                    <span class="info-value stats-number">{{ "%.1f"|format(stats.coverage|default(0)) }}%</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Avec détails:</span>
+                    <span class="info-value">{{ stats.total_details|default(0) }} torrents</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Action:</span>
+                    <span class="info-value">
+                        <span class="action-link">Voir les détails →</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card warning-card interactive" onclick="navigateToTorrents('downloading')" title="Voir les torrents actifs">
+            <h3 class="card-title">⬇️ Torrents actifs</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">En cours:</span>
+                    <span class="info-value stats-number">{{ stats.active_count|default(0) }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Statut:</span>
+                    <span class="info-value">En traitement</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Action:</span>
+                    <span class="info-value">
+                        <span class="action-link">Voir les actifs →</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card error-card interactive" onclick="navigateToTorrents('error')" title="Voir les torrents en erreur">
+            <h3 class="card-title">❌ Torrents en erreur</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Erreurs:</span>
+                    <span class="info-value stats-number">{{ stats.error_count|default(0) }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Statut:</span>
+                    <span class="info-value">Nécessite attention</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Action:</span>
+                    <span class="info-value">
+                        <span class="action-link">Voir les erreurs →</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card error-card interactive" onclick="navigateToTorrents('unavailable')" title="Voir les fichiers indisponibles">
+            <h3 class="card-title">📂 Fichiers indisponibles</h3>
+            <div class="info-table">
+                <div class="info-row">
+                    <span class="info-label">Liens morts:</span>
+                    <span class="info-value stats-number">{{ stats.unavailable_files|default(0) }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Statut:</span>
+                    <span class="info-value">Erreur 503/404/24</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Action:</span>
+                    <span class="info-value">
+                        <span class="action-link">Gérer les indisponibles →</span>
+                    </span>
+                </div>
+            </div>
+        </div> de notification -->
 <div id="toast-container" class="toast-container"></div>
 
 <!-- Modal de confirmation -->
@@ -175,6 +307,14 @@
                 </div>
             </button>
             
+            <button onclick="executeSyncAction('/api/health/check_all', '🔍 Vérifier santé des fichiers')" class="btn btn-info action-button">
+                <div class="action-icon">🔍</div>
+                <div class="action-content">
+                    <strong>Vérifier santé fichiers</strong>
+                    <span>Teste tous les liens pour détecter les indisponibles</span>
+                </div>
+            </button>
+
             <button onclick="executeSyncAction('/api/health/check_all', '🔍 Vérifier santé des fichiers')" class="btn btn-info action-button">
                 <div class="action-icon">🔍</div>
                 <div class="action-content">

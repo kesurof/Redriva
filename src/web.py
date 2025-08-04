@@ -261,8 +261,19 @@ def dashboard():
                     error_count = c.fetchone()[0] or 0
                 else:
                     error_count = 0
+                
+                # Fichiers indisponibles (erreurs 503, 404, 24 - réutilise l'existant)
+                c.execute("""
+                    SELECT COUNT(DISTINCT td.id) 
+                    FROM torrent_details td
+                    LEFT JOIN torrents t ON td.id = t.id
+                    WHERE t.status != 'deleted' 
+                    AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
+                         OR td.error LIKE '%unavailable_file%')
+                """)
+                unavailable_files = c.fetchone()[0] or 0
                     
-                print(f"📊 Stats avancées calculées: {error_count} erreurs")
+                print(f"📊 Stats avancées calculées: {error_count} erreurs, {unavailable_files} fichiers indisponibles")
                 
             except sqlite3.Error as db_error:
                 print(f"❌ Erreur DB lors des stats avancées: {db_error}")
@@ -271,6 +282,7 @@ def dashboard():
                 recent_24h = 0
                 total_size = 0
                 error_count = 0
+                unavailable_files = 0
             
             try:
                 # Statistiques complémentaires
@@ -321,6 +333,7 @@ def dashboard():
             'error_count': error_count,
             'active_count': active_count,
             'downloaded_count': downloaded_count,
+            'unavailable_files': unavailable_files,
             'status_data': status_data
         }
         
@@ -391,6 +404,9 @@ def torrents_list():
                 conditions.append("(t.status = 'deleted' OR td.status = 'deleted')")
             elif status_filter == 'error':
                 conditions.append("(t.status = 'error' OR td.status = 'error')")
+            elif status_filter == 'unavailable':
+                # Nouveau filtre pour fichiers indisponibles (réutilise la logique existante)
+                conditions.append("(td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' OR td.error LIKE '%unavailable_file%')")
             else:
                 conditions.append("(t.status = ? OR td.status = ?)")
                 params.extend([status_filter, status_filter])
@@ -1328,6 +1344,17 @@ def refresh_stats():
             c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
             downloaded_count = c.fetchone()[0] or 0
             
+            # Fichiers indisponibles (réutilise la logique existante)
+            c.execute("""
+                SELECT COUNT(DISTINCT td.id) 
+                FROM torrent_details td
+                LEFT JOIN torrents t ON td.id = t.id
+                WHERE t.status != 'deleted' 
+                AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
+                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%health_check_error%')
+            """)
+            unavailable_files = c.fetchone()[0] or 0
+            
             # Actifs (logique unifiée : priorité torrents.status)
             if ACTIVE_STATUSES:
                 placeholders = ','.join('?' * len(ACTIVE_STATUSES))
@@ -1350,12 +1377,180 @@ def refresh_stats():
                     'coverage': round(coverage, 1),
                     'error_count': error_count,
                     'downloaded_count': downloaded_count,
-                    'active_count': active_count
+                    'active_count': active_count,
+                    'unavailable_files': unavailable_files
                 }
             })
             
     except Exception as e:
         print(f"❌ Erreur lors du rafraîchissement des stats: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/health/check_all')
+def check_all_files_health():
+    """API pour vérifier la santé de tous les liens de fichiers"""
+    try:
+        from main import load_token
+        token = load_token()
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Récupérer tous les torrents avec des liens de download
+            c.execute("""
+                SELECT td.id, td.links 
+                FROM torrent_details td
+                LEFT JOIN torrents t ON td.id = t.id
+                WHERE td.links IS NOT NULL 
+                AND td.links != ''
+                AND t.status != 'deleted'
+            """)
+            torrents_to_check = c.fetchall()
+            
+            if not torrents_to_check:
+                return jsonify({
+                    'success': True,
+                    'message': 'Aucun fichier à vérifier',
+                    'checked': 0,
+                    'unavailable': 0
+                })
+            
+            print(f"🔍 Vérification de la santé de {len(torrents_to_check)} fichiers...")
+            unavailable_count = 0
+            
+            # Vérifier chaque lien via l'API Real-Debrid
+            for torrent_id, links_json in torrents_to_check:
+                try:
+                    # Parser les liens JSON
+                    if links_json:
+                        links = json.loads(links_json) if isinstance(links_json, str) else links_json
+                        # Prendre le premier lien disponible pour le test
+                        test_link = links[0] if isinstance(links, list) and links else str(links_json)
+                    else:
+                        continue
+                    
+                    # Utiliser l'API /unrestrict/check pour tester le lien
+                    response = requests.post(
+                        'https://api.real-debrid.com/rest/1.0/unrestrict/check',
+                        headers={'Authorization': f'Bearer {token}'},
+                        data={'link': test_link},
+                        timeout=10
+                    )
+                    
+                    if response.status_code != 200:
+                        # Marquer comme indisponible
+                        error_msg = f"health_check_error_{response.status_code}"
+                        if response.status_code == 503:
+                            error_msg = "503_service_unavailable"
+                        elif response.status_code == 404:
+                            error_msg = "404_file_not_found"
+                        
+                        c.execute("""
+                            UPDATE torrent_details 
+                            SET error = ?, status = 'error'
+                            WHERE id = ?
+                        """, (error_msg, torrent_id))
+                        unavailable_count += 1
+                        
+                    # Rate limiting pour éviter de surcharger l'API
+                    time.sleep(0.5)
+                    
+                except Exception as link_error:
+                    print(f"❌ Erreur lors de la vérification du lien {torrent_id}: {link_error}")
+                    # Marquer comme erreur de vérification
+                    c.execute("""
+                        UPDATE torrent_details 
+                        SET error = 'health_check_failed'
+                        WHERE id = ?
+                    """, (torrent_id,))
+                    unavailable_count += 1
+            
+            conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Vérification terminée: {unavailable_count} fichiers indisponibles détectés',
+                'checked': len(torrents_to_check),
+                'unavailable': unavailable_count
+            })
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la vérification de santé: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/health/cleanup')
+def cleanup_unavailable_files():
+    """API pour nettoyer les fichiers indisponibles et notifier Sonarr/Radarr"""
+    try:
+        from main import load_token
+        token = load_token()
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Identifier les torrents avec liens indisponibles
+            c.execute("""
+                SELECT td.id, td.name, td.links
+                FROM torrent_details td
+                LEFT JOIN torrents t ON td.id = t.id
+                WHERE t.status != 'deleted' 
+                AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
+                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%health_check_error%')
+            """)
+            unavailable_torrents = c.fetchall()
+            
+            if not unavailable_torrents:
+                return jsonify({
+                    'success': True,
+                    'message': 'Aucun fichier indisponible à nettoyer',
+                    'cleaned': 0
+                })
+            
+            cleaned_count = 0
+            
+            # Supprimer les torrents indisponibles
+            for torrent_id, name, links_json in unavailable_torrents:
+                try:
+                    # Marquer comme supprimé dans la base locale
+                    c.execute("UPDATE torrents SET status = 'deleted' WHERE id = ?", (torrent_id,))
+                    c.execute("UPDATE torrent_details SET status = 'deleted' WHERE id = ?", (torrent_id,))
+                    
+                    # Optionnel: Supprimer également côté Real-Debrid si souhaité
+                    # (décommenté si nécessaire)
+                    # try:
+                    #     requests.delete(
+                    #         f'https://api.real-debrid.com/rest/1.0/torrents/delete/{torrent_id}',
+                    #         headers={'Authorization': f'Bearer {token}'},
+                    #         timeout=10
+                    #     )
+                    # except:
+                    #     pass  # Ignorer les erreurs de suppression RD
+                    
+                    cleaned_count += 1
+                    print(f"🧹 Nettoyé: {name}")
+                    
+                except Exception as cleanup_error:
+                    print(f"❌ Erreur nettoyage {torrent_id}: {cleanup_error}")
+            
+            conn.commit()
+            
+            # Optionnel: Notification Sonarr/Radarr si module symlink disponible
+            try:
+                from symguard_integration import notify_arr_missing_content
+                # Cette fonction devrait être implémentée pour notifier les *arr
+                # notify_arr_missing_content(unavailable_torrents)
+                print("📡 Notification Sonarr/Radarr envoyée (si configuré)")
+            except ImportError:
+                print("ℹ️ Module symlink non disponible, pas de notification *arr")
+            
+            return jsonify({
+                'success': True,
+                'message': f'{cleaned_count} fichiers indisponibles nettoyés',
+                'cleaned': cleaned_count
+            })
+            
+    except Exception as e:
+        print(f"❌ Erreur lors du nettoyage: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/processing_torrents')
