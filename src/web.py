@@ -515,6 +515,20 @@ def torrents_list():
                          available_statuses=available_statuses,
                          total_count=total_count)
 
+@app.route('/settings')
+def settings():
+    """Page des paramètres de configuration"""
+    try:
+        # Vérifier la disponibilité du module symlink
+        symlink_available = SYMLINK_AVAILABLE
+        
+        return render_template('settings.html', 
+                             symlink_available=symlink_available)
+    except Exception as e:
+        print(f"❌ Erreur page settings: {e}")
+        flash("Erreur lors du chargement des paramètres", 'error')
+        return redirect(url_for('dashboard'))
+
 @app.route('/sync/<action>', methods=['GET', 'POST'])
 def sync_action(action):
     """Lance une action de synchronisation"""
@@ -1658,6 +1672,185 @@ def get_processing_torrents():
             
     except Exception as e:
         print(f"❌ Erreur lors de la récupération des torrents en traitement: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ROUTES API SETTINGS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/settings', methods=['GET'])
+def get_settings():
+    """API pour récupérer les paramètres actuels"""
+    try:
+        # Charger les paramètres depuis la base de données ou un fichier de configuration
+        settings = {
+            'apiToken': '',  # Ne jamais renvoyer le token réel pour des raisons de sécurité
+        }
+        
+        # Essayer de charger les paramètres existants
+        try:
+            settings_file = os.path.join(os.path.dirname(DB_PATH), 'settings.json')
+            if os.path.exists(settings_file):
+                with open(settings_file, 'r') as f:
+                    saved_settings = json.load(f)
+                    settings.update(saved_settings)
+                    # Ne jamais inclure le token dans la réponse
+                    settings['apiToken'] = ''
+        except Exception as e:
+            print(f"⚠️ Erreur lecture paramètres: {e}")
+        
+        return jsonify({'success': True, 'settings': settings})
+        
+    except Exception as e:
+        print(f"❌ Erreur get_settings: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/settings', methods=['POST'])
+def save_settings():
+    """API pour sauvegarder les paramètres"""
+    try:
+        settings = request.get_json()
+        if not settings:
+            return jsonify({'success': False, 'error': 'Données manquantes'})
+        
+        # Créer le répertoire de configuration s'il n'existe pas
+        config_dir = os.path.dirname(DB_PATH)
+        os.makedirs(config_dir, exist_ok=True)
+        
+        settings_file = os.path.join(config_dir, 'settings.json')
+        
+        # Charger les paramètres existants
+        existing_settings = {}
+        if os.path.exists(settings_file):
+            try:
+                with open(settings_file, 'r') as f:
+                    existing_settings = json.load(f)
+            except:
+                pass
+        
+        # Mettre à jour avec les nouveaux paramètres
+        existing_settings.update(settings)
+        
+        # Sauvegarder dans le fichier
+        with open(settings_file, 'w') as f:
+            json.dump(existing_settings, f, indent=2)
+        
+        # Si un token API est fourni, le sauvegarder séparément
+        if settings.get('apiToken'):
+            token_file = os.path.join(config_dir, 'token')
+            try:
+                with open(token_file, 'w') as f:
+                    f.write(settings['apiToken'].strip())
+                print("✅ Token API sauvegardé")
+            except Exception as e:
+                print(f"⚠️ Erreur sauvegarde token: {e}")
+        
+        return jsonify({'success': True, 'message': 'Paramètres sauvegardés'})
+        
+    except Exception as e:
+        print(f"❌ Erreur save_settings: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/settings/reset', methods=['POST'])
+def reset_settings():
+    """API pour réinitialiser les paramètres"""
+    try:
+        config_dir = os.path.dirname(DB_PATH)
+        settings_file = os.path.join(config_dir, 'settings.json')
+        
+        # Supprimer le fichier de paramètres
+        if os.path.exists(settings_file):
+            os.remove(settings_file)
+        
+        return jsonify({'success': True, 'message': 'Paramètres réinitialisés'})
+        
+    except Exception as e:
+        print(f"❌ Erreur reset_settings: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/settings/export')
+def export_settings():
+    """API pour exporter les paramètres"""
+    try:
+        from flask import send_file
+        import tempfile
+        
+        config_dir = os.path.dirname(DB_PATH)
+        settings_file = os.path.join(config_dir, 'settings.json')
+        
+        settings = {}
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r') as f:
+                settings = json.load(f)
+        
+        # Créer un fichier temporaire pour l'export
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
+            # Ne pas inclure le token pour des raisons de sécurité
+            export_settings = {k: v for k, v in settings.items() if k != 'apiToken'}
+            json.dump(export_settings, f, indent=2)
+            temp_file = f.name
+        
+        return send_file(temp_file, as_attachment=True, 
+                        download_name=f'redriva-settings-{datetime.now().strftime("%Y%m%d")}.json',
+                        mimetype='application/json')
+        
+    except Exception as e:
+        print(f"❌ Erreur export_settings: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/settings/import', methods=['POST'])
+def import_settings():
+    """API pour importer les paramètres"""
+    try:
+        settings = request.get_json()
+        if not settings:
+            return jsonify({'success': False, 'error': 'Données manquantes'})
+        
+        config_dir = os.path.dirname(DB_PATH)
+        os.makedirs(config_dir, exist_ok=True)
+        settings_file = os.path.join(config_dir, 'settings.json')
+        
+        # Sauvegarder les paramètres importés
+        with open(settings_file, 'w') as f:
+            json.dump(settings, f, indent=2)
+        
+        return jsonify({'success': True, 'message': 'Paramètres importés'})
+        
+    except Exception as e:
+        print(f"❌ Erreur import_settings: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/test-connection', methods=['POST'])
+def test_api_connection():
+    """API pour tester la connexion Real-Debrid"""
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        
+        if not token:
+            return jsonify({'success': False, 'error': 'Token manquant'})
+        
+        # Tester la connexion à l'API Real-Debrid
+        headers = {'Authorization': f'Bearer {token}'}
+        response = requests.get('https://api.real-debrid.com/rest/1.0/user', 
+                              headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            user_data = response.json()
+            return jsonify({
+                'success': True, 
+                'message': f'Connecté en tant que {user_data.get("username", "utilisateur")}'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': f'Erreur API: {response.status_code}'
+            })
+            
+    except requests.RequestException as e:
+        return jsonify({'success': False, 'error': f'Erreur de connexion: {str(e)}'})
+    except Exception as e:
+        print(f"❌ Erreur test_api_connection: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
