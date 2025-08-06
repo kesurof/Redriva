@@ -18,6 +18,7 @@ import urllib.parse
 import uuid
 import signal
 import traceback
+import aiohttp
 from datetime import datetime
 
 # Import des fonctions existantes
@@ -49,6 +50,17 @@ except ImportError as e:
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+# Variables globales pour le statut des tâches (définies avant les gestionnaires d'erreur)
+task_status = {
+    "running": False, 
+    "progress": "", 
+    "result": "",
+    "last_update": None
+}
+
+# Variable globale pour les opérations de suppression en masse
+batch_operations = {}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # INITIALISATION SYMLINK MANAGER (au niveau module pour Gunicorn)
@@ -120,17 +132,6 @@ def internal_error(error):
                          stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
                          task_status=task_status,
                          error_500=True), 500
-
-# Variables globales pour le statut des tâches (améliorées)
-task_status = {
-    "running": False, 
-    "progress": "", 
-    "result": "",
-    "last_update": None
-}
-
-# Variable globale pour les opérations de suppression en masse
-batch_operations = {}
 
 def format_download_link(direct_link):
     """Transforme un lien direct en lien downloader Real-Debrid"""
@@ -831,8 +832,6 @@ def api_torrent_detail(torrent_id):
             return get_cached_torrent_data(torrent_id, error_msg="Token Real-Debrid non configuré")
         
         # 2. Rafraîchir les données depuis l'API Real-Debrid
-        import asyncio
-        import aiohttp
         
         async def refresh_torrent_data():
             async with aiohttp.ClientSession() as session:
@@ -1651,8 +1650,8 @@ def get_processing_torrents():
                 'processing_count': processing_count,
                 'error_count': error_count,
                 'status_breakdown': [{'status': s[0], 'count': s[1]} for s in status_breakdown],
-                'active_statuses': list(ACTIVE_STATUSES),
-                'error_statuses': list(ERROR_STATUSES),
+                'active_statuses': list(ACTIVE_STATUSES) if ACTIVE_STATUSES else [],
+                'error_statuses': list(ERROR_STATUSES) if ERROR_STATUSES else [],
                 'examples': examples,
                 'timestamp': datetime.now().isoformat()
             })
