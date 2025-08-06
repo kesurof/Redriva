@@ -109,9 +109,12 @@ def forbidden_error(error):
         }), 403
     
     flash('Erreur 403: Accès refusé - Vérifiez votre configuration', 'error')
-    return render_template('dashboard.html', 
-                         stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
-                         task_status=task_status,
+    return render_template('torrents.html', 
+                         torrents=[], 
+                         pagination={'page': 1, 'total_pages': 1, 'total': 0},
+                         available_statuses=[],
+                         total_count=0,
+                         coverage=0,
                          error_403=True), 403
 
 @app.errorhandler(500)
@@ -128,9 +131,12 @@ def internal_error(error):
         }), 500
     
     flash('Erreur interne du serveur - Consultez les logs', 'error')
-    return render_template('dashboard.html', 
-                         stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
-                         task_status=task_status,
+    return render_template('torrents.html', 
+                         torrents=[], 
+                         pagination={'page': 1, 'total_pages': 1, 'total': 0},
+                         available_statuses=[],
+                         total_count=0,
+                         coverage=0,
                          error_500=True), 500
 
 def format_download_link(direct_link):
@@ -176,183 +182,6 @@ def run_sync_task(task_name, token, task_func, *args):
     return thread
 
 @app.route('/')
-def dashboard():
-    """Page d'accueil avec statistiques générales et gestion d'erreurs renforcée"""
-    try:
-        # Vérifier le token avant tout
-        try:
-            token = load_token()
-            print(f"✅ Token chargé: {token[:10]}...")
-        except Exception as token_error:
-            print(f"❌ Erreur token: {token_error}")
-            flash("⚠️ Token Real-Debrid non configuré ou invalide", 'warning')
-            return render_template('dashboard.html', 
-                                 stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
-                                 task_status=task_status,
-                                 no_token=True)
-        
-        create_tables()
-        init_symlink_database()  # Initialiser la base symlink
-        
-        with sqlite3.connect(DB_PATH) as conn:
-            c = conn.cursor()
-            
-            try:
-                # Statistiques de base (exclure les supprimés)
-                c.execute("SELECT COUNT(*) FROM torrents WHERE status != 'deleted'")
-                total_torrents = c.fetchone()[0]
-                
-                c.execute("SELECT COUNT(*) FROM torrent_details WHERE status != 'deleted'")
-                total_details = c.fetchone()[0]
-                
-                coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
-                print(f"📊 Stats de base: {total_torrents} torrents, {total_details} détails")
-            except sqlite3.Error as db_error:
-                print(f"❌ Erreur DB lors des stats de base: {db_error}")
-                flash("Erreur d'accès à la base de données", 'error')
-                return render_template('dashboard.html', 
-                                     stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
-                                     task_status=task_status,
-                                     db_error=True)
-            
-            try:
-                # Répartition par statut (exclure les supprimés)
-                c.execute("""
-                    SELECT status, COUNT(*) as count 
-                    FROM torrent_details 
-                    WHERE status != 'deleted'
-                    GROUP BY status 
-                    ORDER BY count DESC 
-                    LIMIT 8
-                """)
-                status_data = c.fetchall()
-                
-                # Torrents récents (exclure les supprimés)
-                c.execute("""
-                    SELECT COUNT(*) FROM torrents 
-                    WHERE datetime(added_on) >= datetime('now', '-24 hours')
-                    AND status != 'deleted'
-                """)
-                recent_24h = c.fetchone()[0] or 0
-                
-                # Taille totale (exclure les supprimés)
-                c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0 AND status != 'deleted'")
-                total_size = c.fetchone()[0] or 0
-                
-                # Erreurs (logique unifiée : priorité torrents.status, exclure les supprimés)
-                if ERROR_STATUSES:
-                    placeholders = ','.join('?' * len(ERROR_STATUSES))
-                    c.execute(f"""
-                        SELECT COUNT(DISTINCT t.id) 
-                        FROM torrents t
-                        LEFT JOIN torrent_details td ON t.id = td.id
-                        WHERE t.status != 'deleted' 
-                        AND COALESCE(t.status, td.status) IN ({placeholders})
-                    """, ERROR_STATUSES)
-                    error_count = c.fetchone()[0] or 0
-                else:
-                    error_count = 0
-                
-                # Fichiers indisponibles (erreurs 503, 404, 24, unavailable_file - réutilise l'existant)
-                c.execute("""
-                    SELECT COUNT(DISTINCT td.id) 
-                    FROM torrent_details td
-                    LEFT JOIN torrents t ON td.id = t.id
-                    WHERE t.status != 'deleted' 
-                    AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
-                         OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%'
-                         OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
-                """)
-                unavailable_files = c.fetchone()[0] or 0
-                
-                # Torrents avec détails manquants (incomplete)
-                c.execute("""
-                    SELECT COUNT(*) 
-                    FROM torrents t
-                    LEFT JOIN torrent_details td ON t.id = td.id
-                    WHERE t.status != 'deleted' AND td.id IS NULL
-                """)
-                incomplete_torrents = c.fetchone()[0] or 0
-                    
-                print(f"📊 Stats avancées calculées: {error_count} erreurs, {unavailable_files} fichiers indisponibles, {incomplete_torrents} détails manquants")
-                
-            except sqlite3.Error as db_error:
-                print(f"❌ Erreur DB lors des stats avancées: {db_error}")
-                # Valeurs par défaut en cas d'erreur
-                status_data = []
-                recent_24h = 0
-                total_size = 0
-                error_count = 0
-                unavailable_files = 0
-                incomplete_torrents = 0
-            
-            try:
-                # Statistiques complémentaires
-                # Récupération des activités récentes (exclure les supprimés)
-                c.execute("""
-                    SELECT SUM(CASE WHEN datetime(added) > datetime('now', '-7 days') THEN 1 ELSE 0 END)
-                    FROM torrent_details
-                    WHERE status != 'deleted'
-                """)
-                result = c.fetchone()
-                recent_7d = result[0] if result and result[0] else 0
-                
-                
-                # Compte des téléchargés (exclure les supprimés)
-                c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
-                downloaded_count = c.fetchone()[0] or 0
-                
-                # Compte des téléchargements actifs (logique unifiée : priorité torrents.status)
-                if ACTIVE_STATUSES:
-                    placeholders = ','.join('?' * len(ACTIVE_STATUSES))
-                    c.execute(f"""
-                        SELECT COUNT(DISTINCT t.id) 
-                        FROM torrents t
-                        LEFT JOIN torrent_details td ON t.id = td.id
-                        WHERE t.status != 'deleted' 
-                        AND COALESCE(t.status, td.status) IN ({placeholders})
-                    """, ACTIVE_STATUSES)
-                    active_count = c.fetchone()[0] or 0
-                else:
-                    active_count = 0
-                    
-                print(f"📊 Stats finales calculées: {downloaded_count} téléchargés, {active_count} actifs")
-                
-            except sqlite3.Error as db_error:
-                print(f"❌ Erreur DB lors des stats complémentaires: {db_error}")
-                # Valeurs par défaut
-                recent_7d = 0
-                downloaded_count = 0
-                active_count = 0
-        
-        stats = {
-            'total_torrents': total_torrents,
-            'total_details': total_details,
-            'coverage': coverage,
-            'recent_24h': recent_24h,
-            'recent_7d': recent_7d,
-            'total_size': format_size(total_size),
-            'error_count': error_count,
-            'active_count': active_count,
-            'downloaded_count': downloaded_count,
-            'unavailable_files': unavailable_files,
-            'incomplete_torrents': incomplete_torrents,
-            'status_data': status_data
-        }
-        
-        return render_template('dashboard.html', stats=stats, task_status=task_status)
-        
-    except Exception as e:
-        print(f"❌ Erreur critique dans dashboard(): {e}")
-        import traceback
-        traceback.print_exc()
-        
-        flash(f"Erreur lors du chargement des statistiques: {str(e)}", 'error')
-        return render_template('dashboard.html', 
-                             stats={'total_torrents': 0, 'total_details': 0, 'coverage': 0}, 
-                             task_status=task_status,
-                             critical_error=True)
-
 @app.route('/torrents', endpoint='torrents')
 def torrents_list():
     """Liste des torrents avec pagination et filtres natifs"""
@@ -505,6 +334,22 @@ def torrents_list():
         'end_item': min(offset + per_page, total_count)
     }
     
+    # Calcul de la couverture des détails
+    try:
+        # Exclure les torrents supprimés uniquement de la table torrents
+        c.execute("SELECT COUNT(*) FROM torrents WHERE status != 'deleted'")
+        total_torrents = c.fetchone()[0]
+        
+        # Compter tous les détails disponibles (pas de filtrage par status car torrent_details n'a pas cette colonne)
+        c.execute("SELECT COUNT(*) FROM torrent_details")
+        total_details = c.fetchone()[0]
+        
+        coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
+        print(f"📊 Calcul couverture torrents: {total_torrents} torrents, {total_details} détails = {coverage:.1f}%")
+    except Exception as e:
+        print(f"❌ Erreur calcul couverture: {e}")
+        coverage = 0
+    
     return render_template('torrents.html', 
                          torrents=torrents,
                          pagination=pagination,
@@ -513,7 +358,8 @@ def torrents_list():
                          sort_by=sort_by,
                          sort_dir=sort_dir,
                          available_statuses=available_statuses,
-                         total_count=total_count)
+                         total_count=total_count,
+                         coverage=round(coverage, 1))
 
 @app.route('/settings')
 def settings():
@@ -527,7 +373,7 @@ def settings():
     except Exception as e:
         print(f"❌ Erreur page settings: {e}")
         flash("Erreur lors du chargement des paramètres", 'error')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('torrents'))
 
 @app.route('/sync/<action>', methods=['GET', 'POST'])
 def sync_action(action):
@@ -539,7 +385,7 @@ def sync_action(action):
             return jsonify({'success': False, 'error': 'Une tâche est déjà en cours'}), 400
         else:
             flash("Une tâche est déjà en cours d'exécution", 'warning')
-            return redirect(request.referrer or url_for('dashboard'))
+            return redirect(request.referrer or url_for('torrents'))
     
     try:
         token = load_token()
@@ -548,7 +394,7 @@ def sync_action(action):
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'}), 401
         else:
             flash("Token Real-Debrid non configuré", 'error')
-            return redirect(request.referrer or url_for('dashboard'))
+            return redirect(request.referrer or url_for('torrents'))
     
     # Lancer la synchronisation
     if action == 'smart':
@@ -565,7 +411,7 @@ def sync_action(action):
             return jsonify({'success': False, 'error': 'Action inconnue'}), 400
         else:
             flash("Action inconnue", 'error')
-            return redirect(request.referrer or url_for('dashboard'))
+            return redirect(request.referrer or url_for('torrents'))
     
     if request.method == 'POST':
         # Pour les requêtes AJAX, retourner succès avec message descriptif
@@ -576,7 +422,7 @@ def sync_action(action):
         if referrer and '/torrents' in referrer:
             return redirect('/torrents')
         else:
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('torrents'))
 
 @app.route('/api/task_status')
 def api_task_status():
@@ -949,50 +795,6 @@ def get_cached_torrent_data(torrent_id, error_msg=None, refreshed=True):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e), 'cached_data': None}), 500
 
-@app.route('/torrent/<torrent_id>')
-def torrent_detail(torrent_id):
-    """Détail d'un torrent spécifique"""
-    with sqlite3.connect(DB_PATH) as conn:
-        c = conn.cursor()
-        
-        # Informations de base
-        c.execute("""
-            SELECT t.id, t.filename, t.status, t.bytes, t.added_on,
-                   td.name, td.status, td.size, td.files_count, td.progress,
-                   td.links, td.hash, td.host, td.error
-            FROM torrents t
-            LEFT JOIN torrent_details td ON t.id = td.id
-            WHERE t.id = ?
-        """, (torrent_id,))
-        
-        torrent = c.fetchone()
-        
-        if not torrent:
-            flash("Torrent non trouvé", 'error')
-            return redirect(url_for('torrents'))
-    
-    torrent_data = {
-        'id': torrent[0],
-        'filename': torrent[1],
-        'status': torrent[2],
-        'bytes': torrent[3],
-        'added_on': torrent[4],
-        'name': torrent[5],
-        'detail_status': torrent[6],
-        'size': torrent[7],
-        'files_count': torrent[8],
-        'progress': torrent[9],
-        'links': torrent[10].split(',') if torrent[10] else [],
-        'hash': torrent[11],
-        'host': torrent[12],
-        'error': torrent[13]
-    }
-    
-    return render_template('torrent_detail.html', 
-                         torrent=torrent_data,
-                         get_status_emoji=get_status_emoji,
-                         format_size=format_size)
-
 @app.route('/api/torrent/delete/<torrent_id>', methods=['POST'])
 def delete_torrent(torrent_id):
     """Supprimer un torrent de Real-Debrid"""
@@ -1329,7 +1131,7 @@ def get_stream_links(torrent_id):
 
 @app.route('/api/refresh_stats')
 def refresh_stats():
-    """API pour rafraîchir les statistiques du dashboard"""
+    """API pour rafraîchir les statistiques"""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
@@ -1404,7 +1206,7 @@ def refresh_stats():
         print(f"❌ Erreur lors du rafraîchissement des stats: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/health/check_all')
+@app.route('/api/health/check_all', methods=['GET', 'POST'])
 def check_all_files_health():
     """API pour vérifier la santé de tous les liens de fichiers"""
     try:
@@ -1501,7 +1303,7 @@ def check_all_files_health():
         print(f"❌ Erreur lors de la vérification de santé: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/health/cleanup')
+@app.route('/api/health/cleanup', methods=['GET', 'POST'])
 def cleanup_unavailable_files():
     """API pour nettoyer les fichiers indisponibles et notifier Sonarr/Radarr"""
     try:
