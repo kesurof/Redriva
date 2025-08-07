@@ -1,0 +1,1160 @@
+{% extends "base.html" %}
+
+{% block title %}Test API Real-Debrid - Redriva Web{% endblock %}
+
+{% block content %}
+<!-- Messages de notification -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Header compact -->
+<div class="card api-header">
+    <div class="header-content">
+        <div class="title-section">
+            <h1 class="title">🧪 API Test</h1>
+            <div class="stats-badges">
+                <span class="badge success" id="badge-success">0 ✓</span>
+                <span class="badge error" id="badge-error">0 ✗</span>
+                <span class="badge total" id="badge-total">0 tests</span>
+            </div>
+        </div>
+        <div class="actions-section">
+            <button class="btn secondary" onclick="toggleHistory()">📊 Historique</button>
+            <button class="btn info" onclick="clearAll()">🧹 Clear</button>
+        </div>
+    </div>
+    
+    <!-- Navigation par onglets -->
+    <div class="tabs-container">
+        <div class="tabs" id="main-tabs"></div>
+    </div>
+</div>
+
+<!-- Historique compact -->
+<div id="test-history" class="card history-panel" style="display: none;">
+    <div class="panel-header">
+        <h4>📈 Derniers tests</h4>
+        <button class="btn-close" onclick="toggleHistory()">✕</button>
+    </div>
+    <div id="history-list" class="history-content">
+        <p class="text-muted">Aucun test effectué</p>
+    </div>
+</div>
+
+<!-- Interface principale -->
+<div class="workspace">
+    <!-- Colonne endpoints -->
+    <div class="endpoints-panel">
+        <!-- Token status -->
+        <div class="tab-content active" id="tab-token">
+            <div class="section">
+                <div class="token-status" id="token-status-display">
+                    <span id="token-status">⏳ Vérification...</span>
+                    <div class="token-actions">
+                        <button class="btn-micro secondary" onclick="checkToken()" title="Vérifier">🔄</button>
+                        <button class="btn-micro info" onclick="refreshToken()" title="Recharger">⟳</button>
+                    </div>
+                </div>
+                <div class="token-debug">
+                    <small>Token: <span id="token-present">{{ 'Configuré' if config.RD_TOKEN else 'Non configuré' }}</span></small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Contenu dynamique des onglets -->
+        <div id="dynamic-content"></div>
+    </div>
+
+    <!-- Colonne résultats -->
+    <div class="results-panel">
+        <div class="panel-header">
+            <h4 id="results-title">Résultats des tests</h4>
+            <div class="panel-actions">
+                <button class="btn-micro secondary" onclick="copyResult()" title="Copier">📋</button>
+                <button class="btn-micro warning" onclick="clearResult()" title="Effacer">✕</button>
+            </div>
+        </div>
+        <div class="results-container">
+            <div id="result-display" class="result-content">
+                <div class="no-results">
+                    <p>Sélectionnez un endpoint et cliquez pour lancer un test</p>
+                    <button class="btn primary" onclick="testEndpoint('user')">🚀 Test rapide /user</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Variables CSS optimisées */
+:root {
+    --primary: #2196F3; --primary-dark: #1976D2;
+    --success: #4CAF50; --success-dark: #388E3C;
+    --warning: #FF9800; --warning-dark: #F57C00;
+    --danger: #f44336; --danger-dark: #D32F2F;
+    --info: #17a2b8; --info-dark: #138496;
+    --secondary: #6c757d; --secondary-dark: #495057;
+    --light: #f8f9fa; --dark: #343a40;
+    --radius: 12px; --shadow: 0 4px 20px rgba(0,0,0,0.08);
+    --transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+    --border: #e0e0e0;
+}
+
+/* Classes utilitaires de base */
+.card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); }
+.flex { display: flex; } .flex-col { flex-direction: column; }
+.items-center { align-items: center; } .justify-between { justify-content: space-between; }
+.gap-2 { gap: 8px; } .gap-3 { gap: 12px; } .gap-4 { gap: 16px; } .gap-5 { gap: 20px; }
+.p-3 { padding: 12px; } .p-4 { padding: 16px; } .p-5 { padding: 20px; }
+.text-muted { color: var(--secondary); font-style: italic; }
+.fade-in { animation: fadeIn 0.3s ease; }
+
+/* Toast système */
+.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+.toast {
+    background: white; border-radius: 8px; box-shadow: var(--shadow);
+    padding: 16px; margin-bottom: 10px; min-width: 300px;
+    border-left: 4px solid var(--info); animation: slideIn 0.3s ease;
+}
+.toast.success { border-left-color: var(--success); }
+.toast.error { border-left-color: var(--danger); }
+.toast.warning { border-left-color: var(--warning); }
+
+/* Header optimisé */
+.api-header { margin-bottom: 20px; padding: 0; border-left: 4px solid var(--primary); }
+.header-content { padding: 20px 24px; border-bottom: 1px solid #e9ecef; }
+.header-content, .title-section { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.title { margin: 0; font-size: 1.4rem; color: var(--dark); font-weight: 600; }
+.stats-badges, .actions-section { display: flex; gap: 10px; }
+
+/* Badges et boutons base */
+.badge, .btn { 
+    border: none; border-radius: 6px; font-weight: 600; cursor: pointer;
+    transition: var(--transition); display: inline-flex; align-items: center; gap: 4px;
+}
+.badge { padding: 4px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.btn { padding: 8px 16px; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+
+/* Variantes de couleurs */
+.primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; }
+.success { background: linear-gradient(135deg, var(--success), var(--success-dark)); color: white; }
+.secondary { background: linear-gradient(135deg, var(--secondary), var(--secondary-dark)); color: white; }
+.info { background: linear-gradient(135deg, var(--info), var(--info-dark)); color: white; }
+.warning { background: linear-gradient(135deg, var(--warning), var(--warning-dark)); color: white; }
+.danger { background: linear-gradient(135deg, var(--danger), var(--danger-dark)); color: white; }
+
+.badge.success { background: #e8f5e9; color: #2e7d32; border: 1px solid var(--success); }
+.badge.error { background: #ffebee; color: #c62828; border: 1px solid var(--danger); }
+.badge.total { background: #e3f2fd; color: #1565c0; border: 1px solid var(--primary); }
+
+/* Navigation onglets - Responsive amélioré */
+.tabs-container { 
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); 
+    overflow-x: auto; 
+    padding: 0 4px;
+}
+.tabs { display: flex; min-width: max-content; gap: 2px; }
+.tab {
+    background: transparent; border: none; padding: 16px 18px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500;
+    color: var(--secondary); border-bottom: 3px solid transparent; transition: var(--transition);
+    min-width: 120px; justify-content: center;
+}
+.tab:hover { background: rgba(33,150,243,0.05); color: var(--primary); }
+.tab.active { background: rgba(33,150,243,0.1); color: var(--primary); border-bottom-color: var(--primary); }
+.tab-indicator { width: 8px; height: 8px; border-radius: 50%; background: transparent; transition: var(--transition); }
+.tab-indicator.success { background: var(--success); }
+.tab-indicator.error { background: var(--danger); }
+
+/* Panneau historique */
+.history-panel { margin-bottom: 20px; border-left: 4px solid var(--info); }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e9ecef; }
+.panel-header h4 { margin: 0; font-size: 1.1rem; color: var(--dark); }
+.btn-close { background: transparent; border: none; font-size: 18px; cursor: pointer; color: var(--secondary); padding: 4px; border-radius: 4px; transition: var(--transition); }
+.btn-close:hover { background: #f8f9fa; color: var(--danger); }
+.history-content { padding: 16px 20px; max-height: 200px; overflow-y: auto; }
+
+/* Workspace principal */
+.workspace { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: calc(100vh - 200px); min-height: 600px; }
+
+/* Panneau endpoints */
+.endpoints-panel { 
+    background: white; border-radius: var(--radius); box-shadow: var(--shadow);
+    border-left: 4px solid var(--warning); overflow: hidden; display: flex; flex-direction: column;
+}
+.tab-content { height: 100%; overflow-y: auto; padding: 20px; display: none; }
+.tab-content.active { display: block; }
+.section { margin-bottom: 24px; }
+.section-title { 
+    color: var(--dark); font-size: 0.9rem; font-weight: 600; margin: 0 0 12px 0;
+    padding: 8px 12px; background: rgba(33,150,243,0.1); border-radius: 6px;
+    border-left: 3px solid var(--primary);
+}
+
+/* Token status */
+.token-status { 
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; background: var(--light); border-radius: 8px;
+    border-left: 4px solid var(--primary); margin-bottom: 12px; font-size: 14px; font-weight: 500;
+}
+.token-actions { display: flex; gap: 6px; }
+.token-debug { padding: 8px 12px; background: #e9ecef; border-radius: 6px; font-family: monospace; font-size: 12px; color: var(--secondary); }
+
+/* Endpoints et inputs */
+.endpoint-list { display: flex; flex-direction: column; gap: 12px; }
+.endpoint-row { 
+    border: 2px solid var(--border); border-radius: 8px; transition: var(--transition); overflow: hidden;
+}
+.endpoint-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(33,150,243,0.15); }
+.endpoint-row.with-input { background: #f8f9fa; }
+
+.btn-endpoint {
+    background: white; border: none; padding: 16px; text-align: left; cursor: pointer;
+    transition: var(--transition); display: flex; align-items: center; gap: 12px;
+    width: 100%; font-size: 14px; border-left: 4px solid var(--primary);
+}
+.btn-endpoint:hover { background: #f8f9fa; }
+.btn-endpoint.success { border-left-color: var(--success); }
+.btn-endpoint.danger { border-left-color: var(--danger); background: #ffebee; }
+.btn-endpoint.warning { border-left-color: var(--warning); }
+.btn-endpoint.info { border-left-color: var(--info); }
+.btn-endpoint.secondary { border-left-color: var(--secondary); }
+
+.endpoint-path { 
+    font-family: monospace; font-weight: 600; flex: 1; 
+    color: var(--dark); font-size: 14px;
+}
+.endpoint-desc { 
+    font-size: 12px; color: var(--secondary); font-style: italic;
+    white-space: nowrap; min-width: fit-content;
+}
+
+.input-row { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.input-field {
+    padding: 8px 12px; border: 2px solid var(--border); border-radius: 6px;
+    font-size: 13px; transition: var(--transition); font-family: monospace; background: white;
+}
+.input-field:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(33,150,243,0.1); }
+.input-area { resize: vertical; min-height: 60px; }
+
+/* Méthodes HTTP */
+.method-badge {
+    padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; min-width: 40px; text-align: center; color: white;
+}
+.method-badge.get { background: var(--primary); }
+.method-badge.post { background: var(--success); }
+.method-badge.put { background: var(--warning); }
+.method-badge.delete { background: var(--danger); }
+
+/* Boutons micro */
+.btn-micro {
+    padding: 6px 8px; border: none; border-radius: 4px; font-size: 12px;
+    cursor: pointer; transition: var(--transition); background: var(--secondary); color: white;
+}
+.btn-micro:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+
+/* Panneau résultats */
+.results-panel {
+    background: white; border-radius: var(--radius); box-shadow: var(--shadow);
+    border-left: 4px solid var(--success); display: flex; flex-direction: column;
+}
+.panel-actions { display: flex; gap: 6px; }
+.results-container { flex: 1; overflow: hidden; }
+.result-content {
+    height: 100%; overflow-y: auto; padding: 20px; font-family: monospace;
+    font-size: 13px; line-height: 1.5; white-space: pre-wrap; background: #fafafa;
+    word-wrap: break-word; overflow-wrap: break-word; hyphens: auto;
+}
+.result-content.success { background: #f1f8e9; color: #2e7d32; border-left: 4px solid var(--success); }
+.result-content.error { background: #ffebee; color: #c62828; border-left: 4px solid var(--danger); }
+.no-results { text-align: center; padding: 60px 20px; color: var(--secondary); }
+
+/* Indicateur de troncature */
+.truncation-info {
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+    padding: 8px 12px;
+    margin: 8px 0;
+    font-size: 12px;
+    color: #856404;
+    font-style: italic;
+    border-radius: 4px;
+}
+
+/* États de chargement */
+.loading { opacity: 0.7; cursor: not-allowed; }
+.loading::after { content: '⏳'; margin-left: 8px; animation: spin 1s linear infinite; }
+
+/* Animations */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Responsive Design amélioré */
+@media (max-width: 1024px) {
+    .workspace { grid-template-columns: 1fr; height: auto; gap: 16px; }
+    .endpoints-panel, .results-panel { height: auto; min-height: 400px; }
+}
+
+@media (max-width: 768px) {
+    .header-content { flex-direction: column; gap: 16px; }
+    .title-section { flex-direction: column; align-items: center; gap: 12px; }
+    .actions-section { flex-wrap: wrap; justify-content: center; }
+    .tabs { flex-wrap: wrap; gap: 3px; }
+    .tab { 
+        padding: 12px 14px; 
+        min-width: 90px;
+        font-size: 13px;
+    }
+    .tab .tab-label { display: none; } /* Masquer les labels, garder les icônes */
+    .btn-endpoint { padding: 16px; font-size: 15px; min-height: 54px; }
+}
+
+@media (max-width: 480px) {
+    .tabs-container { padding: 0 2px; }
+    .tabs { gap: 2px; }
+    .tab { 
+        padding: 10px 8px; 
+        min-width: 70px;
+        font-size: 12px;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .tab span:not(.tab-indicator) { font-size: 10px; }
+    .endpoint-path { font-size: 12px; }
+    .result-content { font-size: 12px; padding: 16px; }
+}
+
+/* Scrollbars personnalisées */
+.tab-content::-webkit-scrollbar, .result-content::-webkit-scrollbar { width: 6px; }
+.tab-content::-webkit-scrollbar-track, .result-content::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+.tab-content::-webkit-scrollbar-thumb, .result-content::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+.tab-content::-webkit-scrollbar-thumb:hover, .result-content::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+</style>
+
+<script>
+// Configuration centralisée avec limites d'affichage
+const CONFIG = {
+    token: '{{ config.RD_TOKEN if config.RD_TOKEN else "" }}',
+    baseUrl: 'https://api.real-debrid.com/rest/1.0',
+    proxyUrl: '/api/proxy-rd',
+    
+    // Configuration des onglets
+    tabs: {
+        token: { icon: '🔑', label: 'Token', title: 'Status du Token' },
+        user: { icon: '👤', label: 'User', title: 'Informations Utilisateur' },
+        torrents: { icon: '🌊', label: 'Torrents', title: 'Endpoints Torrents' },
+        unrestrict: { icon: '🔓', label: 'Unrestrict', title: 'Endpoints Unrestrict' },
+        downloads: { icon: '📥', label: 'Downloads', title: 'Endpoints Downloads' },
+        hosts: { icon: '🌐', label: 'Hosts', title: 'Endpoints Hosts' },
+        streaming: { icon: '📺', label: 'Streaming', title: 'Endpoints Streaming' },
+        traffic: { icon: '📊', label: 'Traffic', title: 'Endpoints Traffic' },
+        settings: { icon: '⚙️', label: 'Settings', title: 'Endpoints Settings' },
+        local: { icon: '🏠', label: 'Local', title: 'Endpoints Locaux' },
+        sync: { icon: '🔄', label: 'Sync', title: 'Synchronisation' },
+        health: { icon: '🏥', label: 'Health', title: 'Santé & Maintenance' },
+        tasks: { icon: '📊', label: 'Tasks', title: 'Gestion des Tâches' }
+    },
+    
+    // Configuration des endpoints
+    endpoints: {
+        // Real-Debrid endpoints basiques
+        user: { method: 'GET', path: '/user', desc: 'Infos compte' },
+        torrents: { method: 'GET', path: '/torrents', desc: 'Liste torrents' },
+        downloads: { method: 'GET', path: '/downloads', desc: 'Historique downloads' },
+        hosts: { method: 'GET', path: '/hosts', desc: 'Liste hébergeurs' },
+        hostsStatus: { method: 'GET', path: '/hosts/status', desc: 'Status hébergeurs' },
+        hostsRegex: { method: 'GET', path: '/hosts/regex', desc: 'Regex patterns' },
+        hostsDomains: { method: 'GET', path: '/hosts/domains', desc: 'Domaines supportés' },
+        traffic: { method: 'GET', path: '/traffic', desc: 'Stats trafic' },
+        trafficDetails: { method: 'GET', path: '/traffic/details', desc: 'Détails trafic' },
+        settings: { method: 'GET', path: '/settings', desc: 'Config compte RD' },
+        
+        // Endpoints torrents avec paramètres
+        torrentInfo: { method: 'GET', path: '/torrents/info/{id}', input: 'torrent-id', desc: 'Détails torrent' },
+        torrentDelete: { method: 'DELETE', path: '/torrents/delete/{id}', input: 'torrent-delete-id', desc: 'Supprimer torrent', confirm: true },
+        torrentAdd: { method: 'PUT', path: '/torrents/addMagnet', input: 'magnet-link', body: 'magnet', desc: 'Ajouter magnet', inputType: 'textarea' },
+        torrentSelect: { method: 'POST', path: '/torrents/selectFiles/{id}', input: 'torrent-select-id', input2: 'file-ids', body: 'files', desc: 'Sélectionner fichiers' },
+        
+        // Endpoints unrestrict
+        unrestrict: { method: 'POST', path: '/unrestrict/link', input: 'unrestrict-link', body: 'link', desc: 'Débrider lien' },
+        checkLink: { method: 'POST', path: '/unrestrict/check', input: 'check-link', body: 'link', desc: 'Vérifier lien' },
+        
+        // Endpoints downloads
+        downloadDelete: { method: 'DELETE', path: '/downloads/delete/{id}', input: 'download-delete-id', desc: 'Supprimer download', confirm: true },
+        
+        // Endpoints streaming
+        transcode: { method: 'GET', path: '/streaming/transcode/{id}', input: 'transcode-id', desc: 'Transcodage streaming' },
+        mediaInfo: { method: 'GET', path: '/streaming/mediaInfos/{id}', input: 'media-info-id', desc: 'Infos média streaming' },
+        
+        // Endpoints settings avancés
+        settingUpdate: { method: 'POST', path: '/settings/update', input: 'setting-name', input2: 'setting-value', desc: 'Modifier paramètre', bodyCustom: true },
+        
+        // Endpoints Redriva locaux - Settings
+        localSettings: { method: 'GET', path: '/api/settings', desc: 'Config Redriva', local: true },
+        localSettingsReset: { method: 'POST', path: '/api/settings/reset', desc: 'Reset paramètres', local: true, confirm: true },
+        localSettingsExport: { method: 'GET', path: '/api/settings/export', desc: 'Export configuration', local: true },
+        testConnection: { method: 'POST', path: '/api/test-connection', desc: 'Test connexion RD', local: true },
+        
+        // Endpoints Redriva locaux - Torrents
+        localTorrent: { method: 'GET', path: '/api/torrent/{id}', input: 'local-torrent-id', desc: 'Détails torrent local', local: true },
+        torrentStream: { method: 'GET', path: '/api/torrent/stream/{id}', input: 'stream-torrent-id', desc: 'Liens streaming torrent', local: true },
+        batchDelete: { method: 'POST', path: '/api/torrents/delete_batch', input: 'batch-delete-ids', body: 'torrent_ids', desc: 'Suppression en masse', local: true, inputType: 'textarea', confirm: true },
+        batchStatus: { method: 'GET', path: '/api/batch_status/{id}', input: 'batch-status-id', desc: 'Statut opération batch', local: true },
+        fixDeletedStatus: { method: 'GET', path: '/api/fix_deleted_status', desc: 'Fix statuts supprimés', local: true },
+        
+        // Endpoints Redriva locaux - Synchronisation
+        syncSmart: { method: 'GET', path: '/sync/smart', desc: 'Synchronisation intelligente', local: true },
+        syncFast: { method: 'GET', path: '/sync/fast', desc: 'Synchronisation complète', local: true },
+        syncTorrents: { method: 'GET', path: '/sync/torrents', desc: 'Sync torrents uniquement', local: true },
+        
+        // Endpoints Redriva locaux - Santé
+        localHealth: { method: 'GET', path: '/api/health', desc: 'Santé système', local: true },
+        healthCheckAll: { method: 'POST', path: '/api/health/check_all', desc: 'Vérifier tous les liens', local: true },
+        healthCleanup: { method: 'POST', path: '/api/health/cleanup', desc: 'Nettoyage fichiers', local: true, confirm: true },
+        refreshStats: { method: 'GET', path: '/api/refresh_stats', desc: 'Refresh statistiques', local: true },
+        
+        // Endpoints Redriva locaux - Tâches
+        taskStatus: { method: 'GET', path: '/api/task_status', desc: 'Statut tâches en cours', local: true }
+    }
+};
+
+// Constantes centralisées pour les limites d'affichage
+const DISPLAY_LIMITS = {
+    TEXT_MAX: 3000,          // Limite d'affichage principal
+    SYNC_PREVIEW_LINES: 100, // Lignes d'aperçu pour sync
+    FALLBACK_MAX: 300,       // Limite pour fallback local
+    JSON_INDENT: 2           // Indentation JSON
+};
+
+// Variables globales
+let currentToken = CONFIG.token;
+let currentTab = 'token';
+let stats = { success: 0, error: 0, total: 0 };
+let testHistory = [];
+let activeEndpoint = null;
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', init);
+
+function init() {
+    console.log('🚀 API Test Page chargée');
+    generateTabs();
+    generateTabContent();
+    loadSavedData();
+    
+    if (currentToken) {
+        checkToken();
+    } else {
+        updateTokenStatus('❌ Token non configuré', 'error');
+    }
+}
+
+// Utilitaires centralisés
+function truncateText(text, maxLength = DISPLAY_LIMITS.TEXT_MAX) {
+    if (!text || typeof text !== 'string') return text;
+    
+    if (text.length <= maxLength) return text;
+    
+    return text.substring(0, maxLength) + 
+           `...\n[Contenu tronqué - ${text.length} caractères au total]`;
+}
+
+function formatSyncResponse(text, path) {
+    const lines = text.split('\n');
+    const preview = lines.slice(0, DISPLAY_LIMITS.SYNC_PREVIEW_LINES).join('\n');
+    
+    return {
+        endpoint: path,
+        summary: preview,
+        totalLines: lines.length,
+        status: 'completed',
+        success: true,
+        timestamp: new Date().toLocaleTimeString()
+    };
+}
+
+function processApiResponse(response, isLocal, path) {
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType && contentType.includes('application/json')) {
+        return response.json();
+    }
+    
+    // Gestion du texte brut
+    return response.text().then(text => {
+        if (isLocal && path.includes('/sync/')) {
+            return formatSyncResponse(text, path);
+        }
+        
+        return {
+            message: truncateText(text, DISPLAY_LIMITS.FALLBACK_MAX),
+            success: response.ok,
+            status: response.status,
+            originalLength: text.length
+        };
+    });
+}
+
+function handleApiError(error, endpoint) {
+    const errorTypes = {
+        'NetworkError': 'Erreur de réseau - Vérifiez votre connexion',
+        'TypeError': 'Erreur de format - Réponse invalide',
+        'SyntaxError': 'Erreur de parsing JSON',
+        'AbortError': 'Requête annulée - Timeout'
+    };
+    
+    const errorMessage = errorTypes[error.name] || error.message;
+    return {
+        type: error.name,
+        message: errorMessage,
+        endpoint: endpoint,
+        timestamp: new Date().toISOString()
+    };
+}
+
+// Génération dynamique des onglets
+function generateTabs() {
+    const tabsContainer = document.getElementById('main-tabs');
+    const tabsHtml = Object.entries(CONFIG.tabs).map(([key, config]) => `
+        <button class="tab ${key === 'token' ? 'active' : ''}" 
+                data-tab="${key}" onclick="switchTab('${key}')">
+            <span>${config.icon}</span>
+            <span class="tab-label">${config.label}</span>
+            <span class="tab-indicator" id="indicator-${key}"></span>
+        </button>
+    `).join('');
+    
+    tabsContainer.innerHTML = tabsHtml;
+}
+
+// Génération dynamique du contenu des onglets
+function generateTabContent() {
+    const dynamicContent = document.getElementById('dynamic-content');
+    let contentHtml = '';
+    
+    Object.keys(CONFIG.tabs).forEach(tabKey => {
+        if (tabKey === 'token') return; // Token tab déjà défini
+        
+        contentHtml += `<div class="tab-content" id="tab-${tabKey}">`;
+        contentHtml += `<div class="section">`;
+        
+        // Ajouter les endpoints pour cet onglet
+        const tabEndpoints = getEndpointsForTab(tabKey);
+        if (tabEndpoints.length > 0) {
+            contentHtml += `<div class="endpoint-list">`;
+            
+            tabEndpoints.forEach(endpoint => {
+                contentHtml += generateEndpointHtml(endpoint);
+            });
+            
+            contentHtml += `</div>`;
+        }
+        
+        contentHtml += `</div></div>`;
+    });
+    
+    dynamicContent.innerHTML = contentHtml;
+}
+
+// Obtenir les endpoints pour un onglet
+function getEndpointsForTab(tabKey) {
+    const tabMappings = {
+        user: ['user'],
+        torrents: ['torrents', 'torrentInfo', 'torrentDelete', 'torrentAdd', 'torrentSelect'],
+        unrestrict: ['unrestrict', 'checkLink'],
+        downloads: ['downloads', 'downloadDelete'],
+        hosts: ['hosts', 'hostsStatus', 'hostsRegex', 'hostsDomains'],
+        streaming: ['transcode', 'mediaInfo'],
+        traffic: ['traffic', 'trafficDetails'],
+        settings: ['settings', 'settingUpdate', 'localSettings', 'localSettingsReset', 'localSettingsExport', 'testConnection'],
+        local: ['localTorrent', 'torrentStream', 'batchDelete', 'batchStatus', 'fixDeletedStatus'],
+        sync: ['syncSmart', 'syncFast', 'syncTorrents'],
+        health: ['localHealth', 'healthCheckAll', 'healthCleanup', 'refreshStats'],
+        tasks: ['taskStatus']
+    };
+    
+    return (tabMappings[tabKey] || []).map(key => ({ key, ...CONFIG.endpoints[key] }));
+}
+
+// Génération HTML d'un endpoint
+function generateEndpointHtml(endpoint) {
+    const { key, method, path, desc, input, input2, confirm, local, inputType } = endpoint;
+    const methodClass = method.toLowerCase();
+    const buttonClass = local ? 'success' : getButtonClassForMethod(method);
+    
+    let html = `<div class="endpoint-row ${input ? 'with-input' : ''}">`;
+    
+    if (input) {
+        html += `<div class="input-row">`;
+        
+        // Premier input
+        if (inputType === 'textarea') {
+            html += `<textarea id="${input}" placeholder="${getInputPlaceholder(input)}" class="input-field input-area" rows="2"></textarea>`;
+        } else {
+            html += `<input type="text" id="${input}" placeholder="${getInputPlaceholder(input)}" class="input-field">`;
+        }
+        
+        // Deuxième input si nécessaire
+        if (input2) {
+            html += `<input type="text" id="${input2}" placeholder="${getInputPlaceholder(input2)}" class="input-field">`;
+        }
+    }
+    
+    html += `<button class="btn-endpoint ${buttonClass}" onclick="testEndpoint('${key}')">
+        <span class="method-badge ${methodClass}">${method}</span>
+        <span class="endpoint-path">${path}</span>
+        <span class="endpoint-desc">${desc}</span>
+    </button>`;
+    
+    if (input) {
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    return html;
+}
+
+// Utilitaires
+function getButtonClassForMethod(method) {
+    const map = { GET: 'primary', POST: 'success', PUT: 'warning', DELETE: 'danger' };
+    return map[method] || 'secondary';
+}
+
+function getInputPlaceholder(inputId) {
+    const placeholders = {
+        'torrent-id': 'ID torrent',
+        'torrent-delete-id': 'ID torrent à supprimer',
+        'torrent-select-id': 'ID torrent',
+        'file-ids': 'IDs fichiers (1,2,3)',
+        'magnet-link': 'Lien magnet',
+        'unrestrict-link': 'Lien à débrider',
+        'check-link': 'Lien à vérifier',
+        'download-delete-id': 'ID téléchargement',
+        'transcode-id': 'ID transcodage',
+        'media-info-id': 'ID media info',
+        'setting-name': 'Nom paramètre',
+        'setting-value': 'Valeur',
+        'local-torrent-id': 'ID torrent local',
+        'stream-torrent-id': 'ID torrent streaming',
+        'batch-delete-ids': 'IDs torrents (un par ligne)',
+        'batch-status-id': 'ID batch operation'
+    };
+    return placeholders[inputId] || 'Valeur';
+}
+
+// Validation des inputs centralisée
+function validateEndpointInputs(endpoint) {
+    const { input, input2, confirm } = endpoint;
+    const inputs = {};
+    
+    if (input) {
+        const value = document.getElementById(input)?.value.trim();
+        if (!value) {
+            return { valid: false, message: '⚠️ Veuillez saisir une valeur' };
+        }
+        inputs.primary = value;
+    }
+    
+    if (input2) {
+        const value = document.getElementById(input2)?.value.trim();
+        if (!value) {
+            return { valid: false, message: '⚠️ Valeur secondaire requise' };
+        }
+        inputs.secondary = value;
+    }
+    
+    if (confirm && !window.confirm('⚠️ Êtes-vous sûr ?')) {
+        return { valid: false };
+    }
+    
+    return { valid: true, inputs };
+}
+
+// Préparation de la requête API
+function prepareApiRequest(endpoint, inputs) {
+    let { method, path, body: bodyKey, local, bodyCustom } = endpoint;
+    
+    // Gestion du path avec ID
+    if (inputs.primary && path.includes('{id}')) {
+        path = path.replace('{id}', inputs.primary);
+    }
+    
+    // Préparer le body
+    let requestBody = null;
+    if (bodyKey && inputs.primary) {
+        // Cas spécial pour les batch delete (array de strings)
+        if (bodyKey === 'torrent_ids') {
+            requestBody = { [bodyKey]: inputs.primary.split('\n').map(id => id.trim()).filter(id => id) };
+        } else {
+            requestBody = { [bodyKey]: inputs.primary };
+        }
+    } else if (bodyCustom && inputs.primary && inputs.secondary) {
+        // Cas spécial pour settings update
+        requestBody = { [inputs.primary]: inputs.secondary };
+    } else if (inputs.secondary && bodyKey === 'files') {
+        // Cas spécial pour torrent select files
+        requestBody = { [bodyKey]: inputs.secondary };
+    }
+    
+    return { method, path, requestBody, local };
+}
+
+// Exécution de l'appel API
+function executeApiCall(requestConfig, endpoint) {
+    const { method, path, requestBody, local } = requestConfig;
+    const button = event.target;
+    setLoading(button, true);
+    
+    const apiCall = local ? 
+        makeLocalApiCall(path, method, requestBody) : 
+        makeApiCall(path, method, requestBody);
+    
+    apiCall
+        .then(response => processApiResponse(response, local, path))
+        .then(data => {
+            const isError = !data || data.error || data.success === false || (!local && !data);
+            displayResult(data, isError, path);
+            updateStats(!isError);
+            addToHistory(path, !isError);
+            updateTabIndicator(currentTab, !isError);
+        })
+        .catch(error => {
+            const errorDetail = handleApiError(error, path);
+            displayResult(errorDetail, true, path);
+            updateStats(false);
+            addToHistory(path, false);
+            updateTabIndicator(currentTab, false);
+        })
+        .finally(() => setLoading(button, false));
+}
+
+// Gestion des onglets
+function switchTab(tabName) {
+    // Mettre à jour les onglets
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Mettre à jour le contenu
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+    
+    currentTab = tabName;
+    updateResultsTitle(CONFIG.tabs[tabName].title);
+    saveData();
+}
+
+function updateResultsTitle(title) {
+    document.getElementById('results-title').textContent = title || 'Résultats des tests';
+}
+
+// API calls
+function makeApiCall(endpoint, method = 'GET', body = null) {
+    const requestBody = { endpoint, method, body };
+    return fetch(CONFIG.proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+    });
+}
+
+function makeLocalApiCall(endpoint, method = 'GET', body = null) {
+    const options = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body && method !== 'GET') options.body = JSON.stringify(body);
+    return fetch(endpoint, options);
+}
+
+// Tests d'endpoints refactorisé
+function testEndpoint(endpointKey) {
+    const endpoint = CONFIG.endpoints[endpointKey];
+    if (!endpoint) return;
+    
+    // Validation des inputs
+    const validation = validateEndpointInputs(endpoint);
+    if (!validation.valid) {
+        if (validation.message) showToast(validation.message, 'warning');
+        return;
+    }
+    
+    // Préparation de la requête
+    const requestConfig = prepareApiRequest(endpoint, validation.inputs);
+    if (!requestConfig) return;
+    
+    // Exécution de l'appel API
+    executeApiCall(requestConfig, endpoint);
+}
+
+// Gestion du token
+function checkToken() {
+    if (!currentToken) {
+        updateTokenStatus('❌ Token non configuré', 'error');
+        return;
+    }
+    
+    updateTokenStatus('⏳ Vérification...', 'info');
+    
+    makeApiCall('/user')
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.id) {
+                const username = data.username || data.email || `User ${data.id}`;
+                updateTokenStatus(`✅ Token valide - ${username}`, 'success');
+            } else {
+                updateTokenStatus('❌ Token invalide', 'error');
+            }
+        })
+        .catch(() => updateTokenStatus('❌ Erreur de connexion', 'error'));
+}
+
+function refreshToken() {
+    fetch('/api/settings')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.settings?.apiToken) {
+                currentToken = data.settings.apiToken;
+                CONFIG.token = currentToken;
+            }
+            checkToken();
+        })
+        .catch(() => checkToken());
+}
+
+function updateTokenStatus(message, type) {
+    const element = document.getElementById('token-status');
+    element.textContent = message;
+    element.className = type;
+}
+
+// Affichage des résultats
+function displayResult(data, isError, endpoint) {
+    const resultDisplay = document.getElementById('result-display');
+    
+    resultDisplay.className = `result-content ${isError ? 'error' : 'success'}`;
+    
+    if (typeof data === 'object') {
+        let jsonString = JSON.stringify(data, null, DISPLAY_LIMITS.JSON_INDENT);
+        
+        // Appliquer la troncature si nécessaire
+        if (jsonString.length > DISPLAY_LIMITS.TEXT_MAX) {
+            const truncated = truncateText(jsonString);
+            resultDisplay.innerHTML = `
+                <div class="truncation-info">
+                    ⚠️ Résultat tronqué pour l'affichage - ${jsonString.length} caractères au total
+                </div>
+                ${highlightJSON(truncated)}
+            `;
+        } else {
+            resultDisplay.innerHTML = highlightJSON(jsonString);
+        }
+    } else {
+        const textData = truncateText(String(data));
+        resultDisplay.textContent = textData;
+        
+        // Ajouter un indicateur si tronqué
+        if (String(data).length > DISPLAY_LIMITS.TEXT_MAX) {
+            const indicator = document.createElement('div');
+            indicator.className = 'truncation-info';
+            indicator.textContent = `⚠️ Contenu tronqué - ${String(data).length} caractères au total`;
+            resultDisplay.prepend(indicator);
+        }
+    }
+    
+    activeEndpoint = endpoint;
+    showToast(isError ? `❌ Erreur ${endpoint}` : `✅ Succès ${endpoint}`, isError ? 'error' : 'success');
+}
+
+function highlightJSON(json) {
+    return json
+        .replace(/("[\w\s-_]+")(\s*:)/g, '<span style="color: #0066cc; font-weight: bold;">$1</span>$2')
+        .replace(/:\s*(".*?")/g, ': <span style="color: #008000;">$1</span>')
+        .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color: #ff6600;">$1</span>')
+        .replace(/:\s*(true|false)/g, ': <span style="color: #cc0066;">$1</span>')
+        .replace(/:\s*(null)/g, ': <span style="color: #999;">$1</span>');
+}
+
+// Gestion des statistiques
+function updateStats(isSuccess) {
+    stats.total++;
+    if (isSuccess) stats.success++;
+    else stats.error++;
+    
+    document.getElementById('badge-success').textContent = `${stats.success} ✓`;
+    document.getElementById('badge-error').textContent = `${stats.error} ✗`;
+    document.getElementById('badge-total').textContent = `${stats.total} tests`;
+}
+
+function addToHistory(endpoint, isSuccess) {
+    const timestamp = new Date().toLocaleTimeString();
+    testHistory.unshift({ endpoint, isSuccess, timestamp });
+    if (testHistory.length > 5) testHistory.pop();
+    
+    updateHistoryDisplay();
+    saveData();
+}
+
+function updateHistoryDisplay() {
+    const historyList = document.getElementById('history-list');
+    if (testHistory.length === 0) {
+        historyList.innerHTML = '<p class="text-muted">Aucun test effectué</p>';
+        return;
+    }
+    
+    historyList.innerHTML = testHistory.map(item => `
+        <div style="display: flex; justify-content: space-between; padding: 8px 12px; margin-bottom: 6px; 
+                    background: #f8f9fa; border-radius: 6px; font-size: 13px;
+                    border-left: 3px solid ${item.isSuccess ? 'var(--success)' : 'var(--danger)'};">
+            <span>${item.endpoint}</span>
+            <span>${item.timestamp}</span>
+        </div>
+    `).join('');
+}
+
+function updateTabIndicator(tabName, isSuccess) {
+    const indicator = document.getElementById(`indicator-${tabName}`);
+    if (indicator) {
+        indicator.className = `tab-indicator ${isSuccess ? 'success' : 'error'}`;
+    }
+}
+
+// Tests automatisés
+function testSuite(type) {
+    if (!currentToken && type !== 'local') {
+        showToast('❌ Token Real-Debrid requis', 'error');
+        return;
+    }
+    
+    const endpoints = type === 'local' 
+        ? ['localHealth', 'taskStatus', 'localSettings', 'refreshStats'] 
+        : ['user', 'torrents', 'downloads', 'hosts', 'traffic'];
+    
+    showToast(`🚀 Démarrage tests ${type}...`, 'info');
+    
+    endpoints.forEach((endpoint, index) => {
+        setTimeout(() => {
+            testEndpoint(endpoint);
+            if (index === endpoints.length - 1) {
+                setTimeout(() => showToast('✅ Tests terminés', 'success'), 1000);
+            }
+        }, index * 1500);
+    });
+}
+
+// Actions des résultats
+function copyResult() {
+    const resultDisplay = document.getElementById('result-display');
+    if (!resultDisplay.textContent.trim()) {
+        showToast('⚠️ Aucun résultat à copier', 'warning');
+        return;
+    }
+    
+    navigator.clipboard.writeText(resultDisplay.textContent)
+        .then(() => showToast('📋 Résultat copié !', 'success'))
+        .catch(() => {
+            const textArea = document.createElement('textarea');
+            textArea.value = resultDisplay.textContent;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('📋 Résultat copié !', 'success');
+        });
+}
+
+function clearResult() {
+    const resultDisplay = document.getElementById('result-display');
+    resultDisplay.className = 'result-content';
+    resultDisplay.innerHTML = `
+        <div class="no-results">
+            <p>Résultat effacé</p>
+            <button class="btn primary" onclick="testEndpoint('user')">🚀 Test rapide /user</button>
+        </div>
+    `;
+    activeEndpoint = null;
+    showToast('🧹 Résultat effacé', 'info');
+}
+
+function clearAll() {
+    // Réinitialiser les statistiques
+    stats = { success: 0, error: 0, total: 0 };
+    testHistory = [];
+    
+    // Mettre à jour l'affichage des badges
+    document.getElementById('badge-success').textContent = '0 ✓';
+    document.getElementById('badge-error').textContent = '0 ✗';
+    document.getElementById('badge-total').textContent = '0 tests';
+    
+    // Mettre à jour l'historique
+    updateHistoryDisplay();
+    
+    // Nettoyer les résultats
+    clearResult();
+    
+    // Reset tous les indicateurs d'onglets
+    document.querySelectorAll('.tab-indicator').forEach(indicator => {
+        indicator.className = 'tab-indicator';
+    });
+    
+    // Sauvegarder les changements
+    saveData();
+    
+    // Notification
+    showToast('🧹 Tout effacé', 'info');
+    
+    console.log('🧹 Clear all executed - Stats reset, history cleared, indicators reset');
+}
+
+// Historique
+function toggleHistory() {
+    const history = document.getElementById('test-history');
+    history.style.display = history.style.display === 'none' ? 'block' : 'none';
+    if (history.style.display === 'block') history.classList.add('fade-in');
+}
+
+// Utilitaires
+function setLoading(button, isLoading) {
+    if (!button) return;
+    button.disabled = isLoading;
+    button.classList.toggle('loading', isLoading);
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// Sauvegarde/chargement
+function saveData() {
+    try {
+        localStorage.setItem('redriva_api_data', JSON.stringify({
+            currentTab, stats, testHistory,
+            inputs: getInputValues()
+        }));
+    } catch (e) {
+        console.warn('Sauvegarde impossible:', e);
+    }
+}
+
+function loadSavedData() {
+    try {
+        const saved = localStorage.getItem('redriva_api_data');
+        if (!saved) return;
+        
+        const data = JSON.parse(saved);
+        if (data.currentTab) {
+            currentTab = data.currentTab;
+            switchTab(currentTab);
+        }
+        if (data.stats) {
+            stats = data.stats;
+            updateStats(false);
+            stats.total--; // Compenser l'incrémentation
+        }
+        if (data.testHistory) {
+            testHistory = data.testHistory;
+            updateHistoryDisplay();
+        }
+        if (data.inputs) {
+            Object.entries(data.inputs).forEach(([id, value]) => {
+                const input = document.getElementById(id);
+                if (input) input.value = value;
+            });
+        }
+    } catch (e) {
+        console.warn('Chargement impossible:', e);
+    }
+}
+
+function getInputValues() {
+    const inputs = {};
+    document.querySelectorAll('input, textarea').forEach(input => {
+        if (input.id && input.value) inputs[input.id] = input.value;
+    });
+    return inputs;
+}
+
+// Auto-sauvegarde des inputs
+document.addEventListener('input', e => {
+    if (e.target.matches('input, textarea')) {
+        clearTimeout(window.saveTimeout);
+        window.saveTimeout = setTimeout(saveData, 500);
+    }
+});
+
+// Tests spécialisés (compatibilité avec le code original)
+function testTorrentInfo() { testEndpoint('torrentInfo'); }
+function testTorrentDelete() { testEndpoint('torrentDelete'); }
+function testTorrentAdd() { testEndpoint('torrentAdd'); }
+function testTorrentSelect() { testEndpoint('torrentSelect'); }
+function testUnrestrict() { testEndpoint('unrestrict'); }
+function testLinkCheck() { testEndpoint('checkLink'); }
+function testDownloadDelete() { testEndpoint('downloadDelete'); }
+function testTranscode() { testEndpoint('transcode'); }
+function testMediaInfo() { testEndpoint('mediaInfo'); }
+function testSettingUpdate() { testEndpoint('settingUpdate'); }
+function testLocalTorrentDetail() { testEndpoint('localTorrent'); }
+function testTorrentStream() { testEndpoint('torrentStream'); }
+function testBatchDelete() { testEndpoint('batchDelete'); }
+function testBatchStatus() { testEndpoint('batchStatus'); }
+function testSyncEndpoint(path) {
+    // Mapping des anciens paths vers les nouvelles clés
+    const pathMapping = {
+        '/sync/smart': 'syncSmart',
+        '/sync/fast': 'syncFast', 
+        '/sync/torrents': 'syncTorrents'
+    };
+    testEndpoint(pathMapping[path]);
+}
+function testHealthCheckAll() { testEndpoint('healthCheckAll'); }
+function testHealthCleanup() { testEndpoint('healthCleanup'); }
+function testConnectionRD() { testEndpoint('testConnection'); }
+function testLocalEndpoint(path, method = 'GET') {
+    // Mapping des paths locaux vers les clés
+    const localMapping = {
+        '/api/health': 'localHealth',
+        '/api/settings': 'localSettings',
+        '/api/settings/reset': 'localSettingsReset',
+        '/api/settings/export': 'localSettingsExport',
+        '/api/refresh_stats': 'refreshStats',
+        '/api/task_status': 'taskStatus',
+        '/api/fix_deleted_status': 'fixDeletedStatus'
+    };
+    
+    const endpointKey = localMapping[path];
+    if (endpointKey) {
+        testEndpoint(endpointKey);
+    } else {
+        // Fallback vers appel direct pour les endpoints non mappés
+        makeLocalApiCall(path, method)
+            .then(response => processApiResponse(response, true, path))
+            .then(data => displayResult(data, !data || data.error, path))
+            .catch(error => displayResult(handleApiError(error, path), true, path));
+    }
+}
+
+// Fonctions legacy pour compatibilité
+function testAllBasic() { testSuite('all'); }
+function testAllLocal() { testSuite('local'); }
+function testAllBasicEnhanced() { 
+    if (confirm('🚀 Tester RD ET locaux ?')) {
+        testSuite('all');
+        setTimeout(() => testSuite('local'), 8000);
+    }
+}
+function clearAllResults() { clearAll(); }
+function copyCurrentResult() { copyResult(); }
+function clearCurrentResult() { clearResult(); }
+function checkTokenStatus() { checkToken(); }
+</script>
+
+{% endblock %}

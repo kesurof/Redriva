@@ -375,6 +375,17 @@ def settings():
         flash("Erreur lors du chargement des paramètres", 'error')
         return redirect(url_for('torrents'))
 
+@app.route('/api-test')
+def api_test():
+    """Page de test API Real-Debrid"""
+    try:
+        # Passer le token pour l'affichage côté client
+        return render_template('api_test.html', config={'RD_TOKEN': load_token()})
+    except Exception as e:
+        print(f"❌ Erreur page API test: {e}")
+        flash("Erreur lors du chargement de la page de test API", 'error')
+        return redirect(url_for('settings'))
+
 @app.route('/sync/<action>', methods=['GET', 'POST'])
 def sync_action(action):
     """Lance une action de synchronisation"""
@@ -1712,6 +1723,64 @@ def test_api_connection():
     except Exception as e:
         print(f"❌ Erreur test_api_connection: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/proxy-rd', methods=['POST'])
+def proxy_real_debrid():
+    """Proxy pour les appels à l'API Real-Debrid depuis le frontend"""
+    try:
+        # Récupérer les paramètres depuis le body JSON ou les query parameters
+        data = request.get_json() or {}
+        
+        # Priorité au body JSON, sinon query parameters (pour compatibilité)
+        endpoint = data.get('endpoint') or request.args.get('endpoint', '')
+        method = data.get('method') or request.args.get('method', 'GET')
+        body = data.get('body')
+        
+        print(f"🔍 Proxy RD - Endpoint: {endpoint}, Method: {method}")
+        
+        # Charger le token
+        token = load_token()
+        if not token:
+            return jsonify({'error': 'Token Real-Debrid non configuré'}), 401
+        
+        # Construire l'URL complète
+        base_url = 'https://api.real-debrid.com/rest/1.0'
+        url = f"{base_url}{endpoint}"
+        
+        # Headers d'authentification
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Faire l'appel API
+        if method.upper() == 'GET':
+            response = requests.get(url, headers=headers, timeout=30)
+        elif method.upper() == 'POST':
+            response = requests.post(url, headers=headers, json=body, timeout=30)
+        elif method.upper() == 'PUT':
+            response = requests.put(url, headers=headers, json=body, timeout=30)
+        elif method.upper() == 'DELETE':
+            response = requests.delete(url, headers=headers, timeout=30)
+        else:
+            return jsonify({'error': f'Méthode HTTP non supportée: {method}'}), 400
+        
+        # Retourner la réponse
+        try:
+            return jsonify(response.json())
+        except ValueError:
+            # Si la réponse n'est pas du JSON
+            return jsonify({
+                'status_code': response.status_code,
+                'text': response.text,
+                'success': response.status_code < 400
+            })
+            
+    except requests.RequestException as e:
+        return jsonify({'error': f'Erreur de connexion: {str(e)}'}), 500
+    except Exception as e:
+        print(f"❌ Erreur proxy_real_debrid: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     import signal

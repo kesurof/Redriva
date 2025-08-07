@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Redriva Web{% endblock %}</title>
     <style>
-        /* Variables CSS pour navigation responsive */
+        /* Variables CSS consolidées */
         :root {
             --header-bg: #2c3e50;
             --header-text: white;
@@ -13,25 +13,34 @@
             --active-bg: rgba(255,255,255,0.2);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             --shadow: 0 2px 8px rgba(0,0,0,0.1);
+            --border-radius: 8px;
         }
 
+        /* Reset et base optimisés */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
-        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            background: #f5f5f5; 
+            line-height: 1.6;
+        }
         
-        /* Header responsive avec Material Design */
+        .container { 
+            max-width: 1600px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
+        
+        /* Header unifié et responsive */
         .header { 
             background: var(--header-bg); 
             color: var(--header-text); 
             padding: 1rem 0; 
-            margin-bottom: 0; 
             box-shadow: var(--shadow);
             position: sticky;
             top: 0;
             z-index: 100;
         }
         
-        /* Navigation responsive */
         .nav-container {
             display: flex;
             justify-content: space-between;
@@ -40,7 +49,7 @@
         }
         
         .nav-brand {
-            font-size: 1.5em;
+            font-size: clamp(1.2em, 4vw, 1.5em);
             font-weight: 600;
             color: var(--header-text);
             text-decoration: none;
@@ -55,7 +64,11 @@
             transform: scale(1.02);
         }
         
-        /* Menu hamburger (caché par défaut) */
+        .nav-brand .brand-text {
+            display: none;
+        }
+        
+        /* Menu hamburger - toujours visible sur mobile */
         .nav-toggle {
             display: none;
             background: none;
@@ -66,13 +79,15 @@
             padding: 8px;
             border-radius: 4px;
             transition: var(--transition);
+            min-height: 44px;
+            min-width: 44px;
         }
         
         .nav-toggle:hover {
             background: var(--hover-bg);
         }
         
-        /* Navigation principale */
+        /* Navigation principale avec système responsive unifié */
         .nav-links {
             display: flex;
             gap: 8px;
@@ -84,14 +99,14 @@
             color: var(--header-text);
             text-decoration: none;
             padding: 10px 16px;
-            border-radius: 8px;
+            border-radius: var(--border-radius);
             transition: var(--transition);
             font-weight: 500;
             display: flex;
             align-items: center;
             gap: 6px;
             min-height: 44px;
-            box-sizing: border-box;
+            white-space: nowrap;
         }
         
         .nav-links a:hover {
@@ -99,7 +114,8 @@
             transform: translateY(-1px);
         }
         
-        .nav-links a.active {
+        .nav-links a.active,
+        .nav-links a[href="{{ request.path }}"] {
             background: var(--active-bg);
             font-weight: 600;
         }
@@ -109,14 +125,8 @@
             outline-offset: 2px;
         }
         
-        /* Breakpoints responsifs */
-        
-        /* Mobile First - Très petits écrans (< 576px) */
-        @media (max-width: 575px) {
-            .nav-brand {
-                font-size: 1.2em;
-            }
-            
+        /* Responsive unifié - système mobile/desktop seulement */
+        @media (max-width: 768px) {
             .nav-brand .brand-text {
                 display: none;
             }
@@ -167,142 +177,223 @@
             }
         }
         
-        /* Mobile standard (576px - 767px) */
-        @media (min-width: 576px) and (max-width: 767px) {
-            .nav-brand {
-                font-size: 1.3em;
-            }
-            
-            .nav-toggle {
-                display: block;
-            }
-            
-            .nav-links {
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: var(--header-bg);
-                flex-direction: column;
-                gap: 0;
-                box-shadow: var(--shadow);
-                transform: translateY(-100%);
-                opacity: 0;
-                visibility: hidden;
-                transition: var(--transition);
-                border-radius: 0 0 12px 12px;
-            }
-            
-            .nav-links.active {
-                transform: translateY(0);
-                opacity: 1;
-                visibility: visible;
-            }
-            
-            .nav-links a {
-                padding: 14px 20px;
-                border-radius: 0;
-                border-bottom: 1px solid rgba(255,255,255,0.1);
-                min-height: 52px;
-            }
-            
-            .nav-links a:hover {
-                background: var(--active-bg);
-                transform: none;
-                padding-left: 24px;
+        @media (min-width: 769px) {
+            .nav-brand .brand-text {
+                display: inline;
             }
         }
         
-        /* Tablette (768px - 1024px) */
-        @media (min-width: 768px) and (max-width: 1024px) {
-            .nav-brand {
-                font-size: 1.4em;
-            }
-            
-            .nav-links {
-                gap: 4px;
-            }
-            
-            .nav-links a {
-                padding: 8px 12px;
-                font-size: 0.95em;
-            }
+        /* Composants UI optimisés */
+        .card { 
+            background: white; 
+            border-radius: var(--border-radius); 
+            padding: 20px; 
+            margin-bottom: 20px; 
+            box-shadow: var(--shadow); 
         }
         
-        /* Desktop (> 1024px) */
-        @media (min-width: 1025px) {
-            .nav-brand {
-                font-size: 1.5em;
-            }
-            
-            .nav-links {
-                gap: 8px;
-            }
-            
-            .nav-links a {
-                padding: 10px 16px;
-                font-size: 1em;
-            }
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 20px; 
         }
         
-        /* Animations pour menu mobile */
-        @keyframes slideDown {
-            from {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+        .stat-card { 
+            text-align: center; 
+            padding: 20px; 
+            border-radius: var(--border-radius); 
+            color: white; 
         }
         
-        @keyframes slideUp {
-            from {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-        }
-        
-        /* Indicateur de page active */
-        .nav-links a[href="{{ request.path }}"] {
-            background: var(--active-bg);
-            font-weight: 600;
-        }
-        
-        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-        .stat-card { text-align: center; padding: 20px; border-radius: 8px; color: white; }
         .stat-card.primary { background: #3498db; }
         .stat-card.success { background: #2ecc71; }
         .stat-card.warning { background: #f39c12; }
         .stat-card.danger { background: #e74c3c; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s; }
+        
+        /* Système de boutons unifié */
+        .btn { 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            text-decoration: none; 
+            display: inline-block; 
+            transition: var(--transition);
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        .btn:hover { 
+            opacity: 0.9; 
+            transform: translateY(-1px); 
+        }
+        
+        .btn-sm { 
+            padding: 6px 12px; 
+            font-size: 14px; 
+        }
+        
         .btn-primary { background: #3498db; color: white; }
         .btn-success { background: #2ecc71; color: white; }
         .btn-warning { background: #f39c12; color: white; }
         .btn-danger { background: #e74c3c; color: white; }
         .btn-secondary { background: #6c757d; color: white; }
         .btn-light { background: #f8f9fa; color: #495057; border: 1px solid #dee2e6; }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-sm { padding: 6px 12px; font-size: 14px; }
-        .table { width: 100%; border-collapse: collapse; }
-        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        .table th { background: #f8f9fa; font-weight: 600; }
-        .table-striped tbody tr:nth-child(odd) { background-color: rgba(0,0,0,0.05); }
-        .table-hover tbody tr:hover { background-color: rgba(0,0,0,0.075); }
+        
+        /* Table responsive */
+        .table { 
+            width: 100%; 
+            border-collapse: collapse; 
+        }
+        
+        .table th, 
+        .table td { 
+            padding: 12px; 
+            text-align: left; 
+            border-bottom: 1px solid #ddd; 
+        }
+        
+        .table th { 
+            background: #f8f9fa; 
+            font-weight: 600; 
+        }
+        
+        .table-striped tbody tr:nth-child(odd) { 
+            background-color: rgba(0,0,0,0.05); 
+        }
+        
+        .table-hover tbody tr:hover { 
+            background-color: rgba(0,0,0,0.075); 
+        }
+        
+        /* Utilitaires */
         .text-right { text-align: right; }
-        .pagination { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
-        .flash { padding: 10px; margin: 10px 0; border-radius: 4px; }
-        .flash.success { background: #d4edda; color: #155724; }
-        .flash.error { background: #f8d7da; color: #721c24; }
-        .flash.warning { background: #fff3cd; color: #856404; }
-        .task-status { position: fixed; top: 20px; right: 20px; background: #34495e; color: white; padding: 15px; border-radius: 8px; display: none; }
-        .task-status.active { display: block; }
+        
+        .pagination { 
+            display: flex; 
+            gap: 10px; 
+            justify-content: center; 
+            margin: 20px 0; 
+        }
+        
+        /* Messages Flash optimisés - Position fixe bas droite */
+        .flash { 
+            position: fixed;
+            bottom: 80px;  /* Au-dessus des toasts JS */
+            right: 20px;
+            z-index: 1000;  /* En dessous des toasts JS */
+            max-width: 350px;
+            padding: 15px 20px;
+            margin: 0;
+            border-radius: 12px;
+            border-left: 4px solid;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            animation: slideInFromRight 0.4s ease-out;
+            transform: translateX(0);  /* Position finale */
+        }
+        
+        /* Empilement vertical automatique des messages Flask multiples */
+        .flash:nth-of-type(1) { bottom: 80px; }  /* Premier message Flask au-dessus des toasts */
+        .flash:nth-of-type(2) { bottom: 140px; }
+        .flash:nth-of-type(3) { bottom: 200px; }
+        .flash:nth-of-type(4) { bottom: 260px; }
+        
+        /* Couleurs des messages Flask */
+        .flash.success { 
+            background: linear-gradient(135deg, #f1f8e9, #e8f5e8); 
+            color: #2e7d32; 
+            border-color: #4CAF50;
+        }
+        
+        .flash.error { 
+            background: linear-gradient(135deg, #ffebee, #fde7e7); 
+            color: #c62828; 
+            border-color: #f44336;
+        }
+        
+        .flash.warning { 
+            background: linear-gradient(135deg, #fff8e1, #ffecb3); 
+            color: #ef6c00; 
+            border-color: #FF9800;
+        }
+        
+        .flash.info { 
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb); 
+            color: #1565c0; 
+            border-color: #2196F3;
+        }
+        
+        /* Animation d'entrée pour Flask Flash */
+        @keyframes slideInFromRight {
+            from { 
+                transform: translateX(100%); 
+                opacity: 0; 
+            }
+            to { 
+                transform: translateX(0); 
+                opacity: 1; 
+            }
+        }
+        
+        /* Status Task optimisé */
+        .task-status { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            background: #34495e; 
+            color: white; 
+            padding: 15px; 
+            border-radius: var(--border-radius); 
+            display: none;
+            box-shadow: var(--shadow);
+            z-index: 999;  /* En dessous des messages Flash */
+        }
+        
+        .task-status.active { 
+            display: block; 
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Responsive général */
+        @media (max-width: 768px) {
+            .task-status {
+                left: 20px;
+                right: 20px;
+                top: auto;
+                bottom: 20px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .table {
+                font-size: 14px;
+            }
+            
+            .table th,
+            .table td {
+                padding: 8px;
+            }
+            
+            /* Responsive pour Flask Flash */
+            .flash {
+                left: 10px;
+                right: 10px;
+                bottom: 10px;
+                max-width: none;
+            }
+            
+            .flash:nth-of-type(1) { bottom: 70px; }
+            .flash:nth-of-type(2) { bottom: 130px; }
+            .flash:nth-of-type(3) { bottom: 190px; }
+            .flash:nth-of-type(4) { bottom: 250px; }
+        }
     </style>
 </head>
 <body>
@@ -314,7 +405,7 @@
                     <span class="brand-text">Redriva Web</span>
                 </a>
                 
-                <button class="nav-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation">
+                <button class="nav-toggle" onclick="App.toggleMenu()" aria-label="Toggle navigation">
                     <span id="nav-toggle-icon">☰</span>
                 </button>
                 
@@ -322,6 +413,7 @@
                     <a href="/">📁 Torrents</a>
                     <a href="/symlink">🔗 Symlink</a>
                     <a href="/settings">⚙️ Settings</a>
+                    <a href="/api-test">🧪 API Test</a>
                 </div>
             </nav>
         </div>
@@ -345,252 +437,161 @@
     </div>
 
     <script>
-        // Variables globales pour le suivi
-        let lastKnownTimestamp = 0;
-        let isPolling = true;
-        let pollInterval = null;
-
-        function getStatusEmoji(status) {
-            const emojis = {
-                'downloaded': '✅',
-                'downloading': '⬇️',
-                'error': '❌',
-                'deleted': '❓',
-                'queued': '🔄',
-                'waiting': '⏳',
-                'magnet_conversion': '🧲'
-            };
-            return emojis[status] || '📁';
-        }
-        
-        // Mise à jour simplifiée du statut
-        function updateTaskStatus() {
-            if (!isPolling) return;
-            
-            fetch('/api/task_status', {
-                method: 'GET',
-                cache: 'no-cache'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+        // Application principale - Architecture modulaire
+        const App = {
+            // Configuration
+            config: {
+                statusEmojis: {
+                    'downloaded': '✅',
+                    'downloading': '⬇️',
+                    'error': '❌',
+                    'deleted': '❓',
+                    'queued': '🔄',
+                    'waiting': '⏳',
+                    'magnet_conversion': '🧲'
                 }
-                return response.json();
-            })
-            .then(data => {
-                console.log('📊 Status reçu:', data);
-                
-                // Mise à jour de tous les indicateurs de statut
-                const indicators = document.querySelectorAll('.status-indicator');
-                indicators.forEach(indicator => {
-                    if (data.running) {
-                        indicator.className = 'status-indicator running';
-                        indicator.textContent = 'En cours...';
-                    } else {
-                        indicator.className = 'status-indicator ready';
-                        indicator.textContent = 'Prêt';
-                    }
-                });
-                
-                const statusDiv = document.getElementById('taskStatus');
-                const progressDiv = document.getElementById('taskProgress');
-                const resultDiv = document.getElementById('taskResult');
-                
-                // Mise à jour de l'affichage du statut
-                if (data.running) {
-                    if (statusDiv) statusDiv.classList.add('active');
-                    if (progressDiv) progressDiv.textContent = data.progress;
-                    if (resultDiv) resultDiv.textContent = '';
-                    
-                    // Augmenter la fréquence pendant l'exécution
-                    if (pollInterval) {
-                        clearInterval(pollInterval);
-                        pollInterval = setInterval(updateTaskStatus, 1000); // 1 seconde
-                    }
-                    
-                } else {
-                    // Tâche terminée
-                    if (progressDiv) progressDiv.textContent = '';
-                    if (resultDiv) resultDiv.textContent = data.result;
-                    
-                    if (statusDiv) {
-                        setTimeout(() => {
-                            statusDiv.classList.remove('active');
-                        }, 3000);
-                    }
-                    
-                    // Revenir à la fréquence normale
-                    if (pollInterval) {
-                        clearInterval(pollInterval);
-                        pollInterval = setInterval(updateTaskStatus, 5000); // 5 secondes
-                    }
+            },
+
+            // État global
+            state: {
+                menuOpen: false
+            },
+
+            // Utilitaires
+            utils: {
+                log: (message, data = '') => console.log(`🚀 ${message}`, data),
+                error: (message, error = '') => console.error(`❌ ${message}`, error),
+                getStatusEmoji: (status) => App.config.statusEmojis[status] || '📁',
+                debounce: (func, wait) => {
+                    let timeout;
+                    return (...args) => {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(() => func.apply(null, args), wait);
+                    };
                 }
+            },
+
+            // Gestion du menu mobile
+            toggleMenu() {
+                const navLinks = document.getElementById('navLinks');
+                const toggleIcon = document.getElementById('nav-toggle-icon');
                 
-                // Mettre à jour le timestamp
-                lastKnownTimestamp = data.timestamp;
+                if (!navLinks || !toggleIcon) return;
                 
-            })
-            .catch(error => {
-                console.error('❌ Erreur de polling:', error);
-                
-                // En cas d'erreur, réduire la fréquence
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = setInterval(updateTaskStatus, 10000); // 10 secondes
-                }
-            });
-        }
-
-        // Démarrage du polling intelligent
-        function startPolling() {
-            console.log('🚀 Démarrage du polling intelligent');
-            
-            // Premier appel immédiat
-            updateTaskStatus();
-            
-            // Interval de base (5 secondes)
-            pollInterval = setInterval(updateTaskStatus, 5000);
-        }
-
-        // Arrêt du polling
-        function stopPolling() {
-            console.log('🛑 Arrêt du polling');
-            isPolling = false;
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
-        }
-
-        // Gestion de la visibilité de la page
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden) {
-                console.log('📱 Page cachée - réduction polling');
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = setInterval(updateTaskStatus, 30000); // 30 secondes
-                }
-            } else {
-                console.log('📱 Page visible - reprise polling normal');
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = setInterval(updateTaskStatus, 5000); // 5 secondes
-                }
-                updateTaskStatus(); // Appel immédiat
-            }
-        });
-
-        // Démarrage automatique
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎯 DOM chargé - initialisation polling');
-            startPolling();
-        });
-
-        // Nettoyage avant fermeture
-        window.addEventListener('beforeunload', function() {
-            stopPolling();
-        });
-
-        // Navigation responsive - Menu hamburger
-        function toggleMobileMenu() {
-            const navLinks = document.getElementById('navLinks');
-            const toggleIcon = document.getElementById('nav-toggle-icon');
-            
-            if (navLinks && toggleIcon) {
-                navLinks.classList.toggle('active');
+                this.state.menuOpen = !this.state.menuOpen;
+                navLinks.classList.toggle('active', this.state.menuOpen);
                 
                 // Animation de l'icône
-                if (navLinks.classList.contains('active')) {
-                    toggleIcon.textContent = '✕';
-                    toggleIcon.style.transform = 'rotate(90deg)';
-                } else {
+                toggleIcon.textContent = this.state.menuOpen ? '✕' : '☰';
+                toggleIcon.style.transform = `rotate(${this.state.menuOpen ? 90 : 0}deg)`;
+            },
+
+            closeMenu() {
+                if (!this.state.menuOpen) return;
+                
+                const navLinks = document.getElementById('navLinks');
+                const toggleIcon = document.getElementById('nav-toggle-icon');
+                
+                if (navLinks) navLinks.classList.remove('active');
+                if (toggleIcon) {
                     toggleIcon.textContent = '☰';
                     toggleIcon.style.transform = 'rotate(0deg)';
                 }
-            }
-        }
+                this.state.menuOpen = false;
+            },
 
-        // Fermer le menu mobile lors du clic sur un lien
-        function closeMobileMenuOnLinkClick() {
-            const navLinks = document.querySelectorAll('.nav-links a');
-            const navLinksContainer = document.getElementById('navLinks');
-            const toggleIcon = document.getElementById('nav-toggle-icon');
-            
-            navLinks.forEach(link => {
-                link.addEventListener('click', () => {
-                    if (window.innerWidth <= 767 && navLinksContainer) {
-                        navLinksContainer.classList.remove('active');
-                        if (toggleIcon) {
-                            toggleIcon.textContent = '☰';
-                            toggleIcon.style.transform = 'rotate(0deg)';
+            // Système de polling désactivé (pour éviter les erreurs /api/task_status)
+            polling: {
+                updateStatus() {
+                    // Polling désactivé - pas d'appel à /api/task_status
+                },
+
+                handleStatusUpdate(data) {
+                    // Pas de traitement de status - fonctionnalité désactivée
+                },
+
+                adjustPollFrequency(isRunning, hasError = false) {
+                    // Pas d'ajustement de fréquence - fonctionnalité désactivée
+                },
+
+                start() {
+                    // Polling désactivé pour cette application
+                    App.utils.log('Polling désactivé - pas de /api/task_status');
+                },
+
+                stop() {
+                    // Pas de polling à arrêter
+                }
+            },
+
+            // Initialisation
+            init() {
+                this.utils.log('Initialisation de l\'application');
+                
+                // Navigation
+                this.initNavigation();
+                
+                // Polling
+                this.polling.start();
+                
+                // Events listeners
+                this.initEventListeners();
+            },
+
+            initNavigation() {
+                // Fermeture menu sur clic lien
+                document.querySelectorAll('.nav-links a').forEach(link => {
+                    link.addEventListener('click', () => {
+                        if (window.innerWidth <= 768) {
+                            this.closeMenu();
                         }
+                    });
+                });
+
+                // Fermeture menu sur clic extérieur
+                document.addEventListener('click', (event) => {
+                    const navContainer = document.querySelector('.nav-container');
+                    if (navContainer && !navContainer.contains(event.target)) {
+                        this.closeMenu();
                     }
                 });
-            });
-        }
 
-        // Fermer le menu mobile lors du clic à l'extérieur
-        function closeMobileMenuOnOutsideClick() {
-            document.addEventListener('click', (event) => {
-                const navContainer = document.querySelector('.nav-container');
-                const navLinks = document.getElementById('navLinks');
-                const toggleIcon = document.getElementById('nav-toggle-icon');
-                
-                if (navContainer && navLinks && !navContainer.contains(event.target)) {
-                    if (navLinks.classList.contains('active')) {
-                        navLinks.classList.remove('active');
-                        if (toggleIcon) {
-                            toggleIcon.textContent = '☰';
-                            toggleIcon.style.transform = 'rotate(0deg)';
-                        }
+                // Marquer la page active
+                const currentPath = window.location.pathname;
+                document.querySelectorAll('.nav-links a').forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href') === currentPath) {
+                        link.classList.add('active');
                     }
-                }
-            });
-        }
+                });
+            },
 
-        // Gérer le redimensionnement de la fenêtre
-        function handleWindowResize() {
-            window.addEventListener('resize', () => {
-                const navLinks = document.getElementById('navLinks');
-                const toggleIcon = document.getElementById('nav-toggle-icon');
-                
-                // Fermer le menu mobile si on passe en mode desktop
-                if (window.innerWidth > 767 && navLinks) {
-                    navLinks.classList.remove('active');
-                    if (toggleIcon) {
-                        toggleIcon.textContent = '☰';
-                        toggleIcon.style.transform = 'rotate(0deg)';
+            initEventListeners() {
+                // Redimensionnement
+                const handleResize = this.utils.debounce(() => {
+                    if (window.innerWidth > 768) {
+                        this.closeMenu();
                     }
-                }
-            });
+                }, 250);
+                
+                window.addEventListener('resize', handleResize);
+
+                // Nettoyage avant fermeture
+                window.addEventListener('beforeunload', () => {
+                    this.polling.stop();
+                });
+            }
+        };
+
+        // Démarrage automatique
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => App.init());
+        } else {
+            App.init();
         }
 
-        // Marquer la page active
-        function setActiveNavLink() {
-            const currentPath = window.location.pathname;
-            const navLinks = document.querySelectorAll('.nav-links a');
-            
-            navLinks.forEach(link => {
-                link.classList.remove('active');
-                if (link.getAttribute('href') === currentPath) {
-                    link.classList.add('active');
-                }
-            });
-        }
-
-        // Initialisation de la navigation responsive
-        function initResponsiveNavigation() {
-            closeMobileMenuOnLinkClick();
-            closeMobileMenuOnOutsideClick();
-            handleWindowResize();
-            setActiveNavLink();
-        }
-
-        // Démarrage de la navigation responsive
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🚀 Initialisation navigation responsive');
-            initResponsiveNavigation();
-        });
+        // Export global pour rétrocompatibilité
+        window.toggleMobileMenu = () => App.toggleMenu();
     </script>
     
     {% block scripts %}{% endblock %}
