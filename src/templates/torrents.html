@@ -38,7 +38,7 @@
 /* STYLES POUR L'INTERFACE TORRENTS */
 .toast-container {
     position: fixed;
-    top: 20px;
+    bottom: 20px;
     right: 20px;
     z-index: 1000;
 }
@@ -379,11 +379,18 @@
                     <td>
                         <div style="display: flex; gap: 3px; justify-content: center;">
                             <button onclick="showDetailsModal('{{ torrent.id }}')" 
-                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid #007bff; background: transparent; color: #007bff; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
+                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid #007bff; background: transparent; color: #007bff; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;"
                                     title="Voir détails"
                                     onmouseover="this.style.background='#007bff'; this.style.color='white';"
                                     onmouseout="this.style.background='transparent'; this.style.color='#007bff';">
-                                🔍
+                                DL
+                            </button>
+                            <button onclick="updateTorrentDetails('{{ torrent.id }}')" 
+                                    style="width: 32px; height: 32px; padding: 0; border: 1px solid #ffc107; background: transparent; color: #ffc107; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;"
+                                    title="Mettre à jour les détails"
+                                    onmouseover="this.style.background='#ffc107'; this.style.color='black';"
+                                    onmouseout="this.style.background='transparent'; this.style.color='#ffc107';">
+                                UPD
                             </button>
                             <button onclick="deleteTorrent('{{ torrent.id }}')" 
                                     style="width: 32px; height: 32px; padding: 0; border: 1px solid #dc3545; background: transparent; color: #dc3545; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px;"
@@ -471,86 +478,51 @@
     {% endif %}
 </div>
 
-<!-- Modal pour les détails de torrent -->
+<!-- Modal pour les détails de torrent optimisée -->
 <div id="torrentModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
     <div class="modal-content responsive-modal" style="
         background: white; 
-        margin: 2% auto; 
-        padding: 20px; 
+        margin: 1% auto; 
+        padding: 16px; 
         border-radius: 12px; 
         width: 95%; 
-        max-width: 800px; 
-        max-height: 95vh; 
+        max-width: 900px; 
+        max-height: 98vh; 
         overflow-y: auto;
         box-shadow: 0 12px 40px rgba(0,0,0,0.15);
         border: 1px solid rgba(220, 226, 231, 0.5);
     ">
-        <div class="modal-header responsive-header" style="
+        <!-- En-tête compact -->
+        <div class="modal-header" style="
             display: flex; 
-            flex-direction: column; 
-            gap: 15px; 
-            margin-bottom: 20px; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 16px; 
             border-bottom: 1px solid #dee2e6; 
-            padding-bottom: 15px;
+            padding-bottom: 12px;
         ">
-            <div class="header-title-row" style="
-                display: flex; 
-                justify-content: space-between; 
-                align-items: center; 
-                width: 100%;
-            ">
-                <h3 id="modalTitle" style="
-                    margin: 0; 
-                    font-size: 1.4em; 
-                    color: #2c3e50; 
-                    font-weight: 600;
-                    flex: 1;
-                    min-width: 0;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                ">Détails du torrent</h3>
-                <button class="close" onclick="closeModal()" style="
-                    background: none; 
-                    border: none; 
-                    font-size: 24px; 
-                    cursor: pointer; 
-                    color: #6c757d;
-                    padding: 5px;
-                    border-radius: 50%;
-                    transition: all 0.2s ease;
-                    flex-shrink: 0;
-                " onmouseover="this.style.background='#f8f9fa'; this.style.color='#dc3545';" onmouseout="this.style.background='none'; this.style.color='#6c757d';">&times;</button>
-            </div>
-            <div class="header-actions-row" style="
-                display: flex; 
-                justify-content: center; 
-                width: 100%;
-            ">
-                <button onclick="refreshTorrentData()" 
-                        class="btn btn-primary refresh-button" 
-                        style="
-                            padding: 10px 20px; 
-                            font-size: 0.9em; 
-                            border: none; 
-                            background: linear-gradient(135deg, #007bff, #0056b3); 
-                            color: white; 
-                            border-radius: 8px; 
-                            cursor: pointer;
-                            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
-                            transition: all 0.2s ease;
-                            font-weight: 500;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                        "
-                        title="Actualiser les données depuis Real-Debrid"
-                        onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(0,123,255,0.4)';"
-                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,123,255,0.3)';">
-                    <span style="font-size: 1.1em;">🔄</span>
-                    <span>Actualiser</span>
-                </button>
-            </div>
+            <h3 id="modalTitle" style="
+                margin: 0; 
+                font-size: 1.3em; 
+                color: #2c3e50; 
+                font-weight: 600;
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            ">Détails du torrent</h3>
+            <button class="close" onclick="closeModal()" style="
+                background: none; 
+                border: none; 
+                font-size: 24px; 
+                cursor: pointer; 
+                color: #6c757d;
+                padding: 5px;
+                border-radius: 50%;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            " onmouseover="this.style.background='#f8f9fa'; this.style.color='#dc3545';" onmouseout="this.style.background='none'; this.style.color='#6c757d';">&times;</button>
         </div>
         
         <div id="modalLoading" style="text-align: center; padding: 50px;">
@@ -588,9 +560,33 @@
                     </div>
                 </div>
                 
-                <!-- État et statut -->
+                <!-- État et statut avec bouton intégré -->
                 <div class="card status-card">
-                    <h3 class="card-title">📊 État et statut</h3>
+                    <h3 class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>📊 État et statut</span>
+                        <button onclick="refreshTorrentData()" 
+                                class="refresh-icon-btn" 
+                                style="
+                                    background: none; 
+                                    border: 1px solid #007bff; 
+                                    color: #007bff; 
+                                    border-radius: 50%; 
+                                    width: 28px; 
+                                    height: 28px; 
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    transition: all 0.2s ease;
+                                    font-size: 12px;
+                                    flex-shrink: 0;
+                                "
+                                title="Actualiser les données"
+                                onmouseover="this.style.background='#007bff'; this.style.color='white'; this.style.transform='scale(1.1)';"
+                                onmouseout="this.style.background='none'; this.style.color='#007bff'; this.style.transform='scale(1)';">
+                            🔄
+                        </button>
+                    </h3>
                     <div class="info-table">
                         <div class="info-row">
                             <span class="info-label">Statut:</span>
@@ -627,16 +623,67 @@
                 </div>
             </div>
 
-            <!-- Liens de téléchargement -->
+            <!-- Liens de téléchargement optimisés -->
             <div class="card files-card" id="modalLinksContainer" style="display: none;">
-                <h3 class="card-title">🔗 Fichiers disponibles</h3>
-                <div class="files-container" id="modalLinks">
-                    <!-- Contenu généré dynamiquement -->
-                </div>
-            </div>
-        </div>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
-                        <div id="modalLinks"></div>
+                <h3 class="card-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <span>🔗 Fichiers disponibles</span>
+                </h3>
+                
+                <div class="files-container-wrapper">
+                    <div class="files-container" id="modalLinks" style="
+                        display: flex;
+                        flex-direction: column;
+                        gap: 8px;
+                        max-height: 400px;
+                        overflow-y: auto;
+                    ">
+                        <!-- Contenu généré dynamiquement -->
+                    </div>
+                    
+                    <!-- Pagination optimisée -->
+                    <div class="files-pagination" id="filesPagination" style="
+                        display: none;
+                        justify-content: space-between;
+                        align-items: center;
+                        gap: 8px;
+                        margin-top: 10px;
+                        padding-top: 10px;
+                        border-top: 1px solid #dee2e6;
+                        flex-wrap: wrap;
+                    ">
+                        <button onclick="previousFilesPage()" id="prevPageBtn" 
+                                style="
+                                    background: none; 
+                                    border: 1px solid #007bff; 
+                                    color: #007bff; 
+                                    border-radius: 4px; 
+                                    padding: 4px 8px; 
+                                    cursor: pointer;
+                                    font-size: 11px;
+                                    transition: all 0.2s ease;
+                                    min-width: 70px;
+                                "
+                                onmouseover="this.style.background='#007bff'; this.style.color='white';"
+                                onmouseout="this.style.background='none'; this.style.color='#007bff';">
+                            ← Préc.
+                        </button>
+                        <span id="pageInfo" style="font-size: 11px; color: #6c757d; text-align: center; flex: 1;">Page 1 sur 1</span>
+                        <button onclick="nextFilesPage()" id="nextPageBtn" 
+                                style="
+                                    background: none; 
+                                    border: 1px solid #007bff; 
+                                    color: #007bff; 
+                                    border-radius: 4px; 
+                                    padding: 4px 8px; 
+                                    cursor: pointer;
+                                    font-size: 11px;
+                                    transition: all 0.2s ease;
+                                    min-width: 70px;
+                                "
+                                onmouseover="this.style.background='#007bff'; this.style.color='white';"
+                                onmouseout="this.style.background='none'; this.style.color='#007bff';">
+                            Suiv. →
+                        </button>
                     </div>
                 </div>
             </div>
@@ -770,11 +817,11 @@
 /* Styles pour les toasts - Material Design harmonisé */
 .toast-container {
     position: fixed;
-    top: 20px;
+    bottom: 20px;
     right: 20px;
     z-index: 1000;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     gap: 12px;
 }
 
@@ -844,7 +891,7 @@ input[type="text"]:focus, input[type="search"]:focus, select:focus {
 /* Responsive */
 @media (max-width: 768px) {
     .toast-container {
-        top: 10px;
+        bottom: 10px;
         right: 10px;
         left: 10px;
     }
@@ -1361,6 +1408,133 @@ input[type="text"]:focus, input[type="search"]:focus, select:focus {
     box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4);
     color: white;
 }
+
+/* Styles pour la modal optimisée */
+.file-item-optimized {
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.files-controls input:focus {
+    outline: none;
+    border-color: #2196F3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.refresh-icon-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+}
+
+/* Responsive pour la modal optimisée */
+@media (max-width: 480px) {
+    .file-item-optimized {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 6px;
+        padding: 6px 8px !important;
+    }
+    
+    .file-actions-optimized {
+        width: 100%;
+        justify-content: center;
+        gap: 6px !important;
+    }
+    
+    .files-pagination button,
+    .files-pagination span {
+        font-size: 10px !important;
+        padding: 3px 6px !important;
+    }
+    
+    .files-controls {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 4px !important;
+    }
+    
+    .files-controls button,
+    .files-controls input {
+        font-size: 10px !important;
+        padding: 2px 4px !important;
+    }
+    
+    .card-title {
+        font-size: 1.0em !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .responsive-modal {
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        padding: 12px !important;
+    }
+    
+    .files-controls {
+        flex-direction: row;
+        align-items: center !important;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    
+    .files-controls input {
+        flex: 1 !important;
+        min-width: 80px !important;
+    }
+    
+    .files-pagination {
+        flex-wrap: wrap;
+        gap: 5px !important;
+    }
+    
+    .detail-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .card-title {
+        font-size: 1.1em !important;
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .file-item-optimized {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 8px;
+    }
+    
+    .file-actions-optimized {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .files-pagination button,
+    .files-pagination span {
+        font-size: 11px !important;
+        padding: 4px 8px !important;
+    }
+}
 </style>
 
 <script>
@@ -1380,7 +1554,6 @@ function showToast(message, type = 'success') {
     
     toast.innerHTML = message;
     toast.style.cssText = `
-        position: fixed; top: 20px; right: 20px; z-index: 2000;
         padding: 16px 20px; border-radius: 12px; font-size: 14px; font-weight: 500;
         background: ${style.bg}; color: ${style.color};
         border-left: 4px solid ${style.border};
@@ -1388,9 +1561,12 @@ function showToast(message, type = 'success') {
         min-width: 300px; max-width: 350px;
         transform: translateX(380px); opacity: 0;
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        margin-bottom: 12px;
     `;
     
-    document.body.appendChild(toast);
+    // Ajouter au conteneur en bas à droite
+    const container = document.getElementById('toast-container');
+    container.appendChild(toast);
     
     // Animation d'entrée
     setTimeout(() => {
@@ -1513,303 +1689,255 @@ function deleteTorrent(torrentId) {
     }
 }
 
+function updateTorrentDetails(torrentId) {
+    showLoading(true, 'Mise à jour des détails en cours...');
+    fetch(`/api/torrent/${torrentId}`, { method: 'GET' })
+        .then(response => response.json())
+        .then(data => {
+            showLoading(false);
+            if (data.success !== false) {
+                // Rafraîchir la page pour montrer les données mises à jour
+                showToast('✅ Détails du torrent mis à jour', 'success');
+                // Délai pour afficher le toast avant le rechargement
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                showToast('❌ Erreur lors de la mise à jour: ' + (data.error || 'Erreur inconnue'), 'error');
+            }
+        })
+        .catch(error => {
+            showLoading(false);
+            showToast('❌ Erreur réseau lors de la mise à jour', 'error');
+            console.error('Erreur:', error);
+        });
+}
+
 function showDetailsModal(torrentId) {
-    // Stocker l'ID du torrent pour le bouton d'actualisation
-    currentTorrentId = torrentId;
+    console.log('🔍 Affichage modal pour torrent:', torrentId);
     
-    const modal = document.getElementById('torrentModal');
-    const loading = document.getElementById('modalLoading');
-    const content = document.getElementById('modalContent');
-    const error = document.getElementById('modalError');
+    // Créer l'overlay modal simple et qui fonctionne
+    const overlay = document.createElement('div');
+    overlay.id = 'torrentModal';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+    `;
     
-    // Réinitialiser l'état du modal
-    modal.style.display = 'block';
-    loading.style.display = 'block';
-    content.style.display = 'none';
-    error.style.display = 'none';
-    
-    // Message de rafraîchissement avec animation
-    loading.innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <div style="font-size: 2em; margin-bottom: 15px; animation: spin 2s linear infinite;">🔄</div>
-            <div style="font-size: 1.1em; font-weight: bold; margin-bottom: 10px; color: #007bff;">
-                Récupération des données actualisées...
+    // Contenu simple d'abord
+    overlay.innerHTML = `
+        <div style="
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            width: 90%; 
+            max-width: 800px; 
+            max-height: 80vh; 
+            overflow-y: auto;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+                <h3 style="margin: 0; font-size: 1.3em; color: #2c3e50;">🔄 Torrent ${torrentId}</h3>
+                <button onclick="closeModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6c757d; padding: 5px;">×</button>
             </div>
-            <div style="font-size: 0.9em; color: #6c757d;">
-                Synchronisation avec Real-Debrid en cours
-            </div>
-            <div style="margin-top: 15px; height: 4px; background: #e9ecef; border-radius: 2px; overflow: hidden;">
-                <div style="height: 100%; width: 30%; background: linear-gradient(90deg, #007bff, #28a745); animation: progress 3s ease-in-out infinite;"></div>
+            
+            <div id="content">
+                <div id="loading" style="text-align: center; padding: 40px;">
+                    <div style="font-size: 2em; margin-bottom: 15px;">🔄</div>
+                    <div style="font-size: 1.1em; color: #007bff;">Récupération des fichiers...</div>
+                </div>
+                
+                <div id="files" style="display: none;">
+                    <!-- Fichiers ici -->
+                </div>
             </div>
         </div>
     `;
     
-    // Désactiver temporairement le bouton de fermeture
-    const closeBtn = modal.querySelector('.close');
-    closeBtn.style.opacity = '0.5';
-    closeBtn.style.pointerEvents = 'none';
+    document.body.appendChild(overlay);
     
-    // Appel API avec timeout étendu pour le rafraîchissement
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 secondes
+    // Fermer avec clic sur overlay
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closeModal();
+    });
     
-    fetch(`/api/torrent/${torrentId}`, {
-        signal: controller.signal
-    })
-        .then(response => response.json())
-        .then(data => {
-            clearTimeout(timeoutId);
-            loading.style.display = 'none';
+    // Maintenant faire le fetch
+    const loadingDiv = overlay.querySelector('#loading');
+    const filesDiv = overlay.querySelector('#files');
+    
+    console.log('🔍 Éléments trouvés:', { loadingDiv: !!loadingDiv, filesDiv: !!filesDiv });
+    
+    const streamUrl = '/api/torrent/stream/' + torrentId;
+    console.log('🚀 Fetch vers:', streamUrl);
+    
+    // Appel direct à l'API - version simplifiée
+    console.log('🔄 Début du fetch pour torrent:', torrentId);
+    fetch(streamUrl)
+        .then(function(response) {
+            console.log('📡 Réponse directe reçue, status:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(function(streamData) {
+            console.log('✅ Données directes reçues:', streamData);
             
-            // Réactiver le bouton de fermeture
-            closeBtn.style.opacity = '1';
-            closeBtn.style.pointerEvents = 'auto';
+            // Mettre à jour le titre du modal avec le nom du torrent
+            const modalTitle = overlay.querySelector('h3');
+            if (modalTitle && streamData && streamData.torrent_info && streamData.torrent_info.filename) {
+                const torrentName = streamData.torrent_info.filename || streamData.torrent_info.original_filename || `Torrent ${torrentId}`;
+                modalTitle.textContent = `🎬 ${torrentName}`;
+                console.log('📝 Titre mis à jour:', torrentName);
+            }
             
-            if (data.success) {
-                const torrent = data.torrent;
+            if (!filesDiv) {
+                console.error('❌ Élément files non trouvé !');
+                return;
+            }
+            
+            if (streamData && streamData.success && streamData.files && streamData.files.length > 0) {
+                console.log('🎯 Affichage de ' + streamData.files.length + ' fichiers');
                 
-                // Remplir les informations générales
-                document.getElementById('modalTitle').textContent = `${torrent.status_emoji} ${torrent.name || torrent.filename}`;
-                document.getElementById('modalId').textContent = torrent.id;
-                document.getElementById('modalName').textContent = torrent.name || torrent.filename;
+                // Filtrer seulement les fichiers avec selected: 1
+                const selectedFiles = streamData.files.filter(file => file.selected === 1);
+                console.log('� Fichiers sélectionnés (selected=1):', selectedFiles.length, 'sur', streamData.files.length);
                 
-                // Statut avec Material Design badges
-                const status = torrent.detail_status || torrent.status;
-                let statusClass = 'status-secondary';
-                
-                if (status === 'downloaded') {
-                    statusClass = 'status-success';
-                } else if (status && status.includes('error')) {
-                    statusClass = 'status-danger';
-                } else if (status === 'downloading') {
-                    statusClass = 'status-warning';
-                } else if (status === 'waiting_files_selection') {
-                    statusClass = 'status-info';
-                }
-                
-                document.getElementById('modalStatus').innerHTML = `<span class="status-badge ${statusClass}">${torrent.status_emoji} ${status}</span>`;
-                
-                document.getElementById('modalSize').textContent = torrent.size_formatted;
-                document.getElementById('modalFiles').textContent = torrent.files_count ? `${torrent.files_count} fichier(s)` : 'N/A';
-                document.getElementById('modalHash').textContent = torrent.hash || 'N/A';
-                
-                // Indicateur de fraîcheur des données
-                const refreshIndicator = document.getElementById('refreshIndicator') || createRefreshIndicator();
-                if (data.refreshed) {
-                    refreshIndicator.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #d4edda; color: #155724; border-radius: 4px; font-size: 0.85em; margin-bottom: 15px;">
-                            <span style="font-size: 1.2em;">✅</span>
-                            <span><strong>Données actualisées</strong> - Dernière mise à jour: ${torrent.last_updated}</span>
-                        </div>
-                    `;
-                    showToast('✅ Données mises à jour depuis Real-Debrid', 'success');
-                } else {
-                    refreshIndicator.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff3cd; color: #856404; border-radius: 4px; font-size: 0.85em; margin-bottom: 15px;">
-                            <span style="font-size: 1.2em;">⚠️</span>
-                            <span><strong>Données en cache</strong> - ${data.warning || 'Impossible de récupérer les données fraîches'}</span>
-                        </div>
-                    `;
-                    showToast('⚠️ Affichage des données en cache', 'warning');
-                }
-                
-                // Progression
-                const progress = torrent.progress || 0;
-                document.getElementById('modalProgress').textContent = `${progress}%`;
-                document.getElementById('modalProgressBar').style.width = `${progress}%`;
-                
-                document.getElementById('modalHost').textContent = torrent.host || 'N/A';
-                document.getElementById('modalAdded').textContent = torrent.added_on ? new Date(torrent.added_on).toLocaleDateString('fr-FR') : 'N/A';
-                
-                // Gestion des erreurs
-                const errorContainer = document.getElementById('modalErrorContainer');
-                if (torrent.error) {
-                    errorContainer.style.display = 'block';
-                    document.getElementById('modalError').textContent = torrent.error;
-                } else {
-                    errorContainer.style.display = 'none';
-                }
-                
-                // Liens de téléchargement et streaming
-                // Récupération des liens de streaming avec la nouvelle API
-                console.log('🔍 Récupération des liens de streaming pour torrent:', torrent.id);
-                
-                const linksContainer = document.getElementById('modalLinksContainer');
-                const linksDiv = document.getElementById('modalLinks');
-                
-                // Afficher un indicateur de chargement pour les liens
-                linksContainer.style.display = 'block';
-                linksDiv.innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: #6c757d;">
-                        <div style="font-size: 1.5em; margin-bottom: 10px; animation: spin 2s linear infinite;">🔄</div>
-                        <div>Récupération des liens de streaming...</div>
-                    </div>
-                `;
-                
-                // Appel à notre nouvelle API pour récupérer les liens améliorés avec timeout
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes timeout (augmenté)
-                
-                console.log('🚀 Démarrage fetch vers:', `/api/torrent/stream/${torrent.id}`);
-                
-                fetch(`/api/torrent/stream/${torrent.id}`, {
-                    signal: controller.signal
-                })
-                    .then(response => {
-                        console.log('📡 Réponse reçue:', response.status, response.ok);
-                        clearTimeout(timeoutId);
-                        if (!response.ok) {
-                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                        }
-                        return response.json();
-                    })
-                    .then(streamData => {
-                        console.log('📊 Données reçues:', streamData);
-                        console.log('🔍 Vérification conditions:', {
-                            success: streamData.success,
-                            files: streamData.files,
-                            filesLength: streamData.files ? streamData.files.length : 0
-                        });
+                if (selectedFiles.length > 0) {
+                    let html = '<h4>🎬 Fichiers vidéo (' + selectedFiles.length + ')</h4>';
+                    
+                    // Afficher seulement les fichiers sélectionnés
+                    for (let i = 0; i < selectedFiles.length; i++) {
+                        const file = selectedFiles[i];
+                        const filename = file.filename || file.name || 'Fichier ' + (i + 1);
                         
-                        if (streamData.success && streamData.files && streamData.files.length > 0) {
-                            console.log('✅ Liens récupérés:', streamData.files);
-                            
-                            linksDiv.innerHTML = streamData.files.map((file, index) => {
-                                const hasError = file.error;
-                                const hasStreaming = file.streaming_link && !hasError;
-                                const hasDownload = file.download_link;
-                                const hasMediaInfo = file.file_id && !hasError;
-                                
-                                // Déterminer le nom du fichier
-                                let displayName = file.filename || `Fichier ${index + 1}`;
-                                if (displayName.length > 60) {
-                                    displayName = displayName.substring(0, 60) + '...';
-                                }
-                                
-                                // Formatage de la taille
-                                let sizeText = 'Taille inconnue';
-                                if (file.size > 0) {
-                                    const sizeGB = (file.size / (1024**3)).toFixed(2);
-                                    sizeText = `${sizeGB} GB`;
-                                }
-                                
-                                return `
-                                    <div class="file-item-card" id="file-item-${index}">
-                                        <div class="file-header">
-                                            <div class="file-info">
-                                                <div class="file-name" title="${file.filename || `Fichier ${index + 1}`}">
-                                                    ${displayName}
-                                                </div>
-                                                <div class="file-size">
-                                                    ${sizeText} • ${file.mime_type || 'Type inconnu'}
-                                                </div>
-                                                ${hasError ? `<div style="font-size: 13px; color: #c62828; margin-top: 4px;">⚠️ ${file.error}</div>` : ''}
-                                            </div>
-                                            <div class="file-actions">
-                                                ${hasStreaming ? `
-                                                    <a href="${file.streaming_link}" target="_blank" class="btn btn-sm btn-success file-action-btn" title="Lire en streaming">
-                                                        🎬 Stream
-                                                    </a>
-                                                ` : `
-                                                    <span class="file-unavailable" title="${hasError ? 'Streaming indisponible (erreur)' : 'Streaming non disponible'}">
-                                                        🎬 Stream
-                                                    </span>
-                                                `}
-                                                ${hasDownload ? `
-                                                    <a href="${file.download_link}" target="_blank" class="btn btn-sm btn-success file-action-btn" title="Télécharger">
-                                                        💾 Télécharger
-                                                    </a>
-                                                ` : `
-                                                    <span class="file-unavailable" title="Téléchargement non disponible">
-                                                        💾 Télécharger
-                                                    </span>
-                                                `}
-                                                ${hasMediaInfo ? `
-                                                    <button onclick="fetchMediaInfo('${file.file_id}', ${index})" class="btn btn-sm btn-info file-action-btn" title="Informations média">
-                                                        ℹ️ Info
-                                                    </button>
-                                                ` : ''}
-                                            </div>
-                                        </div>
-                                        <div class="media-info-container" id="media-info-${index}" style="max-height: 0; overflow: hidden; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);"></div>
+                        // Fonction locale pour formater la taille
+                        function formatBytes(bytes) {
+                            if (!bytes || bytes === 0) return 'Taille inconnue';
+                            const k = 1024;
+                            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                            const i = Math.floor(Math.log(bytes) / Math.log(k));
+                            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                        }
+                        
+                        // Essayer différentes propriétés pour la taille et afficher pour debug
+                        const rawSize = file.bytes || file.size || file.filesize || 0;
+                        const fileSize = formatBytes(rawSize);
+                        console.log('📏 Fichier:', filename, '- Taille calculée:', fileSize, '- Raw bytes:', rawSize, '- File object:', file);
+                        
+                        html += `
+                            <div style="
+                                background: #fafafa;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 6px;
+                                padding: 12px;
+                                margin-bottom: 8px;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                gap: 12px;
+                            ">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-weight: 500; font-size: 14px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${filename}">
+                                        🎬 ${filename.length > 55 ? filename.substring(0, 52) + '...' : filename}
                                     </div>
-                                `;
-                            }).join('');
-                        } else {
-                            console.log('❌ Aucun fichier trouvé dans la réponse');
-                            linksDiv.innerHTML = `
-                                <div style="text-align: center; padding: 20px; color: #6c757d;">
-                                    <div style="font-size: 2em; margin-bottom: 10px;">📭</div>
-                                    <div>Aucun fichier disponible</div>
-                                    <div style="font-size: 0.9em; margin-top: 5px;">
-                                        ${streamData.error || 'Ce torrent n\'a peut-être pas été téléchargé ou les liens ont expiré'}
+                                    <div style="font-size: 12px; color: #007bff; margin-top: 4px; font-weight: 500;">
+                                        💾 ${fileSize}
                                     </div>
                                 </div>
-                            `;
-                        }
-                    })
-                    .catch(streamError => {
-                        clearTimeout(timeoutId);
-                        console.error('Erreur récupération liens streaming:', streamError);
+                                <div style="display: flex; gap: 8px; flex-shrink: 0;">`;
                         
-                        let errorMessage = 'Erreur réseau';
-                        if (streamError.name === 'AbortError') {
-                            errorMessage = 'Timeout - La récupération des liens a pris trop de temps';
-                        } else if (streamError.message) {
-                            errorMessage = streamError.message;
+                        if (file.streaming_link) {
+                            html += `<a href="${file.streaming_link}" target="_blank" style="background: #4CAF50; color: white; text-decoration: none; padding: 8px 12px; border-radius: 4px; font-size: 12px;">🎬 Stream</a>`;
                         }
                         
-                        linksDiv.innerHTML = `
-                            <div style="text-align: center; padding: 20px; color: #dc3545;">
-                                <div style="font-size: 2em; margin-bottom: 10px;">⚠️</div>
-                                <div>Erreur lors de la récupération des liens</div>
-                                <div style="font-size: 0.9em; margin-top: 5px;">
-                                    ${errorMessage}
-                                </div>
-                                <button onclick="location.reload()" class="btn btn-sm btn-primary" style="margin-top: 10px;">
-                                    🔄 Réessayer
-                                </button>
-                            </div>
-                        `;
-                    });
+                        if (file.download_link) {
+                            html += `<a href="${file.download_link}" target="_blank" style="background: #2196F3; color: white; text-decoration: none; padding: 8px 12px; border-radius: 4px; font-size: 12px;">💾 Télécharger</a>`;
+                        }
+                        
+                        html += `</div></div>`;
+                    }
+                    
+                    filesDiv.innerHTML = html;
+                } else {
+                    filesDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #ffc107;">⚠️ Aucun fichier vidéo principal trouvé (selected=1)</div>';
+                }
                 
-                content.style.display = 'block';
+                // Masquer le loading et afficher les fichiers
+                console.log('🎯 Mise à jour de l\'affichage...');
+                loadingDiv.style.display = 'none';
+                filesDiv.style.display = 'block';
+                
+                console.log('✅ Affichage direct terminé !');
+                
             } else {
-                error.style.display = 'block';
-                document.getElementById('modalErrorText').textContent = data.error || 'Erreur inconnue';
-                showToast('❌ Erreur lors du chargement des détails', 'error');
+                console.log('❌ Pas de fichiers dans la réponse directe');
+                filesDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">📭 Aucun fichier disponible</div>';
+                loadingDiv.style.display = 'none';
+                filesDiv.style.display = 'block';
             }
         })
-        .catch(err => {
-            clearTimeout(timeoutId);
-            loading.style.display = 'none';
-            
-            // Réactiver le bouton de fermeture
-            closeBtn.style.opacity = '1';
-            closeBtn.style.pointerEvents = 'auto';
-            
-            if (err.name === 'AbortError') {
-                error.style.display = 'block';
-                document.getElementById('modalErrorText').innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="font-size: 1.5em; margin-bottom: 10px;">⏱️</div>
-                        <div style="font-weight: bold; margin-bottom: 8px;">Timeout lors de la récupération</div>
-                        <div style="font-size: 0.9em; color: #6c757d; margin-bottom: 15px;">
-                            La récupération des données depuis Real-Debrid a pris trop de temps
-                        </div>
-                        <button onclick="showDetailsModal('${torrentId}')" class="btn btn-primary btn-sm">
-                            🔄 Réessayer
-                        </button>
-                    </div>
-                `;
-                showToast('⏱️ Timeout - Réessayez ou consultez les données en cache', 'warning');
-            } else {
-                error.style.display = 'block';
-                document.getElementById('modalErrorText').textContent = 'Erreur réseau: ' + err.message;
-                showToast('❌ Erreur réseau lors du chargement', 'error');
-            }
-            console.error('Erreur:', err);
+        .catch(function(err) {
+            console.error('❌ Erreur fetch direct:', err);
+            filesDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #dc3545;">⚠️ Erreur: ' + err.message + '</div>';
+            loadingDiv.style.display = 'none';
+            filesDiv.style.display = 'block';
         });
+}
+
+// Fonctions d'aide pour l'affichage amélioré
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Non disponible';
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR') + ' ' + date.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+    } catch {
+        return 'Date invalide';
+    }
+}
+
+function createFileCard(file, index, isVideo) {
+    const filename = file.filename || file.name || `Fichier ${index + 1}`;
+    const fileSize = file.bytes ? formatFileSize(file.bytes) : 'Taille inconnue';
+    const icon = isVideo ? '🎬' : '📄';
+    const cardClass = isVideo ? 'file-card video-file' : 'file-card other-file';
+    
+    return `
+        <div class="${cardClass}">
+            <div class="file-header">
+                <div class="file-icon">${icon}</div>
+                <div class="file-info">
+                    <div class="file-name" title="${filename}">${filename}</div>
+                    <div class="file-meta">
+                        <span class="file-size">${fileSize}</span>
+                        <span class="file-selected">Selected: ${file.selected}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="file-actions">
+                ${file.download_link ? `<a href="${file.download_link}" target="_blank" class="action-btn download-btn">📥 Télécharger</a>` : ''}
+                ${file.streaming_link ? `<a href="${file.streaming_link}" target="_blank" class="action-btn stream-btn">📺 Stream</a>` : ''}
+            </div>
+        </div>
+    `;
 }
 
 function createRefreshIndicator() {
@@ -1821,7 +1949,10 @@ function createRefreshIndicator() {
 }
 
 function closeModal() {
-    document.getElementById('torrentModal').style.display = 'none';
+    const modal = document.getElementById('torrentModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 // Variable globale pour stocker l'ID du torrent actuellement affiché
@@ -1886,6 +2017,283 @@ function copyToClipboardFallback(text) {
     
     document.body.removeChild(textArea);
 }
+
+// ==========================================
+// NOUVELLES FONCTIONS POUR LA MODAL OPTIMISÉE
+// ==========================================
+
+// Variables globales pour la gestion des fichiers
+let allFiles = [];
+let currentFilesPage = 1;
+let filesPerPage = 15;
+
+// Fonction pour afficher les fichiers de la page actuelle (vue compacte uniquement)
+function displayCurrentFilesPage() {
+    const container = document.getElementById('modalLinks');
+    const startIndex = (currentFilesPage - 1) * filesPerPage;
+    const endIndex = startIndex + filesPerPage;
+    const pageFiles = allFiles.slice(startIndex, endIndex);
+    
+    let html = '';
+    
+    pageFiles.forEach((file, index) => {
+        const globalIndex = startIndex + index;
+        const hasError = file.error && file.error.trim() !== '';
+        const hasStreaming = file.streaming_link && !hasError;
+        const hasDownload = file.download_link && !hasError;
+        
+        let displayName = file.filename || `Fichier ${globalIndex + 1}`;
+        if (displayName.length > 45) {
+            displayName = displayName.substring(0, 45) + '...';
+        }
+        
+        // Style adaptatif pour les boutons selon l'écran
+        const isMobile = window.innerWidth < 768;
+        const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
+        const isSmallMobile = window.innerWidth < 480;
+        
+        // Réduire encore plus la taille sur très petits écrans
+        const buttonPadding = isSmallMobile ? '4px' : isMobile ? '5px' : '6px 8px';
+        const buttonFontSize = isSmallMobile ? '10px' : isMobile ? '11px' : '11px';
+        const buttonGap = isSmallMobile ? '2px' : isMobile ? '3px' : '4px';
+        
+        html += `
+            <div class="file-item-optimized" style="
+                background: #fafafa;
+                border: 1px solid #e0e0e0;
+                border-radius: 6px;
+                padding: 8px 12px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                transition: all 0.2s ease;
+                ${hasError ? 'border-left: 3px solid #f44336;' : ''}
+            " onmouseover="this.style.borderColor='#2196F3'" onmouseout="this.style.borderColor='#e0e0e0'">
+                
+                <div class="file-info-optimized" style="flex: 1; min-width: 0;">
+                    <div class="file-name-optimized" style="
+                        font-weight: 500;
+                        font-size: 13px;
+                        color: ${hasError ? '#c62828' : '#333'};
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
+                    " title="${file.filename || `Fichier ${globalIndex + 1}`}">
+                        ${displayName}
+                    </div>
+                    ${hasError ? `
+                        <div style="font-size: 11px; color: #c62828; margin-top: 2px;">
+                            ⚠️ ${file.error}
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <div class="file-actions-optimized" style="
+                    display: flex;
+                    gap: ${buttonGap};
+                    flex-shrink: 0;
+                    align-items: center;
+                ">
+                    ${hasStreaming ? `
+                        <a href="${file.streaming_link}" target="_blank" 
+                           style="
+                               background: ${isMobile ? '#4CAF50' : 'linear-gradient(135deg, #4CAF50, #388E3C)'};
+                               color: white;
+                               text-decoration: none;
+                               padding: ${buttonPadding};
+                               border-radius: 3px;
+                               font-size: ${buttonFontSize};
+                               font-weight: 500;
+                               display: flex;
+                               align-items: center;
+                               gap: 2px;
+                               transition: all 0.2s ease;
+                               box-shadow: 0 1px 3px rgba(76, 175, 80, 0.3);
+                               min-width: ${isSmallMobile ? '24px' : '28px'};
+                               justify-content: center;
+                           "
+                           title="Lire en streaming"
+                           onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 2px 6px rgba(76, 175, 80, 0.4)';"
+                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(76, 175, 80, 0.3)';">
+                            🎬${isSmallMobile ? '' : isMobile ? '' : isTablet ? ' Stream' : ' Stream'}
+                        </a>
+                    ` : `
+                        <span style="
+                            background: #f5f5f5;
+                            color: #9e9e9e;
+                            padding: ${buttonPadding};
+                            border-radius: 3px;
+                            font-size: ${buttonFontSize};
+                            display: flex;
+                            align-items: center;
+                            gap: 2px;
+                            min-width: ${isSmallMobile ? '24px' : '28px'};
+                            justify-content: center;
+                        " title="Streaming indisponible">
+                            🎬
+                        </span>
+                    `}
+                    
+                    ${hasDownload ? `
+                        <a href="${file.download_link}" target="_blank" 
+                           style="
+                               background: ${isMobile ? '#2196F3' : 'linear-gradient(135deg, #2196F3, #1976D2)'};
+                               color: white;
+                               text-decoration: none;
+                               padding: ${buttonPadding};
+                               border-radius: 3px;
+                               font-size: ${buttonFontSize};
+                               font-weight: 500;
+                               display: flex;
+                               align-items: center;
+                               gap: 2px;
+                               transition: all 0.2s ease;
+                               box-shadow: 0 1px 3px rgba(33, 150, 243, 0.3);
+                               min-width: ${isSmallMobile ? '24px' : '28px'};
+                               justify-content: center;
+                           "
+                           title="Télécharger"
+                           onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 2px 6px rgba(33, 150, 243, 0.4)';"
+                           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(33, 150, 243, 0.3)';">
+                            💾${isSmallMobile ? '' : isMobile ? '' : isTablet ? ' DL' : ' Télécharger'}
+                        </a>
+                    ` : `
+                        <span style="
+                            background: #f5f5f5;
+                            color: #9e9e9e;
+                            padding: ${buttonPadding};
+                            border-radius: 3px;
+                            font-size: ${buttonFontSize};
+                            display: flex;
+                            align-items: center;
+                            gap: 2px;
+                            min-width: ${isSmallMobile ? '24px' : '28px'};
+                            justify-content: center;
+                        " title="Téléchargement indisponible">
+                            💾
+                        </span>
+                    `}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Fonctions de pagination
+function updateFilesPagination() {
+    const totalPages = Math.ceil(allFiles.length / filesPerPage);
+    const pagination = document.getElementById('filesPagination');
+    const pageInfo = document.getElementById('pageInfo');
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    
+    if (totalPages <= 1) {
+        pagination.style.display = 'none';
+    } else {
+        pagination.style.display = 'flex';
+        pageInfo.textContent = `Page ${currentFilesPage} sur ${totalPages} (${allFiles.length} fichiers)`;
+        
+        prevBtn.disabled = currentFilesPage <= 1;
+        nextBtn.disabled = currentFilesPage >= totalPages;
+        
+        prevBtn.style.opacity = currentFilesPage <= 1 ? '0.5' : '1';
+        nextBtn.style.opacity = currentFilesPage >= totalPages ? '0.5' : '1';
+    }
+}
+
+function previousFilesPage() {
+    if (currentFilesPage > 1) {
+        currentFilesPage--;
+        updateFilesPagination();
+        displayCurrentFilesPage();
+    }
+}
+
+function nextFilesPage() {
+    const totalPages = Math.ceil(allFiles.length / filesPerPage);
+    if (currentFilesPage < totalPages) {
+        currentFilesPage++;
+        updateFilesPagination();
+        displayCurrentFilesPage();
+    }
+}
+
+// Fonction utilitaire pour formater les tailles de fichiers
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Fonction utilitaire pour formater les tailles
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Fonction modifiée pour initialiser les fichiers optimisés avec tri alphabétique
+function initializeOptimizedFiles(files) {
+    const rawFiles = files || [];
+    
+    console.log(`📋 Données brutes reçues pour ${rawFiles.length} fichiers:`, rawFiles.slice(0, 3)); // Log des 3 premiers fichiers pour debug
+    
+    // Filtrer pour ne garder que les fichiers vidéo et éliminer les NFO, txt, etc.
+    allFiles = rawFiles.filter(file => {
+        // Si le fichier a une propriété 'selected', ne garder que ceux sélectionnés (selected = 1)
+        if (file.selected !== undefined) {
+            console.log(`🔍 Fichier ${file.filename}: selected=${file.selected}`);
+            return file.selected === 1;
+        }
+        
+        // Sinon, filtrer par extension pour ne garder que les fichiers vidéo
+        const filename = file.filename || file.name || file.path || '';
+        const videoExtensions = ['.mkv', '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.m2ts'];
+        const isVideoFile = videoExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+        
+        // Exclure explicitement les fichiers NFO, txt, srt, etc.
+        const excludeExtensions = ['.nfo', '.txt', '.srt', '.sub', '.idx', '.jpg', '.png', '.gif'];
+        const isExcludedFile = excludeExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+        
+        return isVideoFile && !isExcludedFile;
+    });
+    
+    console.log(`📁 Fichiers reçus: ${rawFiles.length}, Fichiers vidéo filtrés: ${allFiles.length}`);
+    
+    // Tri alphabétique par nom de fichier
+    allFiles.sort((a, b) => {
+        const nameA = (a.filename || a.name || a.path || '').toLowerCase();
+        const nameB = (b.filename || b.name || b.path || '').toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    currentFilesPage = 1;
+    
+    // Ajuster le nombre de fichiers par page selon la taille d'écran de façon plus agressive
+    if (window.innerWidth < 480) {
+        filesPerPage = 8; // Très petit mobile - encore moins de fichiers
+    } else if (window.innerWidth < 768) {
+        filesPerPage = 12; // Mobile - réduit
+    } else if (window.innerWidth < 1024) {
+        filesPerPage = 16; // Tablet - équilibré
+    } else {
+        filesPerPage = 20; // Desktop - plus de fichiers
+    }
+    
+    updateFilesPagination();
+    displayCurrentFilesPage();
+}
+
+// ==========================================
+// FIN DES NOUVELLES FONCTIONS
+// ==========================================
 
 // NOUVELLE FONCTION POUR RÉCUPÉRER LES INFOS MÉDIA DÉTAILLÉES
 function fetchMediaInfo(fileId, index) {
@@ -2506,9 +2914,7 @@ function closeBatchModal() {
     
     console.log('✅ Modal fermé et sélection nettoyée');
 }
-</script>
-
-<style>
+    </script><style>
 /* CSS Responsif pour le Modal des Détails de Torrent */
 
 /* Variables CSS pour cohérence */
@@ -2817,6 +3223,291 @@ function closeBatchModal() {
     border-radius: 6px;
     margin: 0 -8px;
     padding: 8px;
+}
+
+/* Nouveaux styles pour l'UI améliorée */
+
+/* Grille d'informations */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.info-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1px solid rgba(220, 226, 231, 0.8);
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    transition: all 0.3s ease;
+}
+
+.info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    border-color: #007bff;
+}
+
+.info-icon {
+    font-size: 1.5em;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.info-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.info-label {
+    font-size: 0.85em;
+    color: #6c757d;
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.info-value {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.95em;
+    word-wrap: break-word;
+}
+
+.status-downloaded { color: #28a745; }
+.status-downloading { color: #007bff; }
+.status-waiting { color: #ffc107; }
+.status-error { color: #dc3545; }
+
+/* Styles pour les fichiers */
+.files-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px 0;
+    border-bottom: 2px solid #f1f3f4;
+}
+
+.files-header h4 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.3em;
+}
+
+.file-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.stat-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.stat-badge.video {
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.stat-badge.other {
+    background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+    color: #ef6c00;
+    border: 1px solid #ffcc02;
+}
+
+.file-section {
+    margin-bottom: 25px;
+}
+
+.section-title {
+    color: #2c3e50;
+    font-size: 1.1em;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.file-card {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    padding: 15px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.file-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+.file-card.video-file {
+    border-left: 4px solid #28a745;
+}
+
+.file-card.other-file {
+    border-left: 4px solid #ffc107;
+}
+
+.file-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.file-icon {
+    font-size: 1.5em;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 6px;
+    word-wrap: break-word;
+    line-height: 1.3;
+}
+
+.file-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 0.85em;
+    color: #6c757d;
+}
+
+.file-size {
+    font-weight: 500;
+}
+
+.file-selected {
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+}
+
+.file-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.download-btn {
+    background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    color: #1976d2;
+    border: 1px solid #90caf9;
+}
+
+.download-btn:hover {
+    background: linear-gradient(135deg, #bbdefb, #90caf9);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+.stream-btn {
+    background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.stream-btn:hover {
+    background: linear-gradient(135deg, #c8e6c9, #a5d6a7);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(46, 125, 50, 0.3);
+}
+
+/* État vide */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6c757d;
+    font-size: 1.1em;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 10px;
+    border: 2px dashed #dee2e6;
+}
+
+.empty-state span {
+    display: block;
+    margin-top: 10px;
+}
+
+/* Responsive pour les nouveaux éléments */
+@media (max-width: 768px) {
+    .info-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .files-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .file-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .file-icon {
+        align-self: flex-start;
+    }
+    
+    .file-actions {
+        width: 100%;
+    }
+    
+    .action-btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 120px;
+    }
 }
 </style>
 

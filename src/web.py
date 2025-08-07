@@ -1013,6 +1013,7 @@ def get_stream_links(torrent_id):
                 file_info = files_info[i] if i < len(files_info) else {}
                 filename = file_info.get('path', f'Fichier {i+1}')
                 file_size = file_info.get('bytes', 0)
+                selected = file_info.get('selected', 1)  # Récupérer la propriété selected (1 pour vidéo, 0 pour NFO)
                 
                 print(f"🔄 Traitement fichier {i+1}: {filename}")
                 
@@ -1032,6 +1033,7 @@ def get_stream_links(torrent_id):
                         'index': i,
                         'filename': filename,
                         'size': file_size,
+                        'selected': selected,  # Ajouter la propriété selected pour le filtrage
                         'download_link': formatted_download,
                         'direct_download': download_link,
                         'streaming_link': None,
@@ -1047,6 +1049,7 @@ def get_stream_links(torrent_id):
                         'index': i,
                         'filename': filename,
                         'size': file_size,
+                        'selected': selected,  # Ajouter la propriété selected pour le filtrage
                         'download_link': formatted_download,
                         'direct_download': download_link,
                         'streaming_link': None,
@@ -1073,6 +1076,7 @@ def get_stream_links(torrent_id):
                         'index': i,
                         'filename': filename,
                         'size': file_size,
+                        'selected': selected,  # Ajouter la propriété selected pour le filtrage
                         'download_link': formatted_download,  # Lien formaté pour le downloader Real-Debrid  
                         'direct_download': direct_download,  # Lien direct brut
                         'streaming_link': streaming_link,  # Lien de streaming construit
@@ -1087,6 +1091,7 @@ def get_stream_links(torrent_id):
                         'index': i,
                         'filename': filename,
                         'size': file_size,
+                        'selected': selected,  # Ajouter la propriété selected pour le filtrage
                         'download_link': formatted_download,
                         'direct_download': download_link,
                         'streaming_link': None,
@@ -1103,6 +1108,7 @@ def get_stream_links(torrent_id):
                     'index': i,
                     'filename': f'Fichier {i+1}',
                     'size': 0,
+                    'selected': 1,  # Par défaut, considérer comme sélectionné si erreur
                     'download_link': formatted_download,
                     'direct_download': download_link,
                     'streaming_link': None,
@@ -1127,6 +1133,58 @@ def get_stream_links(torrent_id):
         print(f"❌ Erreur critique dans get_stream_links: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Erreur interne: {str(e)}'})
+
+@app.route('/api/torrent/files/<torrent_id>', methods=['GET'])
+def get_torrent_files(torrent_id):
+    """
+    Récupérer uniquement la liste des fichiers avec propriété selected (sans débridage)
+    API rapide pour filtrage NFO vs vidéo
+    """
+    try:
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
+        
+        # Récupérer uniquement les infos des fichiers depuis Real-Debrid
+        response = requests.get(
+            f'https://api.real-debrid.com/rest/1.0/torrents/info/{torrent_id}',
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=10  # Timeout court car pas de débridage
+        )
+        
+        if response.status_code == 404:
+            return jsonify({'success': False, 'error': 'Torrent non trouvé sur Real-Debrid'})
+        elif response.status_code != 200:
+            return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
+        
+        torrent_info = response.json()
+        files_info = torrent_info.get('files', [])
+        
+        # Formater les fichiers avec leurs propriétés selected
+        files_data = []
+        for i, file_info in enumerate(files_info):
+            files_data.append({
+                'index': i,
+                'filename': file_info.get('path', f'Fichier {i+1}'),
+                'size': file_info.get('bytes', 0),
+                'selected': file_info.get('selected', 1),  # selected: 1 pour vidéo, 0 pour NFO
+            })
+        
+        return jsonify({
+            'success': True,
+            'torrent_info': {
+                'id': torrent_id,
+                'filename': torrent_info.get('filename', 'Unknown'),
+                'status': torrent_info.get('status', 'unknown'),
+                'progress': torrent_info.get('progress', 0)
+            },
+            'files': files_data,
+            'total_files': len(files_data)
+        })
+            
+    except Exception as e:
+        print(f"❌ Erreur dans get_torrent_files: {e}")
         return jsonify({'success': False, 'error': f'Erreur interne: {str(e)}'})
 
 @app.route('/api/refresh_stats')
