@@ -281,7 +281,7 @@ def torrents_list():
                    COALESCE(td.name, t.filename) as display_name,
                    COALESCE(td.status, t.status) as current_status,
                    COALESCE(td.progress, 0) as progress,
-                   td.host, td.error
+                   td.host, td.error, td.health_error
             FROM torrents t
             LEFT JOIN torrent_details td ON t.id = td.id
         """
@@ -302,7 +302,10 @@ def torrents_list():
                 conditions.append("(t.status = 'error' OR td.status = 'error')")
             elif status_filter == 'unavailable':
                 # Nouveau filtre pour fichiers indisponibles (réutilise la logique existante)
-                conditions.append("(td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%' OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')")
+                conditions.append("(td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%' OR td.error LIKE '%health_check_error%' OR td.error LIKE '%health_503_error%' OR td.error LIKE '%http_error_%')")
+            elif status_filter == 'health_error':
+                # Nouveau filtre spécifique pour les erreurs de santé 503
+                conditions.append("td.health_error IS NOT NULL")
             elif status_filter == 'incomplete':
                 # Nouveau filtre pour torrents avec détails manquants
                 conditions.append("td.id IS NULL")
@@ -354,11 +357,21 @@ def torrents_list():
         """)
         incomplete_count = c.fetchone()[0]
         
-        # Ajout de l'option "incomplete" si elle n'existe pas déjà et qu'il y a des torrents sans détails
+        # Ajout du count pour les erreurs de santé 503
+        c.execute("""
+            SELECT COUNT(*) 
+            FROM torrent_details td
+            WHERE td.health_error IS NOT NULL
+        """)
+        health_error_count = c.fetchone()[0]
+        
+        # Ajout des options "incomplete" et "health_error" si elles n'existent pas déjà
+        available_statuses = list(available_statuses)
         if incomplete_count > 0:
-            available_statuses = list(available_statuses)
             available_statuses.append(('incomplete', incomplete_count))
-            available_statuses = tuple(available_statuses)
+        if health_error_count > 0:
+            available_statuses.append(('health_error', health_error_count))
+        available_statuses = tuple(available_statuses)
     
     # Calcul de la pagination
     total_pages = (total_count + per_page - 1) // per_page
@@ -379,6 +392,7 @@ def torrents_list():
             'progress': row[7],
             'host': row[8],
             'error': row[9],
+            'health_error': row[10],  # Nouveau champ
             'size_formatted': format_size(row[3]) if row[3] else 'N/A',
             'status_emoji': get_status_emoji(row[6]),
             'added_date': row[4][:10] if row[4] else 'N/A'
@@ -1373,9 +1387,10 @@ def api_cleanup_deleted():
             "deleted_count": 0
         }), 500
 
-@app.route('/api/health/check_all', methods=['GET', 'POST'])
-def check_all_files_health():
-    """API pour vérifier la santé de tous les liens de fichiers"""
+
+@app.route('/api/health/check/<torrent_id>', methods=['GET', 'POST'])
+def check_single_torrent_health(torrent_id):
+    """API pour vérifier la santé d'un torrent spécifique via api/torrent/stream"""
     try:
         from main import load_token
         token = load_token()
@@ -1383,87 +1398,352 @@ def check_all_files_health():
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             
-            # Récupérer tous les torrents avec des liens de download
+            # Vérifier que le torrent existe
             c.execute("""
-                SELECT td.id, td.links 
-                FROM torrent_details td
-                LEFT JOIN torrents t ON td.id = t.id
-                WHERE td.links IS NOT NULL 
-                AND td.links != ''
-                AND t.status != 'deleted'
+                SELECT t.id, t.filename 
+                FROM torrents t
+                WHERE t.id = ? AND t.status != 'deleted' AND t.status != 'error'
+            """, (torrent_id,))
+            torrent_info = c.fetchone()
+            
+            if not torrent_info:
+                return jsonify({
+                    'success': False,
+                    'error': 'Torrent non trouvé ou supprimé'
+                })
+            
+            logging.info(f"Vérification de la santé du torrent {torrent_id} via stream endpoint...")
+            error_503_found = False
+            error_message = None
+            
+            try:
+                # Appeler l'endpoint local /api/torrent/stream/{id}
+                with app.test_client() as client:
+                    response = client.get(f'/api/torrent/stream/{torrent_id}')
+                    
+                    if response.status_code == 200:
+                        try:
+                            data = response.get_json()
+                            
+                            # Rechercher l'erreur "Échec débridage: 503" dans la réponse
+                            if data and isinstance(data, dict):
+                                # Vérifier s'il y a une erreur 503 dans la réponse principale
+                                if 'error' in data and '503' in str(data['error']):
+                                    error_503_found = True
+                                    error_message = str(data['error'])
+                                
+                                # Vérifier dans les fichiers si présents
+                                elif 'files' in data and isinstance(data['files'], list):
+                                    for file_info in data['files']:
+                                        if isinstance(file_info, dict) and 'error' in file_info:
+                                            if '503' in str(file_info['error']):
+                                                error_503_found = True
+                                                error_message = str(file_info['error'])
+                                                break
+                                
+                                # Si erreur 503 détectée, mettre à jour la base de données
+                                if error_503_found:
+                                    # Créer l'entrée torrent_details si elle n'existe pas
+                                    c.execute("INSERT OR IGNORE INTO torrent_details (id) VALUES (?)", (torrent_id,))
+                                    
+                                    # Mettre à jour seulement le champ health_error
+                                    c.execute("""
+                                        UPDATE torrent_details 
+                                        SET health_error = ?
+                                        WHERE id = ?
+                                    """, (error_message, torrent_id))
+                                    
+                                    print(f"⚠️ Erreur 503 détectée pour torrent {torrent_id}: {error_message}")
+                                
+                                # Si aucune erreur 503, nettoyer l'ancien champ health_error
+                                else:
+                                    c.execute("""
+                                        UPDATE torrent_details 
+                                        SET health_error = NULL
+                                        WHERE id = ?
+                                    """, (torrent_id,))
+                            
+                        except (json.JSONDecodeError, KeyError) as json_error:
+                            print(f"⚠️ Erreur parsing JSON pour torrent {torrent_id}: {json_error}")
+                            return jsonify({'success': False, 'error': f'Erreur parsing réponse: {json_error}'})
+                    
+                    else:
+                        print(f"⚠️ Erreur HTTP {response.status_code} pour torrent {torrent_id}")
+                        return jsonify({'success': False, 'error': f'Erreur HTTP: {response.status_code}'})
+                
+            except Exception as torrent_error:
+                print(f"❌ Erreur lors de la vérification du torrent {torrent_id}: {torrent_error}")
+                return jsonify({'success': False, 'error': str(torrent_error)})
+            
+            conn.commit()
+            
+            # Construire la réponse selon le résultat
+            if error_503_found:
+                return jsonify({
+                    'success': True,
+                    'message': f'⚠️ Erreur 503 détectée pour le torrent {torrent_id}',
+                    'error_503_found': True,
+                    'error_message': error_message,
+                    'torrent_id': torrent_id
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'message': f'✅ Torrent {torrent_id} en bonne santé',
+                    'error_503_found': False,
+                    'torrent_id': torrent_id
+                })
+            
+    except Exception as e:
+        print(f"❌ Erreur lors de la vérification de santé du torrent {torrent_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/health/check_all', methods=['GET', 'POST'])
+def check_all_files_health():
+    """API pour vérifier la santé de tous les liens de fichiers via api/torrent/stream - VERSION ULTRA RAPIDE"""
+    try:
+        from main import load_token
+        token = load_token()
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Token Real-Debrid non configuré'
+            })
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Récupérer tous les torrents actifs (pas supprimés) avec optimisation et limite de test
+            c.execute("""
+                SELECT t.id, t.filename 
+                FROM torrents t
+                LEFT JOIN torrent_details td ON t.id = td.id
+                WHERE t.status != 'deleted'
+                AND t.status != 'error'
+                ORDER BY t.added_on DESC
+                LIMIT 100
             """)
             torrents_to_check = c.fetchall()
             
             if not torrents_to_check:
+                logging.info("⚠️ Aucun torrent trouvé pour la vérification de santé")
+                print("⚠️ Aucun torrent trouvé pour la vérification de santé")
                 return jsonify({
                     'success': True,
-                    'message': 'Aucun fichier à vérifier',
+                    'message': 'Aucun torrent à vérifier',
                     'checked': 0,
-                    'unavailable': 0
+                    'errors_503_found': 0
                 })
             
-            logging.info(f"Vérification de la santé de {len(torrents_to_check)} fichiers...")
-            unavailable_count = 0
+            logging.info(f"🚀 DÉMARRAGE: Vérification ULTRA RAPIDE de la santé de {len(torrents_to_check)} torrents (limite 100)...")
+            print(f"🚀 DÉBUT: Vérification de {len(torrents_to_check)} torrents (limite 100)")
+            print(f"📋 Commande utilisée: /api/health/check_all")
+            print(f"🎯 Objectif: Détecter les erreurs 503 via débridage Real-Debrid")
             
-            # Vérifier chaque lien via l'API Real-Debrid
-            for torrent_id, links_json in torrents_to_check:
+            # === OPTIMISATION: Traitement par batches avec asyncio ===
+            
+            async def check_torrent_health_async(session, torrent_id):
+                """Vérifie la santé d'un torrent via l'endpoint stream (le plus rapide)"""
                 try:
-                    # Parser les liens JSON
-                    if links_json:
-                        links = json.loads(links_json) if isinstance(links_json, str) else links_json
-                        # Prendre le premier lien disponible pour le test
-                        test_link = links[0] if isinstance(links, list) and links else str(links_json)
-                    else:
-                        continue
+                    print(f"🔍 Vérification torrent {torrent_id}...")
+                    url = f'https://api.real-debrid.com/rest/1.0/torrents/info/{torrent_id}'
+                    headers = {"Authorization": f"Bearer {token}"}
                     
-                    # Utiliser l'API /unrestrict/check pour tester le lien
-                    response = requests.post(
-                        'https://api.real-debrid.com/rest/1.0/unrestrict/check',
-                        headers={'Authorization': f'Bearer {token}'},
-                        data={'link': test_link},
-                        timeout=10
-                    )
-                    
-                    if response.status_code != 200:
-                        # Marquer comme indisponible
-                        try:
-                            # Essayer de parser la réponse JSON de Real-Debrid
-                            error_data = response.json()
-                            if 'error' in error_data and 'error_code' in error_data:
-                                error_msg = f"rd_error_{error_data['error_code']}_{error_data['error']}"
+                    async with session.get(url, headers=headers, timeout=8) as response:
+                        print(f"📡 Torrent {torrent_id}: Status HTTP {response.status}")
+                        
+                        if response.status == 404:
+                            print(f"❌ Torrent {torrent_id}: Torrent supprimé/non trouvé")
+                            return torrent_id, "Torrent non trouvé", None
+                        elif response.status != 200:
+                            print(f"⚠️ Torrent {torrent_id}: Erreur HTTP {response.status}")
+                            return torrent_id, f"Erreur HTTP {response.status}", None
+                        
+                        torrent_info = await response.json()
+                        download_links = torrent_info.get('links', [])
+                        
+                        if not download_links:
+                            print(f"⚠️ Torrent {torrent_id}: Aucun lien disponible")
+                            return torrent_id, "Aucun lien disponible", None
+                        
+                        print(f"🔗 Torrent {torrent_id}: {len(download_links)} liens trouvés, test du premier...")
+                        
+                        # Tester seulement le premier lien (optimisation)
+                        first_link = download_links[0]
+                        
+                        # Débrider pour tester la disponibilité
+                        unrestrict_data = {'link': first_link}
+                        async with session.post(
+                            'https://api.real-debrid.com/rest/1.0/unrestrict/link',
+                            headers=headers,
+                            data=unrestrict_data,
+                            timeout=6
+                        ) as unrestrict_response:
+                            
+                            print(f"🔓 Torrent {torrent_id}: Débridage status {unrestrict_response.status}")
+                            
+                            if unrestrict_response.status == 503:
+                                print(f"🚨 Torrent {torrent_id}: ERREUR 503 DÉTECTÉE!")
+                                return torrent_id, "Erreur 503 - Fichier indisponible", "503"
+                            elif unrestrict_response.status == 200:
+                                print(f"✅ Torrent {torrent_id}: Fichier disponible")
+                                return torrent_id, "Fichier disponible", "OK"
                             else:
-                                error_msg = f"http_error_{response.status_code}"
-                        except:
-                            # Fallback si pas de JSON valide
-                            error_msg = f"http_error_{response.status_code}"
-                        
-                        c.execute("""
-                            UPDATE torrent_details 
-                            SET error = ?, status = 'error'
-                            WHERE id = ?
-                        """, (error_msg, torrent_id))
-                        unavailable_count += 1
-                        
-                    # Rate limiting pour éviter de surcharger l'API
-                    time.sleep(0.5)
-                    
-                except Exception as link_error:
-                    print(f"❌ Erreur lors de la vérification du lien {torrent_id}: {link_error}")
-                    # Marquer comme erreur de vérification
-                    c.execute("""
-                        UPDATE torrent_details 
-                        SET error = 'health_check_failed'
-                        WHERE id = ?
-                    """, (torrent_id,))
-                    unavailable_count += 1
+                                print(f"⚠️ Torrent {torrent_id}: Status débridage {unrestrict_response.status}")
+                                return torrent_id, f"Status débridage: {unrestrict_response.status}", None
+                                
+                except asyncio.TimeoutError:
+                    print(f"⏱️ Torrent {torrent_id}: Timeout")
+                    return torrent_id, "Timeout lors de la vérification", None
+                except Exception as e:
+                    print(f"❌ Torrent {torrent_id}: Erreur {str(e)}")
+                    return torrent_id, f"Erreur: {str(e)}", None
             
-            conn.commit()
+            async def process_all_torrents():
+                """Traite tous les torrents en parallèle avec gestion optimisée"""
+                errors_503_count = 0
+                total_checked = 0
+                
+                logging.info(f"🚀 Démarrage du traitement parallèle de {len(torrents_to_check)} torrents...")
+                print(f"🚀 Démarrage du traitement parallèle...")
+                print(f"💡 Pour tester cette fonction: curl 'http://localhost:5000/api/health/check_all'")
+                print(f"💡 Ou via navigateur: http://localhost:5000/api/health/check_all")
+                
+                # Optimisation: Connexion unique avec pool
+                connector = aiohttp.TCPConnector(limit=25, limit_per_host=12)
+                timeout = aiohttp.ClientTimeout(total=8, connect=2)
+                
+                logging.info(f"🔧 Configuration réseau: 25 connexions max, timeout 8s")
+                print(f"🔧 Configuration: 25 connexions max, timeout 8s")
+                
+                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                    
+                    # Traitement par batches de 15 pour équilibrer vitesse/stabilité
+                    batch_size = 15
+                    total_batches = (len(torrents_to_check) + batch_size - 1) // batch_size
+                    
+                    logging.info(f"📦 Traitement par batches de {batch_size}, {total_batches} batches au total")
+                    print(f"📦 Traitement par batches de {batch_size}, {total_batches} batches au total")
+                    print(f"🔍 Méthode: Test de débridage du premier lien de chaque torrent")
+                    print(f"⚡ Détection ultra-rapide des erreurs 503")
+                    
+                    for i in range(0, len(torrents_to_check), batch_size):
+                        batch_num = (i // batch_size) + 1
+                        batch_torrents = torrents_to_check[i:i+batch_size]
+                        
+                        print(f"\n🔄 BATCH {batch_num}/{total_batches}: {len(batch_torrents)} torrents")
+                        logging.info(f"🔄 BATCH {batch_num}/{total_batches}: Traitement de {len(batch_torrents)} torrents")
+                        
+                        # Créer les tâches pour ce batch
+                        tasks = [
+                            check_torrent_health_async(session, torrent_id) 
+                            for torrent_id, filename in batch_torrents
+                        ]
+                        
+                        logging.info(f"⚡ Lancement de {len(tasks)} vérifications parallèles...")
+                        print(f"⚡ Lancement de {len(tasks)} tâches parallèles...")
+                        
+                        # Exécuter le batch en parallèle
+                        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                        
+                        logging.info(f"📊 Batch {batch_num} terminé, analyse des résultats...")
+                        print(f"📊 Batch {batch_num} terminé, traitement des résultats...")
+                        
+                        # Traiter les résultats avec gestion optimisée de la base
+                        batch_updates = []  # Collecter les mises à jour
+                        batch_503_count = 0
+                        
+                        for result in batch_results:
+                            if isinstance(result, Exception):
+                                logging.error(f"❌ Exception dans le batch: {result}")
+                                print(f"❌ Exception dans le batch: {result}")
+                                continue
+                                
+                            torrent_id, message, status = result
+                            total_checked += 1
+                            
+                            if status == "503":
+                                batch_503_count += 1
+                                errors_503_count += 1
+                                logging.warning(f"🚨 ERREUR 503 DÉTECTÉE pour torrent {torrent_id}")
+                                print(f"🚨 Erreur 503 confirmée pour {torrent_id}")
+                                # Préparer la mise à jour pour ce torrent
+                                batch_updates.append((message, torrent_id))
+                            elif status == "OK":
+                                logging.info(f"✅ Torrent {torrent_id} en bonne santé")
+                                print(f"✅ Torrent {torrent_id} en bonne santé")
+                                # Nettoyer les anciennes erreurs de santé
+                                batch_updates.append((None, torrent_id))
+                            else:
+                                logging.info(f"⚠️ Torrent {torrent_id}: {message}")
+                                print(f"⚠️ Torrent {torrent_id}: {message}")
+                        
+                        logging.info(f"📝 Batch {batch_num}: {batch_503_count} erreurs 503 trouvées sur {len(batch_torrents)} torrents")
+                        print(f"📝 Batch {batch_num}: {batch_503_count} erreurs 503 trouvées")
+                        
+                        # Exécuter toutes les mises à jour de base en une seule transaction
+                        if batch_updates:
+                            logging.info(f"💾 Mise à jour base de données: {len(batch_updates)} torrents")
+                            print(f"💾 Mise à jour base de données: {len(batch_updates)} torrents")
+                            with sqlite3.connect(DB_PATH) as conn:
+                                cursor = conn.cursor()
+                                for health_error, torrent_id in batch_updates:
+                                    # Créer l'entrée torrent_details si elle n'existe pas
+                                    cursor.execute("INSERT OR IGNORE INTO torrent_details (id) VALUES (?)", (torrent_id,))
+                                    # Mettre à jour le champ health_error
+                                    cursor.execute("""
+                                        UPDATE torrent_details 
+                                        SET health_error = ?
+                                        WHERE id = ?
+                                    """, (health_error, torrent_id))
+                                conn.commit()
+                            logging.info(f"✅ Base de données mise à jour pour le batch {batch_num}")
+                            print(f"✅ Base de données mise à jour pour le batch {batch_num}")
+                        
+                        # Pause courte entre batches pour respecter les quotas
+                        if i + batch_size < len(torrents_to_check):
+                            logging.info(f"⏸️ Pause 1.5s avant le prochain batch...")
+                            print(f"⏸️ Pause 1.5s avant le prochain batch...")
+                            await asyncio.sleep(1.5)
+                            
+                        progress_pct = (min(i + batch_size, len(torrents_to_check)) / len(torrents_to_check)) * 100
+                        logging.info(f"📊 Progression: {min(i + batch_size, len(torrents_to_check))}/{len(torrents_to_check)} ({progress_pct:.1f}%) - {errors_503_count} erreurs 503")
+                        print(f"📊 Progression globale: {min(i + batch_size, len(torrents_to_check))}/{len(torrents_to_check)} ({progress_pct:.1f}%)")
+                        print(f"🚨 Total erreurs 503 trouvées jusqu'ici: {errors_503_count}")
+                
+                logging.info(f"🎉 VÉRIFICATION TERMINÉE! Total: {total_checked}, erreurs 503: {errors_503_count}")
+                print(f"\n🎉 TERMINÉ! Total vérifié: {total_checked}, erreurs 503: {errors_503_count}")
+                return total_checked, errors_503_count
+            
+            # Exécuter le traitement asynchrone
+            logging.info(f"🚀 Lancement du traitement asynchrone ultra-rapide...")
+            print(f"🚀 Lancement du traitement asynchrone...")
+            print(f"💡 URL de test: http://localhost:5000/api/health/check_all")
+            print(f"💡 Commande curl: curl -s 'http://localhost:5000/api/health/check_all' | jq .")
+            start_time = time.time()
+            total_checked, errors_503_count = asyncio.run(process_all_torrents())
+            end_time = time.time()
+            
+            duration = end_time - start_time
+            rate = total_checked / duration if duration > 0 else 0
+            
+            logging.info(f"⏱️ Durée totale: {duration:.1f}s - Vitesse: {rate:.1f} torrents/sec")
+            print(f"⏱️ Durée totale: {duration:.1f}s")
+            print(f"⚡ Vitesse: {rate:.1f} torrents/seconde")
+            
+            success_message = f'🚀 Vérification ULTRA RAPIDE terminée: {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration:.1f}s ({rate:.1f}/s)'
+            logging.info(f"📋 Résultat final: {success_message}")
+            print(f"📋 Réponse: {success_message}")
             
             return jsonify({
                 'success': True,
-                'message': f'Vérification terminée: {unavailable_count} fichiers indisponibles détectés',
-                'checked': len(torrents_to_check),
-                'unavailable': unavailable_count
+                'message': success_message,
+                'checked': total_checked,
+                'errors_503_found': errors_503_count,
+                'performance': f'Traitement parallèle de {total_checked} torrents en {duration:.1f}s',
+                'rate': f'{rate:.1f} torrents/seconde',
+                'duration': f'{duration:.1f}s'
             })
             
     except Exception as e:

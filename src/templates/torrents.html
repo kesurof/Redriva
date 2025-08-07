@@ -224,6 +224,17 @@
       
       <div style="height: 30px; width: 1px; background: #ddd; margin: 0 5px;"></div>
       
+      <!-- Filtres de santé -->
+      <!-- <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span style="font-weight: 600; color: var(--text-color);">🏥 Santé:</span>
+        <a href="/torrents?status=health_error" class="btn {% if status_filter == 'health_error' %}btn-warning{% else %}btn-secondary{% endif %}" 
+           style="font-size: 12px; padding: 4px 8px;">
+          🚨 Erreurs 503
+        </a>
+      </div>
+      
+      <div style="height: 30px; width: 1px; background: #ddd; margin: 0 5px;"></div>-->
+      
       <!-- Indicateur de couverture -->
       <div style="display: flex; align-items: center; gap: 8px;">
         <span style="font-weight: 600; color: var(--text-color);">📊 Couverture:</span>
@@ -278,12 +289,12 @@
         <tr>
           <th style="width: 3%;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
           <th style="width: 5%;"><a href="{{ url_for('torrents', sort='id', dir='asc' if sort_by == 'id' and sort_dir == 'desc' else 'desc', status=status_filter, search=search) }}" style="text-decoration: none; color: inherit;">ID {% if sort_by == 'id' %}{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
-          <th style="width: 40%;"><a href="{{ url_for('torrents', sort='filename', dir='asc' if sort_by == 'filename' and sort_dir == 'desc' else 'desc', status=status_filter, search=search) }}" style="text-decoration: none; color: inherit;">Nom {% if sort_by == 'filename' %}{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
+          <th style="width: 35%;"><a href="{{ url_for('torrents', sort='filename', dir='asc' if sort_by == 'filename' and sort_dir == 'desc' else 'desc', status=status_filter, search=search) }}" style="text-decoration: none; color: inherit;">Nom {% if sort_by == 'filename' %}{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th style="width: 12%;"><a href="{{ url_for('torrents', sort='status', dir='asc' if sort_by == 'status' and sort_dir == 'desc' else 'desc', status=status_filter, search=search) }}" style="text-decoration: none; color: inherit;">Statut {% if sort_by == 'status' %}{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th style="width: 10%;"><a href="{{ url_for('torrents', sort='bytes', dir='asc' if sort_by == 'bytes' and sort_dir == 'desc' else 'desc', status=status_filter, search=search) }}" style="text-decoration: none; color: inherit;">Taille {% if sort_by == 'bytes' %}{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th style="width: 12%;"><a href="{{ url_for('torrents', sort='added_on', dir='asc' if sort_by == 'added_on' and sort_dir == 'desc' else 'desc', status=status_filter, search=search) }}" style="text-decoration: none; color: inherit;">Date {% if sort_by == 'added_on' %}{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}{% endif %}</a></th>
           <th style="width: 8%;">Progression</th>
-          <th style="width: 13%;">Actions</th>
+          <th style="width: 16%;">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -295,6 +306,24 @@
             <span onclick="copyText('{{ torrent.display_name }}')" style="cursor: copy;">
               {{ torrent.display_name[:50] + ('...' if torrent.display_name|length > 50 else '') }} 📋
             </span>
+            
+            <!-- Affichage de l'erreur de santé -->
+            {% if torrent.health_error %}
+            <div style="margin-top: 4px;">
+              <span style="background: #ffebee; color: #c62828; padding: 2px 6px; border-radius: 4px; font-size: 11px; border: 1px solid #ffcdd2;" title="{{ torrent.health_error }}">
+                🚨 Erreur 503 détectée
+              </span>
+            </div>
+            {% endif %}
+            
+            <!-- Affichage des autres erreurs -->
+            {% if torrent.error and torrent.error != '' %}
+            <div style="margin-top: 4px;">
+              <span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 4px; font-size: 11px; border: 1px solid #ffeaa7;" title="{{ torrent.error }}">
+                ⚠️ Erreur détectée
+              </span>
+            </div>
+            {% endif %}
           </td>
           <td>
             <span class="badge badge-{{ 'success' if torrent.current_status == 'downloaded' else 'danger' if 'error' in torrent.current_status else 'warning' }}">
@@ -317,6 +346,7 @@
             <div style="display: flex; gap: 3px; justify-content: center;">
               <button onclick="showModal('{{ torrent.id }}')" class="action-btn" title="Détails">DL</button>
               <button onclick="updateTorrent('{{ torrent.id }}')" class="action-btn" title="Mettre à jour">UPD</button>
+              <button onclick="checkTorrentHealth('{{ torrent.id }}')" class="action-btn" title="Vérifier santé">🔍</button>
               <button onclick="deleteTorrent('{{ torrent.id }}')" class="action-btn" title="Supprimer">🗑️</button>
               {% if torrent.current_status in ['error', 'virus', 'dead'] %}
               <button onclick="reinsertTorrent('{{ torrent.id }}')" class="action-btn" title="Réinsérer">♻️</button>
@@ -511,6 +541,32 @@ function reinsertTorrent(id) {
       if (data.success) {
         showToast('✅ Torrent réinséré', 'success');
         setTimeout(() => location.reload(), 1500);
+      } else {
+        showToast('❌ ' + (data.error || 'Erreur'), 'error');
+      }
+    })
+    .catch(() => {
+      showLoading(false);
+      showToast('❌ Erreur réseau', 'error');
+    });
+}
+
+function checkTorrentHealth(id) {
+  if (!confirm('Vérifier la santé de ce torrent ?')) return;
+  
+  showLoading(true, 'Vérification de la santé...');
+  fetch(`/api/health/check/${id}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      showLoading(false);
+      if (data.success) {
+        if (data.error_503_found) {
+          showToast(`⚠️ ${data.message}`, 'warning');
+          // Optionnel: recharger la page pour afficher l'erreur dans l'interface
+          setTimeout(() => location.reload(), 2000);
+        } else {
+          showToast(`✅ ${data.message}`, 'success');
+        }
       } else {
         showToast('❌ ' + (data.error || 'Erreur'), 'error');
       }

@@ -270,6 +270,14 @@ def create_tables():
         )
     ''')
     
+    # Ajouter la nouvelle colonne health_error si elle n'existe pas
+    try:
+        cursor.execute("ALTER TABLE torrent_details ADD COLUMN health_error TEXT")
+        logging.info("✅ Colonne health_error ajoutée à torrent_details")
+    except sqlite3.OperationalError:
+        # La colonne existe déjà
+        pass
+    
     # Index pour optimiser les performances
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_torrents_status ON torrents(status)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_torrents_added ON torrents(added_on)')
@@ -596,9 +604,15 @@ def upsert_torrent_detail(detail):
         
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
+        
+        # Récupérer le health_error existant pour le préserver
+        c.execute('SELECT health_error FROM torrent_details WHERE id = ?', (detail.get('id'),))
+        existing_health_error = c.fetchone()
+        preserved_health_error = existing_health_error[0] if existing_health_error else None
+        
         c.execute('''INSERT OR REPLACE INTO torrent_details
-            (id, name, status, size, files_count, progress, links, streaming_links, hash, host, error, added)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (id, name, status, size, files_count, progress, links, streaming_links, hash, host, error, added, health_error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 detail.get('id'),
                 detail.get('filename') or detail.get('name'),
@@ -611,7 +625,8 @@ def upsert_torrent_detail(detail):
                 detail.get('hash'),
                 detail.get('host'),
                 detail.get('error'),
-                detail.get('added')
+                detail.get('added'),
+                preserved_health_error  # Préserver le health_error existant
             )
         )
         conn.commit()
