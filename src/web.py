@@ -139,6 +139,12 @@ def internal_error(error):
                          coverage=0,
                          error_500=True), 500
 
+def get_db_connection():
+    """Crée et retourne une connexion à la base de données SQLite."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row  # Permet d'accéder aux colonnes par nom
+    return conn
+
 def format_download_link(direct_link):
     """Transforme un lien direct en lien downloader Real-Debrid"""
     if not direct_link or not direct_link.startswith('https://real-debrid.com/d/'):
@@ -147,6 +153,65 @@ def format_download_link(direct_link):
     # URL encoder le lien complet
     encoded_link = urllib.parse.quote(direct_link, safe='')
     return f"https://real-debrid.com/downloader?links={encoded_link}"
+
+def cleanup_deleted_torrents():
+    """
+    Supprime définitivement de la base de données tous les torrents 
+    marqués comme 'deleted' dans les tables torrents et torrent_details.
+    Retourne le nombre d'éléments supprimés.
+    """
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Récupérer les IDs des torrents marqués comme deleted dans la table torrents
+            c.execute("SELECT id FROM torrents WHERE status = 'deleted'")
+            deleted_torrent_ids = [row[0] for row in c.fetchall()]
+            
+            # Récupérer les IDs des torrents marqués comme deleted dans la table torrent_details
+            c.execute("SELECT id FROM torrent_details WHERE status = 'deleted'")
+            deleted_detail_ids = [row[0] for row in c.fetchall()]
+            
+            # Fusionner les deux listes pour obtenir tous les IDs à supprimer
+            all_deleted_ids = list(set(deleted_torrent_ids + deleted_detail_ids))
+            
+            if not all_deleted_ids:
+                print("ℹ️ Aucun torrent marqué comme supprimé trouvé")
+                return {
+                    'success': True,
+                    'deleted_count': 0,
+                    'message': 'Aucun torrent à nettoyer'
+                }
+            
+            # Supprimer de la table torrent_details
+            placeholders = ','.join('?' for _ in all_deleted_ids)
+            c.execute(f"DELETE FROM torrent_details WHERE id IN ({placeholders})", all_deleted_ids)
+            details_deleted = c.rowcount
+            
+            # Supprimer de la table torrents
+            c.execute(f"DELETE FROM torrents WHERE id IN ({placeholders})", all_deleted_ids)
+            torrents_deleted = c.rowcount
+            
+            conn.commit()
+            
+            total_deleted = len(all_deleted_ids)
+            print(f"✅ Nettoyage terminé : {total_deleted} torrents supprimés ({torrents_deleted} de torrents, {details_deleted} de torrent_details)")
+            
+            return {
+                'success': True,
+                'deleted_count': total_deleted,
+                'torrents_deleted': torrents_deleted,
+                'details_deleted': details_deleted,
+                'message': f'{total_deleted} torrent(s) supprimé(s) définitivement'
+            }
+            
+    except Exception as e:
+        print(f"❌ Erreur lors du nettoyage des torrents supprimés: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'deleted_count': 0
+        }
 
 def run_sync_task(task_name, token, task_func, *args):
     """Version simplifiée sans capture d'output"""
@@ -1200,80 +1265,113 @@ def get_torrent_files(torrent_id):
 
 @app.route('/api/refresh_stats')
 def refresh_stats():
-    """API pour rafraîchir les statistiques"""
+    """Recalcule et retourne les statistiques de la base de données avec nettoyage des torrents supprimés."""
     try:
+        # Étape 1: Nettoyer les torrents marqués comme "deleted"
+        cleanup_result = cleanup_deleted_torrents()
+        
+        if not cleanup_result['success']:
+            return jsonify({
+                "success": False, 
+                "error": f"Erreur lors du nettoyage: {cleanup_result.get('error', 'Erreur inconnue')}"
+            }), 500
+        
+        deleted_count = cleanup_result['deleted_count']
+        
+        # Étape 2: Recalculer les statistiques sur la base nettoyée
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             
-            # Statistiques de base (exclure les supprimés)
-            c.execute("SELECT COUNT(*) FROM torrents WHERE status != 'deleted'")
+            # Statistiques de base (plus besoin d'exclure les 'deleted' car ils ont été supprimés)
+            c.execute("SELECT COUNT(*) FROM torrents")
             total_torrents = c.fetchone()[0]
             
-            c.execute("SELECT COUNT(*) FROM torrent_details WHERE status != 'deleted'")
+            c.execute("SELECT COUNT(*) FROM torrent_details")
             total_details = c.fetchone()[0]
             
             coverage = (total_details / total_torrents * 100) if total_torrents > 0 else 0
             
-            # Erreurs (logique unifiée : priorité torrents.status)
+            # Erreurs
+            error_count = 0
             if ERROR_STATUSES:
                 placeholders = ','.join('?' * len(ERROR_STATUSES))
                 c.execute(f"""
                     SELECT COUNT(DISTINCT t.id) 
                     FROM torrents t
                     LEFT JOIN torrent_details td ON t.id = td.id
-                    WHERE t.status != 'deleted' 
-                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                    WHERE COALESCE(t.status, td.status) IN ({placeholders})
                 """, ERROR_STATUSES)
                 error_count = c.fetchone()[0] or 0
-            else:
-                error_count = 0
             
-            # Téléchargés (exclure les supprimés)
+            # Téléchargés
             c.execute("SELECT COUNT(*) FROM torrent_details WHERE status = 'downloaded'")
             downloaded_count = c.fetchone()[0] or 0
             
-            # Fichiers indisponibles (réutilise la logique existante)
+            # Fichiers indisponibles
             c.execute("""
                 SELECT COUNT(DISTINCT td.id) 
                 FROM torrent_details td
-                LEFT JOIN torrents t ON td.id = t.id
-                WHERE t.status != 'deleted' 
-                AND (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
-                     OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%'
-                     OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
+                WHERE (td.error LIKE '%503%' OR td.error LIKE '%404%' OR td.error LIKE '%24%' 
+                       OR td.error LIKE '%unavailable_file%' OR td.error LIKE '%rd_error_%'
+                       OR td.error LIKE '%health_check_error%' OR td.error LIKE '%http_error_%')
             """)
             unavailable_files = c.fetchone()[0] or 0
             
-            # Actifs (logique unifiée : priorité torrents.status)
+            # Actifs
+            active_count = 0
             if ACTIVE_STATUSES:
                 placeholders = ','.join('?' * len(ACTIVE_STATUSES))
                 c.execute(f"""
                     SELECT COUNT(DISTINCT t.id) 
                     FROM torrents t
                     LEFT JOIN torrent_details td ON t.id = td.id
-                    WHERE t.status != 'deleted' 
-                    AND COALESCE(t.status, td.status) IN ({placeholders})
+                    WHERE COALESCE(t.status, td.status) IN ({placeholders})
                 """, ACTIVE_STATUSES)
                 active_count = c.fetchone()[0] or 0
-            else:
-                active_count = 0
-            
-            return jsonify({
-                'success': True,
-                'stats': {
-                    'total_torrents': total_torrents,
-                    'total_details': total_details,
-                    'coverage': round(coverage, 1),
-                    'error_count': error_count,
-                    'downloaded_count': downloaded_count,
-                    'active_count': active_count,
-                    'unavailable_files': unavailable_files
-                }
-            })
+
+        return jsonify({
+            "success": True,
+            "message": f"{deleted_count} torrent(s) supprimé(s). Statistiques mises à jour.",
+            "deleted_count": deleted_count,
+            "cleanup_details": {
+                "torrents_deleted": cleanup_result.get('torrents_deleted', 0),
+                "details_deleted": cleanup_result.get('details_deleted', 0)
+            },
+            "stats": {
+                "total_torrents": total_torrents,
+                "total_details": total_details,
+                "coverage": round(coverage, 1),
+                "error_count": error_count,
+                "downloaded_count": downloaded_count,
+                "active_count": active_count,
+                "unavailable_files": unavailable_files
+            }
+        })
+        
+    except Exception as e:
+        print(f"❌ Erreur dans refresh_stats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/cleanup_deleted', methods=['POST'])
+def api_cleanup_deleted():
+    """API pour nettoyer les torrents marqués comme supprimés"""
+    try:
+        result = cleanup_deleted_torrents()
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 500
             
     except Exception as e:
-        print(f"❌ Erreur lors du rafraîchissement des stats: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        print(f"❌ Erreur dans api_cleanup_deleted: {e}")
+        return jsonify({
+            "success": False, 
+            "error": str(e),
+            "deleted_count": 0
+        }), 500
 
 @app.route('/api/health/check_all', methods=['GET', 'POST'])
 def check_all_files_health():

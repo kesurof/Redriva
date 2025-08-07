@@ -413,6 +413,7 @@ const CONFIG = {
         localHealth: { method: 'GET', path: '/api/health', desc: 'Santé système', local: true },
         healthCheckAll: { method: 'POST', path: '/api/health/check_all', desc: 'Vérifier tous les liens', local: true },
         healthCleanup: { method: 'POST', path: '/api/health/cleanup', desc: 'Nettoyage fichiers', local: true, confirm: true },
+        cleanupDeleted: { method: 'POST', path: '/api/cleanup_deleted', desc: 'Nettoyer torrents supprimés', local: true, confirm: true },
         refreshStats: { method: 'GET', path: '/api/refresh_stats', desc: 'Refresh statistiques', local: true },
         
         // Endpoints Redriva locaux - Tâches
@@ -571,7 +572,7 @@ function getEndpointsForTab(tabKey) {
         settings: ['settings', 'settingUpdate', 'localSettings', 'localSettingsReset', 'localSettingsExport', 'testConnection'],
         local: ['localTorrent', 'torrentStream', 'batchDelete', 'batchStatus', 'fixDeletedStatus'],
         sync: ['syncSmart', 'syncFast', 'syncTorrents'],
-        health: ['localHealth', 'healthCheckAll', 'healthCleanup', 'refreshStats'],
+        health: ['localHealth', 'healthCheckAll', 'healthCleanup', 'cleanupDeleted', 'refreshStats'],
         tasks: ['taskStatus']
     };
     
@@ -917,29 +918,6 @@ function updateTabIndicator(tabName, isSuccess) {
     }
 }
 
-// Tests automatisés
-function testSuite(type) {
-    if (!currentToken && type !== 'local') {
-        showToast('❌ Token Real-Debrid requis', 'error');
-        return;
-    }
-    
-    const endpoints = type === 'local' 
-        ? ['localHealth', 'taskStatus', 'localSettings', 'refreshStats'] 
-        : ['user', 'torrents', 'downloads', 'hosts', 'traffic'];
-    
-    showToast(`🚀 Démarrage tests ${type}...`, 'info');
-    
-    endpoints.forEach((endpoint, index) => {
-        setTimeout(() => {
-            testEndpoint(endpoint);
-            if (index === endpoints.length - 1) {
-                setTimeout(() => showToast('✅ Tests terminés', 'success'), 1000);
-            }
-        }, index * 1500);
-    });
-}
-
 // Actions des résultats
 function copyResult() {
     const resultDisplay = document.getElementById('result-display');
@@ -1151,6 +1129,7 @@ function testAllBasicEnhanced() {
         setTimeout(() => testSuite('local'), 8000);
     }
 }
+function testCleanupDeleted() { testEndpoint('cleanupDeleted'); }
 function clearAllResults() { clearAll(); }
 function copyCurrentResult() { copyResult(); }
 function clearCurrentResult() { clearResult(); }
