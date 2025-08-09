@@ -449,14 +449,15 @@ async def health_check_async_worker(token, torrents_to_check):
     
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         
-        # Configuration dynamique des batches - TRÈS CONSERVATRICE au départ
-        batch_size = 3  # Taille initiale très petite pour éviter les 429
+        # Configuration dynamique des batches - OPTIMISÉE POUR RÉCUPÉRATION RAPIDE
+        batch_size = 5  # Taille initiale plus agressive
         min_batch_size = 1  # Descendre jusqu'à 1 si nécessaire
-        max_batch_size = 20  # Réduire le maximum pour plus de stabilité
+        max_batch_size = 25  # Augmenter le maximum
         consecutive_successes = 0
         consecutive_errors = 0
         consecutive_429_errors = 0
-        api_delay = 2.0  # Délai initial plus conservateur
+        api_delay = 1.5  # Délai initial plus agressif
+        recovery_mode = False  # Mode récupération rapide
         
         i = 0
         batch_num = 0
@@ -514,19 +515,37 @@ async def health_check_async_worker(token, torrents_to_check):
                 if status == "503":
                     batch_503_count += 1
                     errors_503_count += 1
+                    logging.warning(f"🚨 ERREUR 503 DÉTECTÉE pour torrent {torrent_id}: {message}")
                     batch_updates.append((message, torrent_id))
                 elif status == "OK":
                     batch_success_count += 1
+                    logging.debug(f"✅ Torrent {torrent_id} en bonne santé")
                     batch_updates.append((None, torrent_id))
                 elif "Timeout" in message or "timeout" in message.lower():
                     batch_timeouts += 1
+                    logging.info(f"⏱️ Torrent {torrent_id}: {message}")
                 elif "Erreur HTTP" in message:
                     batch_api_errors += 1
+                    logging.info(f"⚠️ Torrent {torrent_id}: {message}")
                 elif "429" in message:
                     batch_api_errors += 1
+                    logging.warning(f"🚨 Torrent {torrent_id}: Rate limiting (429) - {message}")
+                else:
+                    logging.info(f"⚠️ Torrent {torrent_id}: {message}")
             
             # LOGIQUE D'ADAPTATION DYNAMIQUE avec gestion spéciale des 429
             batch_error_rate = (batch_api_errors + batch_timeouts) / actual_batch_size if actual_batch_size > 0 else 0
+            
+            # Détecter spécifiquement les erreurs 429 (Rate Limiting)
+            batch_429_errors = sum(1 for result in batch_results 
+                                 if not isinstance(result, Exception) and "429" in result[1])
+            
+            # Log détaillé des erreurs détectées dans ce batch
+            if batch_429_errors > 0 or batch_503_count > 0 or batch_api_errors > 0:
+                logging.info(f"📝 Batch {batch_num} ANALYSE: {batch_503_count} erreurs 503, {batch_api_errors} erreurs API, {batch_timeouts} timeouts, {batch_success_count} succès, {batch_429_errors} erreurs 429")
+                logging.info(f"📊 Batch {batch_num} PERF: {batch_duration:.2f}s, rate: {batch_rate:.1f}/s, erreur_rate: {batch_error_rate:.1%}")
+            else:
+                logging.debug(f"📝 Batch {batch_num}: {batch_success_count} succès, {batch_duration:.2f}s, {batch_rate:.1f}/s")
             batch_429_errors = sum(1 for result in batch_results 
                                  if not isinstance(result, Exception) and "429" in result[1])
             
@@ -534,21 +553,22 @@ async def health_check_async_worker(token, torrents_to_check):
                 consecutive_429_errors += 1
                 consecutive_errors += 1
                 consecutive_successes = 0
+                recovery_mode = True  # Activer le mode récupération
                 
-                # Ralentissement DRASTIQUE pour les erreurs 429
+                # RALENTISSEMENT MODÉRÉ pour les erreurs 429 (moins drastique)
                 old_batch_size = batch_size
                 old_delay = api_delay
                 
                 if consecutive_429_errors >= 3:
-                    # Mode ultra-lent après 3 batches consécutifs avec 429
+                    # Mode ralenti après 3 batches consécutifs avec 429
                     batch_size = min_batch_size  # Descendre au minimum (1)
-                    api_delay = min(api_delay + 5.0, 15.0)  # Jusqu'à 15s entre batches
+                    api_delay = min(api_delay + 3.0, 8.0)  # Max 8s au lieu de 15s
                 else:
                     batch_size = max(min_batch_size, batch_size // 2)  # Diviser par 2
-                    api_delay = min(api_delay + 3.0, 10.0)  # Augmenter de 3s
+                    api_delay = min(api_delay + 2.0, 6.0)  # Max 6s au lieu de 10s
                 
                 logging.warning(f"🚨 RATE LIMITING (429): {batch_429_errors} erreurs, consécutives: {consecutive_429_errors}")
-                logging.warning(f"🔻 RALENTISSEMENT DRASTIQUE: batch_size: {old_batch_size}→{batch_size}, délai: {old_delay:.1f}s→{api_delay:.1f}s")
+                logging.warning(f"🔻 RALENTISSEMENT MODÉRÉ: batch_size: {old_batch_size}→{batch_size}, délai: {old_delay:.1f}s→{api_delay:.1f}s")
                 
             elif batch_error_rate > 0.3:  # Plus de 30% d'erreurs (non-429)
                 consecutive_errors += 1
@@ -558,24 +578,44 @@ async def health_check_async_worker(token, torrents_to_check):
                 # Réduire modérément la taille du batch
                 old_batch_size = batch_size
                 batch_size = max(min_batch_size, batch_size - 2)
-                api_delay = min(api_delay + 1.0, 8.0)
+                api_delay = min(api_delay + 1.0, 5.0)  # Réduire le max
                 
                 logging.warning(f"🔻 RALENTISSEMENT: {batch_error_rate:.1%} erreurs → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
                 
-            elif batch_error_rate < 0.05 and batch_rate > 6:  # Moins de 5% d'erreurs et bonne vitesse
+            elif batch_error_rate < 0.05:  # Moins de 5% d'erreurs - RÉCUPÉRATION RAPIDE
                 consecutive_successes += 1
-                consecutive_errors = 0
-                consecutive_429_errors = 0  # Reset car tout va bien
+                consecutive_errors = max(0, consecutive_errors - 1)
+                consecutive_429_errors = max(0, consecutive_429_errors - 1)
                 
-                # Conditions TRÈS STRICTES pour augmenter la taille
-                if consecutive_successes >= 5 and batch_size < max_batch_size:  # 5 batches parfaits
+                # RÉCUPÉRATION RAPIDE EN MODE RECOVERY
+                if recovery_mode and consecutive_successes >= 2:  # Seulement 2 batches parfaits
                     old_batch_size = batch_size
-                    batch_size = min(max_batch_size, batch_size + 1)  # Augmenter de 1 seulement
-                    api_delay = max(api_delay - 0.3, 1.0)  # Réduire légèrement
+                    old_delay = api_delay
                     
-                    logging.info(f"🔺 ACCÉLÉRATION PRUDENTE: {batch_error_rate:.1%} erreurs, {batch_rate:.1f}/s → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
+                    # Récupération agressive
+                    if batch_size < 5:
+                        batch_size = min(max_batch_size, batch_size + 2)  # +2 au lieu de +1
+                    else:
+                        batch_size = min(max_batch_size, batch_size + 3)  # +3 pour récupération rapide
+                    
+                    api_delay = max(api_delay - 1.0, 1.0)  # Réduction plus rapide
+                    
+                    logging.info(f"🚀 RÉCUPÉRATION RAPIDE: {batch_error_rate:.1%} erreurs → batch_size: {old_batch_size}→{batch_size}, délai: {old_delay:.1f}s→{api_delay:.1f}s")
+                    
+                    # Sortir du mode récupération si on retrouve une bonne taille
+                    if batch_size >= 10:
+                        recovery_mode = False
+                        logging.info(f"✅ SORTIE MODE RÉCUPÉRATION: batch_size={batch_size}")
+                        
+                # ACCÉLÉRATION NORMALE (hors mode récupération)
+                elif not recovery_mode and consecutive_successes >= 3 and batch_size < max_batch_size:  # 3 au lieu de 5
+                    old_batch_size = batch_size
+                    batch_size = min(max_batch_size, batch_size + 2)  # +2 au lieu de +1
+                    api_delay = max(api_delay - 0.2, 1.0)  # Réduction plus rapide
+                    
+                    logging.info(f"🔺 ACCÉLÉRATION NORMALE: {batch_error_rate:.1%} erreurs, {batch_rate:.1f}/s → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
             else:
-                # Maintenir le rythme actuel mais décrementer les compteurs lentement
+                # Maintenir le rythme actuel mais décrementer les compteurs plus rapidement
                 consecutive_errors = max(0, consecutive_errors - 1)
                 consecutive_successes = max(0, consecutive_successes - 1)
                 consecutive_429_errors = max(0, consecutive_429_errors - 1)
