@@ -760,10 +760,10 @@ def process_batch_deletion(token, torrent_ids):
                 logging.info(f"Pause {api_delay}s avant le prochain batch...")
                 time.sleep(api_delay)
         
-        # Finalisation
+    # Finalisation
     batch_results['status'] = 'completed'
-        batch_results['end_time'] = time.time()
-        batch_results['duration'] = batch_results['end_time'] - batch_results['start_time']
+    batch_results['end_time'] = time.time()
+    batch_results['duration'] = batch_results['end_time'] - batch_results['start_time']
     logging.info(f"Suppression terminée: {batch_results['success']}/{batch_results['total']} succès")
     log_event('BATCH_DELETE_END', batch_id=batch_id, success=batch_results['success'], failed=batch_results['failed'], duration=f"{batch_results['duration']:.2f}s")
     
@@ -861,21 +861,16 @@ def get_batch_status(batch_id):
 def api_torrent_detail(torrent_id):
     """API pour récupérer les détails d'un torrent avec rafraîchissement depuis Real-Debrid"""
     try:
-    # 1. Charger le token Real-Debrid
-    log_event('TORRENT_DETAIL_START', torrent_id=torrent_id)
+        log_event('TORRENT_DETAIL_START', torrent_id=torrent_id)
         token = load_token()
         if not token:
-            # Fallback sur les données en cache si pas de token
             return get_cached_torrent_data(torrent_id, error_msg="Token Real-Debrid non configuré")
-        
-        # 2. Rafraîchir les données depuis l'API Real-Debrid
-        
+
         async def refresh_torrent_data():
             async with aiohttp.ClientSession() as session:
                 result = await fetch_torrent_detail(session, token, torrent_id)
                 return result is not None
-        
-        # 3. Exécuter le rafraîchissement (avec timeout)
+
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -887,15 +882,13 @@ def api_torrent_detail(torrent_id):
         except Exception as e:
             logging.error(f"Erreur lors du rafraîchissement du torrent {torrent_id}: {e}")
             return get_cached_torrent_data(torrent_id, error_msg=f"Erreur API: {str(e)}", refreshed=False)
-        
-        # 4. Récupérer les données mises à jour depuis la base
-    response = get_cached_torrent_data(torrent_id, refreshed=refreshed)
-    log_event('TORRENT_DETAIL_END', torrent_id=torrent_id, refreshed=refreshed)
-    return response
-        
+
+        response = get_cached_torrent_data(torrent_id, refreshed=refreshed)
+        log_event('TORRENT_DETAIL_END', torrent_id=torrent_id, refreshed=refreshed)
+        return response
     except Exception as e:
-    logging.error(f"Erreur dans api_torrent_detail: {e}")
-    log_event('TORRENT_DETAIL_END', torrent_id=torrent_id, status='error', error=str(e))
+        logging.error(f"Erreur dans api_torrent_detail: {e}")
+        log_event('TORRENT_DETAIL_END', torrent_id=torrent_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -984,8 +977,8 @@ def delete_torrent(torrent_id):
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
         
         # Appel API Real-Debrid pour supprimer le torrent
-    log_event('TORRENT_DELETE_START', torrent_id=torrent_id)
-    response = requests.delete(
+        log_event('TORRENT_DELETE_START', torrent_id=torrent_id)
+        response = requests.delete(
             f'https://api.real-debrid.com/rest/1.0/torrents/delete/{torrent_id}',
             headers={'Authorization': f'Bearer {token}'}
         )
@@ -1038,8 +1031,8 @@ def reinsert_torrent(torrent_id):
         filename, torrent_hash = torrent_data
         
         # Réinsérer via l'API Real-Debrid
-    log_event('TORRENT_REINSERT_START', torrent_id=torrent_id)
-    response = requests.post(
+        log_event('TORRENT_REINSERT_START', torrent_id=torrent_id)
+        response = requests.post(
             'https://api.real-debrid.com/rest/1.0/torrents/addMagnet',
             headers={'Authorization': f'Bearer {token}'},
             data={'magnet': f'magnet:?xt=urn:btih:{torrent_hash}&dn={filename}'}
@@ -1442,7 +1435,7 @@ def refresh_stats():
                 """, ACTIVE_STATUSES)
                 active_count = c.fetchone()[0] or 0
 
-    response = jsonify({
+        response = jsonify({
             "success": True,
             "message": f"{deleted_count} torrent(s) supprimé(s). Statistiques mises à jour.",
             "deleted_count": deleted_count,
@@ -1460,8 +1453,8 @@ def refresh_stats():
                 "unavailable_files": unavailable_files
             }
         })
-    log_event('STATS_REFRESH_END', torrents=total_torrents, details=total_details, coverage=round(coverage,1), errors=error_count, active=active_count, deleted=deleted_count)
-    return response
+        log_event('STATS_REFRESH_END', torrents=total_torrents, details=total_details, coverage=round(coverage,1), errors=error_count, active=active_count, deleted=deleted_count)
+        return response
         
     except Exception as e:
         print(f"❌ Erreur dans refresh_stats: {e}")
