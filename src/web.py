@@ -394,11 +394,21 @@ def torrents_list():
                 params.extend([status_filter, status_filter])
         
         if search:
-            # Détecter si la recherche est un ID (numérique) ou un nom de fichier
+            # Détecter si la recherche est un ID Real-Debrid ou un nom de fichier
             search_stripped = search.strip()
-            if search_stripped.isdigit():
-                # Recherche par ID exact
-                conditions.append("(t.id = ?)")
+            
+            # Les IDs Real-Debrid sont généralement :
+            # - 13 caractères alphanumériques en majuscules
+            # - Ou peuvent être des IDs numériques purs
+            is_probable_id = (
+                (len(search_stripped) == 13 and search_stripped.isalnum() and search_stripped.isupper()) or
+                search_stripped.isdigit() or
+                (len(search_stripped) >= 8 and search_stripped.isalnum() and not ' ' in search_stripped)
+            )
+            
+            if is_probable_id:
+                # Recherche par ID exact (insensible à la casse)
+                conditions.append("(UPPER(t.id) = UPPER(?))")
                 params.extend([search_stripped])
             else:
                 # Recherche par nom de fichier (comportement existant)
