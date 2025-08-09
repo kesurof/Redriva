@@ -29,20 +29,22 @@ from main import (
     DB_PATH, load_token, sync_smart, sync_all_v2, sync_torrents_only,
     show_stats, diagnose_errors, get_db_stats, format_size, get_status_emoji,
     create_tables, sync_details_only, ACTIVE_STATUSES, ERROR_STATUSES, COMPLETED_STATUSES,
-    fetch_torrent_detail, upsert_torrent_detail
+    fetch_torrent_detail, upsert_torrent_detail, log_event
 )
 
 # INITIALISATION AUTOMATIQUE DE LA BASE DE DONNÉES
 def init_database_if_needed():
     """Initialise la base de données si elle n'existe pas ou est incomplète"""
     try:
-        print("🔧 Vérification de la base de données...")
+    print("🔧 Vérification de la base de données...")
+    log_event('DB_CHECK_START', path=DB_PATH)
         
         # Vérifier si la base existe
         if not os.path.exists(DB_PATH):
             print("📂 Base de données non trouvée, création en cours...")
             create_tables()
             print("✅ Base de données créée avec succès")
+            log_event('DB_CHECK_END', status='created')
             return
         
         # Vérifier l'intégrité des tables
@@ -76,6 +78,7 @@ def init_database_if_needed():
                     print("✅ Colonne 'health_error' ajoutée avec succès")
                 
                 print("✅ Base de données vérifiée et à jour")
+                log_event('DB_CHECK_END', status='ok')
                 
         except Exception as db_error:
             print(f"⚠️ Problème avec la base existante: {db_error}")
@@ -89,9 +92,11 @@ def init_database_if_needed():
             
             create_tables()
             print("✅ Base de données recréée avec succès")
+            log_event('DB_CHECK_END', status='recreated')
             
     except Exception as e:
-        print(f"❌ Erreur lors de l'initialisation de la base: {e}")
+    print(f"❌ Erreur lors de l'initialisation de la base: {e}")
+    log_event('DB_CHECK_END', status='error', error=str(e))
         print(f"   Chemin de la base: {DB_PATH}")
         raise
 
@@ -228,6 +233,7 @@ def cleanup_deleted_torrents():
     Retourne le nombre d'éléments supprimés.
     """
     try:
+        log_event('CLEAN_START', scope='deleted_torrents')
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             
@@ -244,6 +250,7 @@ def cleanup_deleted_torrents():
             
             if not all_deleted_ids:
                 print("ℹ️ Aucun torrent marqué comme supprimé trouvé")
+                log_event('CLEAN_END', scope='deleted_torrents', deleted=0, status='nothing')
                 return {
                     'success': True,
                     'deleted_count': 0,
@@ -263,6 +270,7 @@ def cleanup_deleted_torrents():
             
             total_deleted = len(all_deleted_ids)
             print(f"✅ Nettoyage terminé : {total_deleted} torrents supprimés ({torrents_deleted} de torrents, {details_deleted} de torrent_details)")
+            log_event('CLEAN_END', scope='deleted_torrents', deleted=total_deleted, torrents=torrents_deleted, details=details_deleted, status='success')
             
             return {
                 'success': True,
@@ -274,6 +282,7 @@ def cleanup_deleted_torrents():
             
     except Exception as e:
         print(f"❌ Erreur lors du nettoyage des torrents supprimés: {e}")
+        log_event('CLEAN_END', scope='deleted_torrents', status='error', error=str(e))
         return {
             'success': False,
             'error': str(e),
@@ -284,6 +293,8 @@ def run_sync_task(task_name, token, task_func, *args):
     """Version simplifiée sans capture d'output"""
     def execute_task():
         import time
+        task_id = str(uuid.uuid4())[:8]
+        log_event('ASYNC_TASK_START', name=task_name.replace(' ', '_'), task_id=task_id)
         
         try:
             task_status["running"] = True
@@ -300,11 +311,13 @@ def run_sync_task(task_name, token, task_func, *args):
             task_status["result"] = f"✅ {task_name} terminée avec succès"
             task_status["running"] = False
             task_status["last_update"] = time.time()
+            log_event('ASYNC_TASK_END', name=task_name.replace(' ', '_'), task_id=task_id, status='success')
             
         except Exception as e:
             task_status["result"] = f"❌ Erreur dans {task_name}: {str(e)}"
             task_status["running"] = False
             task_status["last_update"] = time.time()
+            log_event('ASYNC_TASK_END', name=task_name.replace(' ', '_'), task_id=task_id, status='error', error=str(e))
     
     # Lancer la tâche en arrière-plan
     thread = threading.Thread(target=execute_task)
@@ -557,12 +570,15 @@ def sync_action(action):
     if action == 'smart':
         run_sync_task("Sync intelligent", token, sync_smart)
         action_name = "Synchronisation intelligente"
+        log_event('SYNC_TRIGGER', mode='smart', source='web')
     elif action == 'fast':
         run_sync_task("Sync complet", token, sync_all_v2)
         action_name = "Synchronisation complète"
+        log_event('SYNC_TRIGGER', mode='fast', source='web')
     elif action == 'torrents':
         run_sync_task("Vue d'ensemble", token, sync_torrents_only)
         action_name = "Vue d'ensemble"
+        log_event('SYNC_TRIGGER', mode='torrents_only', source='web')
     else:
         if request.method == 'POST':
             return jsonify({'success': False, 'error': 'Action inconnue'}), 400
@@ -643,6 +659,7 @@ def process_batch_deletion(token, torrent_ids):
     
     batch_id = str(uuid.uuid4())[:8]
     logging.info(f"🚀 Démarrage suppression batch {batch_id}: {len(torrent_ids)} torrents")
+    log_event('BATCH_DELETE_START', batch_id=batch_id, total=len(torrent_ids))
     
     # Structure pour suivre les résultats
     batch_results = {
@@ -732,6 +749,8 @@ def process_batch_deletion(token, torrent_ids):
                         'attempts': max_retries
                     })
                     logging.error(f"Échec suppression {torrent_id}: {last_error}")
+                # Progress event
+                log_event('BATCH_DELETE_PROGRESS', batch_id=batch_id, processed=batch_results['processed'], success=batch_results['success'], failed=batch_results['failed'])
                 
                 # Pause entre suppressions individuelles
                 time.sleep(0.5)
@@ -742,11 +761,11 @@ def process_batch_deletion(token, torrent_ids):
                 time.sleep(api_delay)
         
         # Finalisation
-        batch_results['status'] = 'completed'
+    batch_results['status'] = 'completed'
         batch_results['end_time'] = time.time()
         batch_results['duration'] = batch_results['end_time'] - batch_results['start_time']
-        
-        logging.info(f"Suppression terminée: {batch_results['success']}/{batch_results['total']} succès")
+    logging.info(f"Suppression terminée: {batch_results['success']}/{batch_results['total']} succès")
+    log_event('BATCH_DELETE_END', batch_id=batch_id, success=batch_results['success'], failed=batch_results['failed'], duration=f"{batch_results['duration']:.2f}s")
     
     # Lancer le worker en arrière-plan
     threading.Thread(target=deletion_worker, daemon=True).start()
@@ -842,7 +861,8 @@ def get_batch_status(batch_id):
 def api_torrent_detail(torrent_id):
     """API pour récupérer les détails d'un torrent avec rafraîchissement depuis Real-Debrid"""
     try:
-        # 1. Charger le token Real-Debrid
+    # 1. Charger le token Real-Debrid
+    log_event('TORRENT_DETAIL_START', torrent_id=torrent_id)
         token = load_token()
         if not token:
             # Fallback sur les données en cache si pas de token
@@ -869,10 +889,13 @@ def api_torrent_detail(torrent_id):
             return get_cached_torrent_data(torrent_id, error_msg=f"Erreur API: {str(e)}", refreshed=False)
         
         # 4. Récupérer les données mises à jour depuis la base
-        return get_cached_torrent_data(torrent_id, refreshed=refreshed)
+    response = get_cached_torrent_data(torrent_id, refreshed=refreshed)
+    log_event('TORRENT_DETAIL_END', torrent_id=torrent_id, refreshed=refreshed)
+    return response
         
     except Exception as e:
-        logging.error(f"Erreur dans api_torrent_detail: {e}")
+    logging.error(f"Erreur dans api_torrent_detail: {e}")
+    log_event('TORRENT_DETAIL_END', torrent_id=torrent_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -961,7 +984,8 @@ def delete_torrent(torrent_id):
             return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'})
         
         # Appel API Real-Debrid pour supprimer le torrent
-        response = requests.delete(
+    log_event('TORRENT_DELETE_START', torrent_id=torrent_id)
+    response = requests.delete(
             f'https://api.real-debrid.com/rest/1.0/torrents/delete/{torrent_id}',
             headers={'Authorization': f'Bearer {token}'}
         )
@@ -978,11 +1002,14 @@ def delete_torrent(torrent_id):
             conn.commit()
             conn.close()
             
+            log_event('TORRENT_DELETE_END', torrent_id=torrent_id, status='success')
             return jsonify({'success': True, 'message': 'Torrent supprimé avec succès'})
         else:
+            log_event('TORRENT_DELETE_END', torrent_id=torrent_id, status='api_error', http=response.status_code)
             return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
             
     except Exception as e:
+        log_event('TORRENT_DELETE_END', torrent_id=torrent_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/torrent/reinsert/<torrent_id>', methods=['POST'])
@@ -1011,7 +1038,8 @@ def reinsert_torrent(torrent_id):
         filename, torrent_hash = torrent_data
         
         # Réinsérer via l'API Real-Debrid
-        response = requests.post(
+    log_event('TORRENT_REINSERT_START', torrent_id=torrent_id)
+    response = requests.post(
             'https://api.real-debrid.com/rest/1.0/torrents/addMagnet',
             headers={'Authorization': f'Bearer {token}'},
             data={'magnet': f'magnet:?xt=urn:btih:{torrent_hash}&dn={filename}'}
@@ -1032,11 +1060,14 @@ def reinsert_torrent(torrent_id):
             conn.commit()
             conn.close()
             
+            log_event('TORRENT_REINSERT_END', torrent_id=torrent_id, new_id=new_id, status='success')
             return jsonify({'success': True, 'message': 'Torrent réinséré avec succès', 'new_id': new_id})
         else:
+            log_event('TORRENT_REINSERT_END', torrent_id=torrent_id, status='api_error', http=response.status_code)
             return jsonify({'success': False, 'error': f'Erreur API Real-Debrid: {response.status_code}'})
             
     except Exception as e:
+        log_event('TORRENT_REINSERT_END', torrent_id=torrent_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/media_info/<file_id>')
@@ -1348,6 +1379,7 @@ def get_torrent_files(torrent_id):
 def refresh_stats():
     """Recalcule et retourne les statistiques de la base de données avec nettoyage des torrents supprimés."""
     try:
+        log_event('STATS_REFRESH_START')
         # Étape 1: Nettoyer les torrents marqués comme "deleted"
         cleanup_result = cleanup_deleted_torrents()
         
@@ -1410,7 +1442,7 @@ def refresh_stats():
                 """, ACTIVE_STATUSES)
                 active_count = c.fetchone()[0] or 0
 
-        return jsonify({
+    response = jsonify({
             "success": True,
             "message": f"{deleted_count} torrent(s) supprimé(s). Statistiques mises à jour.",
             "deleted_count": deleted_count,
@@ -1428,9 +1460,12 @@ def refresh_stats():
                 "unavailable_files": unavailable_files
             }
         })
+    log_event('STATS_REFRESH_END', torrents=total_torrents, details=total_details, coverage=round(coverage,1), errors=error_count, active=active_count, deleted=deleted_count)
+    return response
         
     except Exception as e:
         print(f"❌ Erreur dans refresh_stats: {e}")
+        log_event('STATS_REFRESH_END', status='error', error=str(e))
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
@@ -1439,15 +1474,19 @@ def refresh_stats():
 def api_cleanup_deleted():
     """API pour nettoyer les torrents marqués comme supprimés"""
     try:
+        log_event('CLEAN_TRIGGER', source='api')
         result = cleanup_deleted_torrents()
         
         if result['success']:
+            log_event('CLEAN_RETURN', deleted=result.get('deleted_count',0), status='success')
             return jsonify(result)
         else:
+            log_event('CLEAN_RETURN', status='error', error=result.get('error'))
             return jsonify(result), 500
             
     except Exception as e:
         print(f"❌ Erreur dans api_cleanup_deleted: {e}")
+        log_event('CLEAN_RETURN', status='error', error=str(e))
         return jsonify({
             "success": False, 
             "error": str(e),
@@ -1459,6 +1498,7 @@ def api_cleanup_deleted():
 def check_single_torrent_health(torrent_id):
     """API pour vérifier la santé d'un torrent spécifique via api/torrent/stream"""
     try:
+        log_event('HEALTH_SINGLE_START', torrent_id=torrent_id)
         from main import load_token
         token = load_token()
         
@@ -1546,6 +1586,7 @@ def check_single_torrent_health(torrent_id):
             
             # Construire la réponse selon le résultat
             if error_503_found:
+                log_event('HEALTH_SINGLE_END', torrent_id=torrent_id, status='503')
                 return jsonify({
                     'success': True,
                     'message': f'⚠️ Erreur 503 détectée pour le torrent {torrent_id}',
@@ -1554,6 +1595,7 @@ def check_single_torrent_health(torrent_id):
                     'torrent_id': torrent_id
                 })
             else:
+                log_event('HEALTH_SINGLE_END', torrent_id=torrent_id, status='ok')
                 return jsonify({
                     'success': True,
                     'message': f'✅ Torrent {torrent_id} en bonne santé',
@@ -1563,12 +1605,15 @@ def check_single_torrent_health(torrent_id):
             
     except Exception as e:
         print(f"❌ Erreur lors de la vérification de santé du torrent {torrent_id}: {e}")
+        log_event('HEALTH_SINGLE_END', torrent_id=torrent_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/health/check_all', methods=['GET', 'POST'])
 def check_all_files_health():
     """API pour vérifier la santé de tous les liens de fichiers via api/torrent/stream - VERSION ULTRA RAPIDE"""
     try:
+        start_time = time.time()
+        log_event('HEALTH_CHECK_START')
         from main import load_token
         token = load_token()
         
@@ -1596,6 +1641,7 @@ def check_all_files_health():
             if not torrents_to_check:
                 logging.info("⚠️ Aucun torrent trouvé pour la vérification de santé")
                 print("⚠️ Aucun torrent trouvé pour la vérification de santé")
+                log_event('HEALTH_CHECK_END', checked=0, errors=0, status='nothing')
                 return jsonify({
                     'success': True,
                     'message': 'Aucun torrent à vérifier',
@@ -1803,7 +1849,7 @@ def check_all_files_health():
             logging.info(f"📋 Résultat final: {success_message}")
             print(f"📋 Réponse: {success_message}")
             
-            return jsonify({
+            response = jsonify({
                 'success': True,
                 'message': success_message,
                 'checked': total_checked,
@@ -1812,15 +1858,19 @@ def check_all_files_health():
                 'rate': f'{rate:.1f} torrents/seconde',
                 'duration': f'{duration:.1f}s'
             })
+            log_event('HEALTH_CHECK_END', checked=total_checked, errors=errors_503_count, duration=f"{duration:.2f}s", rate=f"{rate:.2f}/s")
+            return response
             
     except Exception as e:
         print(f"❌ Erreur lors de la vérification de santé: {e}")
+        log_event('HEALTH_CHECK_END', status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/health/cleanup', methods=['GET', 'POST'])
 def cleanup_unavailable_files():
     """API pour nettoyer les fichiers indisponibles et notifier Sonarr/Radarr"""
     try:
+        log_event('UNAVAILABLE_CLEAN_START')
         from main import load_token
         token = load_token()
         
@@ -1883,14 +1933,17 @@ def cleanup_unavailable_files():
             except ImportError:
                 logging.info("Module symlink non disponible, pas de notification *arr")
             
-            return jsonify({
+            response = jsonify({
                 'success': True,
                 'message': f'{cleaned_count} fichiers indisponibles nettoyés',
                 'cleaned': cleaned_count
             })
+            log_event('UNAVAILABLE_CLEAN_END', cleaned=cleaned_count, status='success')
+            return response
             
     except Exception as e:
         print(f"❌ Erreur lors du nettoyage: {e}")
+        log_event('UNAVAILABLE_CLEAN_END', status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/processing_torrents')

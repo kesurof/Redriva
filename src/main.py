@@ -106,6 +106,32 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+# ──────────────────────────────────────────────────────────────────────────────
+# LOGGING STRUCTURE : helper pour événements parsables dans docker logs
+# Convention : lignes commençant par [SYNC_*] / [DETAILS_*] / [CLEAN_*]
+# Format : [TAG key=value key2=value2 ...] (valeurs sans espaces, ou entre guillemets)
+# Objectif : permettre grep/awk facile (ex: grep '^\[SYNC_END').
+# ──────────────────────────────────────────────────────────────────────────────
+def log_event(tag: str, **fields):
+    """Émet une ligne de log structurée parsable.
+
+    Args:
+        tag (str): Nom d'événement (ex: SYNC_START, SYNC_END, DETAILS_PROGRESS)
+        **fields: Paires clé=valeur (sans transformation). Les valeurs contenant
+                  des espaces ou '=' seront entourées de guillemets doubles.
+    """
+    parts = []
+    for k, v in fields.items():
+        if v is None:
+            continue
+        val = str(v)
+        if ' ' in val or '=' in val:
+            val = '"' + val.replace('"', "'") + '"'
+        parts.append(f"{k}={val}")
+    line = f"[{tag} {' '.join(parts)}]" if parts else f"[{tag}]"
+    # Utilise logging.info pour rester homogène avec le reste
+    logging.info(line)
+
 # Gestion de l'interruption propre (CTRL+C)
 stop_requested = False
 def handle_sigint(signum, frame):
@@ -924,12 +950,15 @@ def sync_smart(token):
     Usage: python src/main.py --sync-smart
     Temps typique: 30s - 2 minutes
     """
+    start_overall = time.time()
     logging.info("🧠 Synchronisation intelligente optimisée démarrée...")
+    log_event('SYNC_START', mode='smart')
     
     # ==========================================
     # 🚀 PHASE 1 : Mise à jour rapide des statuts
     # ==========================================
     logging.info("🚀 [PHASE 1] Mise à jour ultra-rapide des statuts...")
+    log_event('SYNC_PHASE_START', mode='smart', phase=1, name='status_refresh')
     
     # Sauvegarder les anciens statuts pour comparaison
     old_statuses = {}
@@ -943,14 +972,17 @@ def sync_smart(token):
     
     if total_torrents > 0:
         logging.info(f"✅ Statuts mis à jour : {total_torrents} torrents (phase 1 terminée)")
+        log_event('SYNC_PHASE_END', mode='smart', phase=1, torrents=total_torrents, status='success')
     else:
         logging.info("❌ Aucun torrent récupéré, arrêt de la synchronisation")
+        log_event('SYNC_ABORT', mode='smart', reason='no_torrents')
         return
     
     # ==========================================
     # 🎯 PHASE 2 : Analyse des changements
     # ==========================================
     logging.info("🎯 [PHASE 2] Analyse intelligente des changements...")
+    log_event('SYNC_PHASE_START', mode='smart', phase=2, name='change_analysis')
     
     # Récupérer les nouveaux statuts après torrents_only()
     new_statuses = {}
@@ -1000,6 +1032,7 @@ def sync_smart(token):
     
     # Affichage du résumé des changements détectés
     logging.info("📊 Changements détectés :")
+    log_event('SYNC_ANALYSIS', new=len(new_torrents), status_changed=len(status_changed), active=len(active_downloads), errors=len(error_torrents))
     logging.info(f"   🆕 Nouveaux torrents sans détails : {len(new_torrents)}")
     logging.info(f"   🔄 Changements de statut : {len(status_changed)}")
     logging.info(f"   ⬇️  Téléchargements actifs : {len(active_downloads)}")
@@ -1009,6 +1042,8 @@ def sync_smart(token):
     
     if not torrent_ids_list:
         logging.info("✅ Aucun changement détecté, tous les détails sont à jour !")
+        log_event('SYNC_PHASE_END', mode='smart', phase=2, status='no_changes')
+        log_event('SYNC_END', mode='smart', status='success', changes=0, duration=f"{time.time()-start_overall:.2f}s")
         return
     
     total_changes = len(torrent_ids_list)
@@ -1018,6 +1053,7 @@ def sync_smart(token):
     # 🔍 PHASE 3 : Récupération ciblée des détails par IDs
     # ==========================================
     logging.info("🔍 [PHASE 3] Récupération ciblée des détails par IDs...")
+    log_event('SYNC_PHASE_START', mode='smart', phase=3, name='details_fetch', targets=len(torrent_ids_list))
     
     # Traiter les mises à jour avec mesure du temps
     start_time = time.time()
@@ -1031,15 +1067,21 @@ def sync_smart(token):
     logging.info(f"✅ Synchronisation intelligente terminée !")
     logging.info(f"   📊 Phase 1 : {total_torrents} statuts mis à jour")
     logging.info(f"   📊 Phase 3 : {processed} détails mis à jour en {duration:.1f}s ({rate:.1f}/s)")
+    log_event('SYNC_PHASE_END', mode='smart', phase=3, processed=processed, duration=f"{duration:.2f}s", rate=f"{rate:.2f}/s")
     
     # Étape 4: Nettoyage des torrents obsolètes
     logging.info("🧹 [PHASE 4] Nettoyage des torrents obsolètes...")
+    log_event('SYNC_PHASE_START', mode='smart', phase=4, name='cleanup')
     cleaned_count = clean_obsolete_torrents(token)
     if cleaned_count > 0:
         logging.info(f"🗑️ Supprimé {cleaned_count} torrents obsolètes de la base locale")
         print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
     else:
         logging.info("✅ Aucun torrent obsolète trouvé")
+    log_event('SYNC_PHASE_END', mode='smart', phase=4, cleaned=cleaned_count, status='success')
+
+    total_duration = time.time() - start_overall
+    log_event('SYNC_END', mode='smart', status='success', torrents=total_torrents, details=processed, cleaned=cleaned_count, duration=f"{total_duration:.2f}s", rate=f"{processed/ (duration if duration>0 else 1):.2f}/s")
     
     # Afficher un résumé final
     display_final_summary()
@@ -1053,7 +1095,9 @@ def sync_resume(token):
     
     Usage: python src/main.py --resume
     """
+    start_time = time.time()
     logging.info("⏮️  Reprise de synchronisation...")
+    log_event('SYNC_START', mode='resume')
     
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -1062,6 +1106,7 @@ def sync_resume(token):
     
     processed = asyncio.run(fetch_all_torrent_details_v2(token, all_ids, resumable=True))
     logging.info(f"✅ Reprise terminée ! {processed} détails traités")
+    log_event('SYNC_PART', mode='resume', details_processed=processed)
     
     # Nettoyage des torrents obsolètes
     logging.info("🧹 Nettoyage des torrents obsolètes...")
@@ -1071,6 +1116,8 @@ def sync_resume(token):
         print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
     else:
         logging.info("✅ Aucun torrent obsolète trouvé")
+    duration = time.time() - start_time
+    log_event('SYNC_END', mode='resume', status='success', details=processed, cleaned=cleaned_count, duration=f"{duration:.2f}s")
 
 def sync_details_only(token, status_filter=None):
     """
@@ -1096,11 +1143,15 @@ def sync_details_only(token, status_filter=None):
     
     if not torrent_ids:
         logging.info("Aucun torrent trouvé pour synchronisation des détails.")
+        log_event('SYNC_ABORT', mode='details_only', reason='no_torrents')
         return
         
+    start_time = time.time()
     logging.info(f"🔄 Synchronisation des détails pour {len(torrent_ids)} torrents...")
+    log_event('SYNC_START', mode='details_only', targets=len(torrent_ids), status_filter=status_filter or 'all')
     processed = asyncio.run(fetch_all_torrent_details(token, torrent_ids))
     logging.info(f"✅ Détails synchronisés pour {processed} torrents.")
+    log_event('SYNC_PART', mode='details_only', processed=processed)
     
     # Nettoyage des torrents obsolètes
     logging.info("🧹 Nettoyage des torrents obsolètes...")
@@ -1110,6 +1161,8 @@ def sync_details_only(token, status_filter=None):
         print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
     else:
         logging.info("✅ Aucun torrent obsolète trouvé")
+    duration = time.time() - start_time
+    log_event('SYNC_END', mode='details_only', status='success', processed=processed, cleaned=cleaned_count, duration=f"{duration:.2f}s")
 
 def sync_torrents_only(token):
     """
@@ -1123,12 +1176,15 @@ def sync_torrents_only(token):
     Usage: python src/main.py --torrents-only
     Temps typique: 10-30 secondes
     """
+    start_time = time.time()
     logging.info("📋 Synchronisation des torrents de base uniquement...")
+    log_event('SYNC_START', mode='torrents_only')
     
     total = asyncio.run(fetch_all_torrents(token))
     
     if total > 0:
         logging.info(f"✅ Synchronisation terminée ! {total} torrents enregistrés dans la table 'torrents'")
+        log_event('SYNC_PART', mode='torrents_only', torrents=total)
         
         # Nettoyage des torrents obsolètes
         logging.info("🧹 Nettoyage des torrents obsolètes...")
@@ -1138,6 +1194,8 @@ def sync_torrents_only(token):
             print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
         else:
             logging.info("✅ Aucun torrent obsolète trouvé")
+        duration = time.time() - start_time
+        log_event('SYNC_END', mode='torrents_only', status='success', torrents=total, cleaned=cleaned_count, duration=f"{duration:.2f}s")
         
         # Afficher un petit résumé
         with sqlite3.connect(DB_PATH) as conn:
@@ -1151,6 +1209,7 @@ def sync_torrents_only(token):
                 print(f"   {emoji} {status}: {count}")
     else:
         logging.info("ℹ️  Aucun torrent trouvé ou synchronisé")
+        log_event('SYNC_ABORT', mode='torrents_only', reason='no_torrents')
 
 def clean_obsolete_torrents(token):
     """
@@ -1260,7 +1319,9 @@ def sync_all_v2(token):
     Usage: python src/main.py --sync-fast
     Temps typique: 7-10 minutes
     """
+    start_time = time.time()
     logging.info("🚀 Synchronisation complète optimisée en cours...")
+    log_event('SYNC_START', mode='fast')
     
     # Étape 1: Synchroniser tous les torrents de base
     logging.info("📥 Étape 1/2: Récupération des torrents de base...")
@@ -1269,6 +1330,7 @@ def sync_all_v2(token):
     if total_torrents == 0:
         logging.warning("⚠️ Aucun torrent trouvé")
         print("⚠️ Aucun torrent trouvé dans votre compte Real-Debrid")
+        log_event('SYNC_ABORT', mode='fast', reason='no_torrents')
         return
     
     logging.info(f"✅ {total_torrents} torrents de base récupérés")
@@ -1283,12 +1345,15 @@ def sync_all_v2(token):
     
     if missing_ids:
         logging.info(f"🔄 Récupération des détails pour {len(missing_ids)} torrents...")
+        log_event('SYNC_PART', mode='fast', missing_details=len(missing_ids))
         processed = asyncio.run(fetch_all_torrent_details_v2(token, missing_ids))
         logging.info(f"✅ Détails récupérés pour {processed} torrents")
         print(f"🚀 Synchronisation complète terminée: {total_torrents} torrents, {processed} détails")
+        log_event('SYNC_PART', mode='fast', details_processed=processed)
     else:
         logging.info("✅ Tous les détails sont déjà à jour")
         print(f"🚀 Synchronisation complète terminée: {total_torrents} torrents, tous les détails à jour")
+        log_event('SYNC_PART', mode='fast', missing_details=0)
     
     # Étape 3: Nettoyage des torrents obsolètes
     logging.info("🧹 Étape 3/3: Nettoyage des torrents obsolètes...")
@@ -1298,6 +1363,8 @@ def sync_all_v2(token):
         print(f"🧹 Nettoyage terminé: {cleaned_count} torrents obsolètes supprimés")
     else:
         logging.info("✅ Aucun torrent obsolète trouvé")
+    duration = time.time() - start_time
+    log_event('SYNC_END', mode='fast', status='success', torrents=total_torrents, cleaned=cleaned_count, duration=f"{duration:.2f}s")
     
     display_final_summary()
 
