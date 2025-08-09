@@ -1724,17 +1724,17 @@ def check_all_files_health():
                     return torrent_id, f"Erreur: {str(e)}", None
             
             async def process_all_torrents():
-                """Traite tous les torrents en parallèle avec adaptation dynamique des batches"""
+                """Traite tous les torrents en parallèle avec adaptation dynamique des batches - SCAN COMPLET GARANTI"""
                 errors_503_count = 0
                 total_checked = 0
                 start_process_time = time.time()
-                max_execution_time = 45  # Limite à 45 secondes pour éviter le worker timeout
+                # SUPPRESSION de la limite de temps - le scan doit être complet même si cela prend des heures
                 
                 logging.info(f"🚀 Démarrage du traitement parallèle adaptatif de {len(torrents_to_check)} torrents...")
                 print(f"🚀 Démarrage du traitement parallèle adaptatif...")
                 print(f"💡 Pour tester cette fonction: curl 'http://localhost:5000/api/health/check_all'")
                 print(f"💡 Ou via navigateur: http://localhost:5000/api/health/check_all")
-                print(f"⏱️ Limite de temps: {max_execution_time}s pour éviter le timeout worker")
+                print(f"🎯 SCAN COMPLET GARANTI - Pas de limite de temps, adaptation dynamique aux erreurs 429")
                 
                 # Optimisation: Connexion unique avec pool adaptatif
                 connector = aiohttp.TCPConnector(limit=50, limit_per_host=25)
@@ -1745,31 +1745,25 @@ def check_all_files_health():
                 
                 async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                     
-                    # Configuration dynamique des batches
-                    batch_size = 8  # Taille initiale conservative
-                    min_batch_size = 3
-                    max_batch_size = 30
+                    # Configuration dynamique des batches - TRÈS CONSERVATRICE au départ
+                    batch_size = 3  # Taille initiale très petite pour éviter les 429
+                    min_batch_size = 1  # Descendre jusqu'à 1 si nécessaire
+                    max_batch_size = 20  # Réduire le maximum pour plus de stabilité
                     consecutive_successes = 0
                     consecutive_errors = 0
-                    api_delay = 1.0  # Délai initial entre batches
+                    consecutive_429_errors = 0
+                    api_delay = 2.0  # Délai initial plus conservateur
                     
-                    logging.info(f"📦 Démarrage avec batch_size={batch_size} (dynamique: {min_batch_size}-{max_batch_size})")
-                    print(f"📦 Batch adaptatif: taille initiale {batch_size} (range: {min_batch_size}-{max_batch_size})")
+                    logging.info(f"📦 Démarrage ULTRA-CONSERVATEUR: batch_size={batch_size} (dynamique: {min_batch_size}-{max_batch_size})")
+                    print(f"📦 Batch adaptatif CONSERVATEUR: taille initiale {batch_size} (range: {min_batch_size}-{max_batch_size})")
                     print(f"🔍 Méthode: Test de débridage du premier lien de chaque torrent")
-                    print(f"⚡ Détection ultra-rapide des erreurs 503 avec auto-ajustement")
+                    print(f"⚡ Détection ultra-rapide des erreurs 503 avec gestion intelligente des 429")
                     
                     i = 0
                     batch_num = 0
                     
                     while i < len(torrents_to_check):
-                        # Vérifier le temps écoulé pour éviter le worker timeout
-                        elapsed_time = time.time() - start_process_time
-                        if elapsed_time > max_execution_time:
-                            logging.warning(f"⏱️ ARRÊT PRÉVENTIF: Limite de temps atteinte ({elapsed_time:.1f}s > {max_execution_time}s)")
-                            print(f"⏱️ ARRÊT PRÉVENTIF: Limite de temps atteinte pour éviter worker timeout")
-                            print(f"📊 Résultats partiels: {total_checked}/{len(torrents_to_check)} torrents vérifiés")
-                            break
-                        
+                        # SUPPRESSION de la vérification de timeout - on continue jusqu'au bout
                         batch_num += 1
                         batch_start_time = time.time()
                         
@@ -1858,48 +1852,61 @@ def check_all_files_health():
                                              if not isinstance(result, Exception) and "429" in result[1])
                         
                         if batch_429_errors > 0:  # Erreurs de rate limiting détectées
+                            consecutive_429_errors += 1
                             consecutive_errors += 1
                             consecutive_successes = 0
                             
-                            # Ralentissement drastique pour les erreurs 429
+                            # Ralentissement DRASTIQUE pour les erreurs 429
                             old_batch_size = batch_size
-                            batch_size = max(min_batch_size, batch_size // 2)  # Diviser par 2
-                            api_delay = min(api_delay + 2.0, 8.0)  # Augmenter drastiquement le délai
+                            old_delay = api_delay
                             
-                            logging.warning(f"🚨 RATE LIMITING (429): {batch_429_errors} erreurs → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
-                            print(f"🚨 RATE LIMITING: API surchargée ({batch_429_errors} erreurs 429) → taille: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
+                            if consecutive_429_errors >= 3:
+                                # Mode ultra-lent après 3 batches consécutifs avec 429
+                                batch_size = min_batch_size  # Descendre au minimum (1)
+                                api_delay = min(api_delay + 5.0, 15.0)  # Jusqu'à 15s entre batches
+                            else:
+                                batch_size = max(min_batch_size, batch_size // 2)  # Diviser par 2
+                                api_delay = min(api_delay + 3.0, 10.0)  # Augmenter de 3s
+                            
+                            logging.warning(f"🚨 RATE LIMITING (429): {batch_429_errors} erreurs, consécutives: {consecutive_429_errors}")
+                            logging.warning(f"🔻 RALENTISSEMENT DRASTIQUE: batch_size: {old_batch_size}→{batch_size}, délai: {old_delay:.1f}s→{api_delay:.1f}s")
+                            print(f"🚨 RATE LIMITING DÉTECTÉ: {batch_429_errors} erreurs 429 dans ce batch")
+                            print(f"🔻 ADAPTATION EXTRÊME: taille: {old_batch_size}→{batch_size}, délai: {old_delay:.1f}s→{api_delay:.1f}s")
                             
                         elif batch_error_rate > 0.3:  # Plus de 30% d'erreurs (non-429)
                             consecutive_errors += 1
                             consecutive_successes = 0
+                            consecutive_429_errors = 0  # Reset car pas de 429
                             
-                            # Réduire aggressivement la taille du batch
+                            # Réduire modérément la taille du batch
                             old_batch_size = batch_size
-                            batch_size = max(min_batch_size, batch_size - 3)
-                            api_delay = min(api_delay + 0.5, 4.0)  # Augmenter le délai jusqu'à 4s max
+                            batch_size = max(min_batch_size, batch_size - 2)
+                            api_delay = min(api_delay + 1.0, 8.0)
                             
                             logging.warning(f"🔻 RALENTISSEMENT: {batch_error_rate:.1%} erreurs → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
                             print(f"🔻 RALENTISSEMENT: Trop d'erreurs ({batch_error_rate:.1%}) → taille: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
                             
-                        elif batch_error_rate < 0.1 and batch_rate > 8:  # Moins de 10% d'erreurs et bonne vitesse
+                        elif batch_error_rate < 0.05 and batch_rate > 6:  # Moins de 5% d'erreurs et bonne vitesse
                             consecutive_successes += 1
                             consecutive_errors = 0
+                            consecutive_429_errors = 0  # Reset car tout va bien
                             
-                            # Conditions pour augmenter la taille
-                            if consecutive_successes >= 2 and batch_size < max_batch_size:
+                            # Conditions TRÈS STRICTES pour augmenter la taille
+                            if consecutive_successes >= 5 and batch_size < max_batch_size:  # 5 batches parfaits
                                 old_batch_size = batch_size
-                                batch_size = min(max_batch_size, batch_size + 2)
-                                api_delay = max(api_delay - 0.2, 0.5)  # Réduire le délai jusqu'à 0.5s min
+                                batch_size = min(max_batch_size, batch_size + 1)  # Augmenter de 1 seulement
+                                api_delay = max(api_delay - 0.3, 1.0)  # Réduire légèrement
                                 
-                                logging.info(f"🔺 ACCÉLÉRATION: {batch_error_rate:.1%} erreurs, {batch_rate:.1f}/s → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
-                                print(f"🔺 ACCÉLÉRATION: Bonnes performances → taille: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
+                                logging.info(f"🔺 ACCÉLÉRATION PRUDENTE: {batch_error_rate:.1%} erreurs, {batch_rate:.1f}/s → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
+                                print(f"🔺 ACCÉLÉRATION PRUDENTE: Bonnes performances → taille: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
                         else:
-                            # Maintenir le rythme actuel
+                            # Maintenir le rythme actuel mais décrementer les compteurs lentement
                             consecutive_errors = max(0, consecutive_errors - 1)
                             consecutive_successes = max(0, consecutive_successes - 1)
+                            consecutive_429_errors = max(0, consecutive_429_errors - 1)
                         
-                        logging.info(f"📝 Batch {batch_num}: {batch_503_count} erreurs 503, {batch_api_errors} erreurs API, {batch_timeouts} timeouts, {batch_success_count} succès")
-                        print(f"📝 Batch {batch_num}: {batch_503_count} erreurs 503, {batch_api_errors} erreurs API, {batch_success_count} succès")
+                        logging.info(f"📝 Batch {batch_num}: {batch_503_count} erreurs 503, {batch_api_errors} erreurs API, {batch_timeouts} timeouts, {batch_success_count} succès, {batch_429_errors} erreurs 429")
+                        print(f"📝 Batch {batch_num}: {batch_503_count} erreurs 503, {batch_api_errors} erreurs API, {batch_success_count} succès, {batch_429_errors} erreurs 429")
                         
                         # Exécuter toutes les mises à jour de base en une seule transaction
                         if batch_updates:
@@ -1921,14 +1928,9 @@ def check_all_files_health():
                         # Avancer à la position suivante
                         i += actual_batch_size
                         
-                        # Vérifier à nouveau le temps avant la pause
-                        elapsed_time = time.time() - start_process_time
-                        if elapsed_time > max_execution_time:
-                            logging.warning(f"⏱️ ARRÊT PRÉVENTIF FINAL: Temps limite atteint")
-                            print(f"⏱️ Arrêt après ce batch pour éviter timeout")
-                            break
+                        # SUPPRESSION de la vérification de timeout - on continue jusqu'au bout
                         
-                        # Pause adaptative entre batches
+                        # Pause adaptative entre batches - TOUJOURS respecter le délai
                         if i < len(torrents_to_check):
                             logging.info(f"⏸️ Pause adaptative {api_delay:.1f}s avant le prochain batch...")
                             print(f"⏸️ Pause adaptative {api_delay:.1f}s avant le prochain batch...")
@@ -1937,19 +1939,22 @@ def check_all_files_health():
                         progress_pct = (i / len(torrents_to_check)) * 100
                         remaining_torrents = len(torrents_to_check) - i
                         estimated_batches_remaining = (remaining_torrents + batch_size - 1) // batch_size
+                        estimated_time_remaining = estimated_batches_remaining * (batch_duration + api_delay)
+                        elapsed_total = time.time() - start_process_time
                         
                         logging.info(f"📊 Progression: {i}/{len(torrents_to_check)} ({progress_pct:.1f}%) - {errors_503_count} erreurs 503")
                         print(f"📊 Progression globale: {i}/{len(torrents_to_check)} ({progress_pct:.1f}%) - Batch suivant: {batch_size} torrents")
-                        print(f"🚨 Total erreurs 503 trouvées: {errors_503_count} - Batches restants: ~{estimated_batches_remaining}")
-                        print(f"⏱️ Temps écoulé: {elapsed_time:.1f}s/{max_execution_time}s")
+                        print(f"🚨 Total erreurs 503: {errors_503_count} - Batches restants: ~{estimated_batches_remaining}")
+                        print(f"⏱️ Temps écoulé: {elapsed_total/60:.1f}min - Estimation restante: {estimated_time_remaining/60:.1f}min")
+                        print(f"🔧 Configuration actuelle: taille={batch_size}, délai={api_delay:.1f}s, consécutives_429={consecutive_429_errors}")
                 
                 final_elapsed = time.time() - start_process_time
-                completion_status = "COMPLET" if i >= len(torrents_to_check) else "PARTIEL"
+                completion_status = "COMPLET"  # Toujours complet maintenant
                 
                 logging.info(f"🎉 VÉRIFICATION {completion_status}! Total: {total_checked}, erreurs 503: {errors_503_count}")
                 print(f"\n🎉 {completion_status}! Total vérifié: {total_checked}, erreurs 503: {errors_503_count}")
                 print(f"🔧 Configuration finale: batch_size={batch_size}, délai={api_delay:.1f}s")
-                print(f"⏱️ Durée totale: {final_elapsed:.1f}s")
+                print(f"⏱️ Durée totale: {final_elapsed/60:.1f} minutes ({final_elapsed:.1f}s)")
                 
                 return total_checked, errors_503_count, completion_status
             
@@ -1971,9 +1976,9 @@ def check_all_files_health():
             
             # Message adapté selon le statut de complétion
             if completion_status == "COMPLET":
-                success_message = f'🚀 Vérification ULTRA RAPIDE terminée: {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration:.1f}s ({rate:.1f}/s)'
+                success_message = f'🚀 Vérification COMPLÈTE terminée: {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration/60:.1f}min ({rate:.1f}/s)'
             else:
-                success_message = f'⏱️ Vérification PARTIELLE (timeout préventif): {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration:.1f}s ({rate:.1f}/s)'
+                success_message = f'⏱️ Vérification PARTIELLE: {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration/60:.1f}min ({rate:.1f}/s)'
             
             logging.info(f"📋 Résultat final: {success_message}")
             print(f"📋 Réponse: {success_message}")
