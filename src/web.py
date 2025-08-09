@@ -394,8 +394,16 @@ def torrents_list():
                 params.extend([status_filter, status_filter])
         
         if search:
-            conditions.append("(t.filename LIKE ? OR td.name LIKE ?)")
-            params.extend([f"%{search}%", f"%{search}%"])
+            # Détecter si la recherche est un ID (numérique) ou un nom de fichier
+            search_stripped = search.strip()
+            if search_stripped.isdigit():
+                # Recherche par ID exact
+                conditions.append("(t.id = ?)")
+                params.extend([search_stripped])
+            else:
+                # Recherche par nom de fichier (comportement existant)
+                conditions.append("(t.filename LIKE ? OR td.name LIKE ?)")
+                params.extend([f"%{search}%", f"%{search}%"])
         
         # Ajout des conditions WHERE
         if conditions:
@@ -1709,11 +1717,14 @@ def check_all_files_health():
                 """Traite tous les torrents en parallèle avec adaptation dynamique des batches"""
                 errors_503_count = 0
                 total_checked = 0
+                start_process_time = time.time()
+                max_execution_time = 45  # Limite à 45 secondes pour éviter le worker timeout
                 
                 logging.info(f"🚀 Démarrage du traitement parallèle adaptatif de {len(torrents_to_check)} torrents...")
                 print(f"🚀 Démarrage du traitement parallèle adaptatif...")
                 print(f"💡 Pour tester cette fonction: curl 'http://localhost:5000/api/health/check_all'")
                 print(f"💡 Ou via navigateur: http://localhost:5000/api/health/check_all")
+                print(f"⏱️ Limite de temps: {max_execution_time}s pour éviter le timeout worker")
                 
                 # Optimisation: Connexion unique avec pool adaptatif
                 connector = aiohttp.TCPConnector(limit=50, limit_per_host=25)
@@ -1741,6 +1752,14 @@ def check_all_files_health():
                     batch_num = 0
                     
                     while i < len(torrents_to_check):
+                        # Vérifier le temps écoulé pour éviter le worker timeout
+                        elapsed_time = time.time() - start_process_time
+                        if elapsed_time > max_execution_time:
+                            logging.warning(f"⏱️ ARRÊT PRÉVENTIF: Limite de temps atteinte ({elapsed_time:.1f}s > {max_execution_time}s)")
+                            print(f"⏱️ ARRÊT PRÉVENTIF: Limite de temps atteinte pour éviter worker timeout")
+                            print(f"📊 Résultats partiels: {total_checked}/{len(torrents_to_check)} torrents vérifiés")
+                            break
+                        
                         batch_num += 1
                         batch_start_time = time.time()
                         
@@ -1813,6 +1832,10 @@ def check_all_files_health():
                                 batch_api_errors += 1
                                 logging.info(f"⚠️ Torrent {torrent_id}: {message}")
                                 print(f"⚠️ Torrent {torrent_id}: Erreur API")
+                            elif "429" in message:
+                                batch_api_errors += 1
+                                logging.warning(f"🚨 Torrent {torrent_id}: Rate limiting (429)")
+                                print(f"🚨 Torrent {torrent_id}: Rate limiting")
                             else:
                                 logging.info(f"⚠️ Torrent {torrent_id}: {message}")
                                 print(f"⚠️ Torrent {torrent_id}: {message}")
@@ -1820,7 +1843,23 @@ def check_all_files_health():
                         # LOGIQUE D'ADAPTATION DYNAMIQUE
                         batch_error_rate = (batch_api_errors + batch_timeouts) / actual_batch_size if actual_batch_size > 0 else 0
                         
-                        if batch_error_rate > 0.3:  # Plus de 30% d'erreurs
+                        # Détecter spécifiquement les erreurs 429 (Rate Limiting)
+                        batch_429_errors = sum(1 for result in batch_results 
+                                             if not isinstance(result, Exception) and "429" in result[1])
+                        
+                        if batch_429_errors > 0:  # Erreurs de rate limiting détectées
+                            consecutive_errors += 1
+                            consecutive_successes = 0
+                            
+                            # Ralentissement drastique pour les erreurs 429
+                            old_batch_size = batch_size
+                            batch_size = max(min_batch_size, batch_size // 2)  # Diviser par 2
+                            api_delay = min(api_delay + 2.0, 8.0)  # Augmenter drastiquement le délai
+                            
+                            logging.warning(f"🚨 RATE LIMITING (429): {batch_429_errors} erreurs → batch_size: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
+                            print(f"🚨 RATE LIMITING: API surchargée ({batch_429_errors} erreurs 429) → taille: {old_batch_size}→{batch_size}, délai: {api_delay:.1f}s")
+                            
+                        elif batch_error_rate > 0.3:  # Plus de 30% d'erreurs (non-429)
                             consecutive_errors += 1
                             consecutive_successes = 0
                             
@@ -1872,6 +1911,13 @@ def check_all_files_health():
                         # Avancer à la position suivante
                         i += actual_batch_size
                         
+                        # Vérifier à nouveau le temps avant la pause
+                        elapsed_time = time.time() - start_process_time
+                        if elapsed_time > max_execution_time:
+                            logging.warning(f"⏱️ ARRÊT PRÉVENTIF FINAL: Temps limite atteint")
+                            print(f"⏱️ Arrêt après ce batch pour éviter timeout")
+                            break
+                        
                         # Pause adaptative entre batches
                         if i < len(torrents_to_check):
                             logging.info(f"⏸️ Pause adaptative {api_delay:.1f}s avant le prochain batch...")
@@ -1885,11 +1931,17 @@ def check_all_files_health():
                         logging.info(f"📊 Progression: {i}/{len(torrents_to_check)} ({progress_pct:.1f}%) - {errors_503_count} erreurs 503")
                         print(f"📊 Progression globale: {i}/{len(torrents_to_check)} ({progress_pct:.1f}%) - Batch suivant: {batch_size} torrents")
                         print(f"🚨 Total erreurs 503 trouvées: {errors_503_count} - Batches restants: ~{estimated_batches_remaining}")
+                        print(f"⏱️ Temps écoulé: {elapsed_time:.1f}s/{max_execution_time}s")
                 
-                logging.info(f"🎉 VÉRIFICATION TERMINÉE! Total: {total_checked}, erreurs 503: {errors_503_count}")
-                print(f"\n🎉 TERMINÉ! Total vérifié: {total_checked}, erreurs 503: {errors_503_count}")
+                final_elapsed = time.time() - start_process_time
+                completion_status = "COMPLET" if i >= len(torrents_to_check) else "PARTIEL"
+                
+                logging.info(f"🎉 VÉRIFICATION {completion_status}! Total: {total_checked}, erreurs 503: {errors_503_count}")
+                print(f"\n🎉 {completion_status}! Total vérifié: {total_checked}, erreurs 503: {errors_503_count}")
                 print(f"🔧 Configuration finale: batch_size={batch_size}, délai={api_delay:.1f}s")
-                return total_checked, errors_503_count
+                print(f"⏱️ Durée totale: {final_elapsed:.1f}s")
+                
+                return total_checked, errors_503_count, completion_status
             
             # Exécuter le traitement asynchrone
             logging.info(f"🚀 Lancement du traitement asynchrone ultra-rapide...")
@@ -1897,7 +1949,7 @@ def check_all_files_health():
             print(f"💡 URL de test: http://localhost:5000/api/health/check_all")
             print(f"💡 Commande curl: curl -s 'http://localhost:5000/api/health/check_all' | jq .")
             start_time = time.time()
-            total_checked, errors_503_count = asyncio.run(process_all_torrents())
+            total_checked, errors_503_count, completion_status = asyncio.run(process_all_torrents())
             end_time = time.time()
             
             duration = end_time - start_time
@@ -1907,7 +1959,12 @@ def check_all_files_health():
             print(f"⏱️ Durée totale: {duration:.1f}s")
             print(f"⚡ Vitesse: {rate:.1f} torrents/seconde")
             
-            success_message = f'🚀 Vérification ULTRA RAPIDE terminée: {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration:.1f}s ({rate:.1f}/s)'
+            # Message adapté selon le statut de complétion
+            if completion_status == "COMPLET":
+                success_message = f'🚀 Vérification ULTRA RAPIDE terminée: {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration:.1f}s ({rate:.1f}/s)'
+            else:
+                success_message = f'⏱️ Vérification PARTIELLE (timeout préventif): {errors_503_count} erreurs 503 détectées sur {total_checked} torrents vérifiés en {duration:.1f}s ({rate:.1f}/s)'
+            
             logging.info(f"📋 Résultat final: {success_message}")
             print(f"📋 Réponse: {success_message}")
             
@@ -1918,9 +1975,11 @@ def check_all_files_health():
                 'errors_503_found': errors_503_count,
                 'performance': f'Traitement parallèle de {total_checked} torrents en {duration:.1f}s',
                 'rate': f'{rate:.1f} torrents/seconde',
-                'duration': f'{duration:.1f}s'
+                'duration': f'{duration:.1f}s',
+                'completion_status': completion_status,
+                'total_torrents': len(torrents_to_check)
             })
-            log_event('HEALTH_CHECK_END', checked=total_checked, errors=errors_503_count, duration=f"{duration:.2f}s", rate=f"{rate:.2f}/s")
+            log_event('HEALTH_CHECK_END', checked=total_checked, errors=errors_503_count, duration=f"{duration:.2f}s", rate=f"{rate:.2f}/s", status=completion_status)
             return response
             
     except Exception as e:
