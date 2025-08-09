@@ -36,9 +36,9 @@ from main import (
 def init_database_if_needed():
     """Initialise la base de données si elle n'existe pas ou est incomplète"""
     try:
-    print("🔧 Vérification de la base de données...")
-    log_event('DB_CHECK_START', path=DB_PATH)
-        
+        print("🔧 Vérification de la base de données...")
+        log_event('DB_CHECK_START', path=DB_PATH)
+
         # Vérifier si la base existe
         if not os.path.exists(DB_PATH):
             print("📂 Base de données non trouvée, création en cours...")
@@ -46,13 +46,13 @@ def init_database_if_needed():
             print("✅ Base de données créée avec succès")
             log_event('DB_CHECK_END', status='created')
             return
-        
+
         # Vérifier l'intégrité des tables
         try:
             import sqlite3
             with sqlite3.connect(DB_PATH) as conn:
                 c = conn.cursor()
-                
+
                 # Vérifier que les tables principales existent
                 c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='torrents'")
                 if not c.fetchone():
@@ -60,14 +60,14 @@ def init_database_if_needed():
                     create_tables()
                     print("✅ Tables recréées avec succès")
                     return
-                
+
                 c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='torrent_details'")
                 if not c.fetchone():
                     print("🔧 Table 'torrent_details' manquante, recréation...")
                     create_tables()
                     print("✅ Tables recréées avec succès")
                     return
-                
+
                 # Vérifier que la colonne health_error existe
                 c.execute("PRAGMA table_info(torrent_details)")
                 columns = [column[1] for column in c.fetchall()]
@@ -76,10 +76,10 @@ def init_database_if_needed():
                     c.execute("ALTER TABLE torrent_details ADD COLUMN health_error TEXT")
                     conn.commit()
                     print("✅ Colonne 'health_error' ajoutée avec succès")
-                
+
                 print("✅ Base de données vérifiée et à jour")
                 log_event('DB_CHECK_END', status='ok')
-                
+
         except Exception as db_error:
             print(f"⚠️ Problème avec la base existante: {db_error}")
             print("🔧 Recréation complète de la base de données...")
@@ -89,14 +89,14 @@ def init_database_if_needed():
                 import shutil
                 shutil.copy2(DB_PATH, backup_path)
                 print(f"💾 Ancienne base sauvegardée: {backup_path}")
-            
+
             create_tables()
             print("✅ Base de données recréée avec succès")
             log_event('DB_CHECK_END', status='recreated')
-            
+
     except Exception as e:
-    print(f"❌ Erreur lors de l'initialisation de la base: {e}")
-    log_event('DB_CHECK_END', status='error', error=str(e))
+        print(f"❌ Erreur lors de l'initialisation de la base: {e}")
+        log_event('DB_CHECK_END', status='error', error=str(e))
         print(f"   Chemin de la base: {DB_PATH}")
         raise
 
