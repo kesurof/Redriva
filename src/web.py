@@ -1619,7 +1619,7 @@ def check_all_files_health():
         with sqlite3.connect(DB_PATH) as conn:
             c = conn.cursor()
             
-            # Récupérer tous les torrents actifs (pas supprimés) avec optimisation et limite de test
+            # Récupérer tous les torrents actifs (pas supprimés) avec optimisation
             c.execute("""
                 SELECT t.id, t.filename 
                 FROM torrents t
@@ -1627,7 +1627,6 @@ def check_all_files_health():
                 WHERE t.status != 'deleted'
                 AND t.status != 'error'
                 ORDER BY t.added_on DESC
-                LIMIT 100
             """)
             torrents_to_check = c.fetchall()
             
@@ -1642,8 +1641,8 @@ def check_all_files_health():
                     'errors_503_found': 0
                 })
             
-            logging.info(f"🚀 DÉMARRAGE: Vérification ULTRA RAPIDE de la santé de {len(torrents_to_check)} torrents (limite 100)...")
-            print(f"🚀 DÉBUT: Vérification de {len(torrents_to_check)} torrents (limite 100)")
+            logging.info(f"🚀 DÉMARRAGE: Vérification ULTRA RAPIDE de la santé de {len(torrents_to_check)} torrents...")
+            print(f"🚀 DÉBUT: Vérification de {len(torrents_to_check)} torrents")
             print(f"📋 Commande utilisée: /api/health/check_all")
             print(f"🎯 Objectif: Détecter les erreurs 503 via débridage Real-Debrid")
             
