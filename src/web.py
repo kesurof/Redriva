@@ -2254,27 +2254,20 @@ def get_settings():
             'apiToken': '',  # Ne jamais renvoyer le token réel pour des raisons de sécurité
             'mediaPath': config.get_media_path(),
             'workersCount': config.get('workers.count', 3),
-            'sonarr': config.get_sonarr_config(),
-            'radarr': config.get_radarr_config(),
+            'sonarr': {
+                'enabled': config.get('sonarr.enabled', False),
+                'url': config.get('sonarr.url', ''),
+                'apiKey': config.get('sonarr.api_key', '')
+            },
+            'radarr': {
+                'enabled': config.get('radarr.enabled', False),
+                'url': config.get('radarr.url', ''),
+                'apiKey': config.get('radarr.api_key', '')
+            },
             'autoSyncEnabled': config.get('automation.auto_sync_enabled', False),
             'syncInterval': config.get('automation.sync_interval', 300),
             'autoCleanupEnabled': config.get('automation.auto_cleanup_enabled', False)
         }
-        
-        # Aussi charger depuis l'ancien settings.json pour compatibilité
-        try:
-            settings_file = config.get_settings_path()
-            if os.path.exists(settings_file):
-                with open(settings_file, 'r') as f:
-                    saved_settings = json.load(f)
-                    # Merger les anciens paramètres mais privilégier la nouvelle config
-                    for key in ['mediaPath', 'workersCount']:
-                        if key in saved_settings and key not in settings:
-                            settings[key] = saved_settings[key]
-                    # Ne jamais inclure le token dans la réponse
-                    settings['apiToken'] = ''
-        except Exception as e:
-            print(f"⚠️ Erreur lecture anciens paramètres: {e}")
         
         return jsonify({'success': True, 'settings': settings})
         
@@ -2292,78 +2285,40 @@ def save_settings():
         
         config = get_config()
         
-        # Mettre à jour la configuration centralisée
+        # Mettre à jour la configuration centralisée en utilisant update_config
         if 'apiToken' in settings and settings['apiToken']:
-            config.set('tokens.real_debrid', settings['apiToken'])
+            config.update_config('realdebrid.token', settings['apiToken'])
         
         if 'mediaPath' in settings:
             if config.is_docker:
-                config.set('paths.media', settings['mediaPath'])
+                config.update_config('paths.media', settings['mediaPath'])
             else:
-                config.set('paths.media_dev', settings['mediaPath'])
+                config.update_config('paths.media_dev', settings['mediaPath'])
         
         if 'workersCount' in settings:
-            config.set('workers.count', settings['workersCount'])
+            config.update_config('workers.count', settings['workersCount'])
         
         # Paramètres Sonarr
         if 'sonarr' in settings:
             sonarr = settings['sonarr']
-            config.set('sonarr.enabled', sonarr.get('enabled', False))
-            config.set('sonarr.url', sonarr.get('url', ''))
-            config.set('sonarr.api_key', sonarr.get('apiKey', ''))
+            config.update_config('sonarr.enabled', sonarr.get('enabled', False))
+            config.update_config('sonarr.url', sonarr.get('url', ''))
+            config.update_config('sonarr.api_key', sonarr.get('apiKey', ''))
         
         # Paramètres Radarr
         if 'radarr' in settings:
             radarr = settings['radarr']
-            config.set('radarr.enabled', radarr.get('enabled', False))
-            config.set('radarr.url', radarr.get('url', ''))
-            config.set('radarr.api_key', radarr.get('apiKey', ''))
+            config.update_config('radarr.enabled', radarr.get('enabled', False))
+            config.update_config('radarr.url', radarr.get('url', ''))
+            config.update_config('radarr.api_key', radarr.get('apiKey', ''))
         
         # Paramètres d'automatisation
         if 'autoSyncEnabled' in settings:
-            config.set('automation.auto_sync_enabled', settings['autoSyncEnabled'])
+            config.update_config('automation.auto_sync_enabled', settings['autoSyncEnabled'])
         if 'syncInterval' in settings:
-            config.set('automation.sync_interval', settings['syncInterval'])
+            config.update_config('automation.sync_interval', settings['syncInterval'])
         if 'autoCleanupEnabled' in settings:
-            config.set('automation.auto_cleanup_enabled', settings['autoCleanupEnabled'])
-        
-        # Sauvegarder la configuration
-        config.save()
-        
-        # Aussi maintenir la compatibilité avec l'ancien settings.json
-        try:
-            settings_file = config.get_settings_path()
-            config_dir = os.path.dirname(settings_file)
-            os.makedirs(config_dir, exist_ok=True)
-            
-            # Charger les paramètres existants
-            existing_settings = {}
-            if os.path.exists(settings_file):
-                try:
-                    with open(settings_file, 'r') as f:
-                        existing_settings = json.load(f)
-                except:
-                    pass
-            
-            # Mettre à jour avec les nouveaux paramètres
-            existing_settings.update(settings)
-            
-            # Sauvegarder dans l'ancien format pour compatibilité
-            with open(settings_file, 'w') as f:
-                json.dump(existing_settings, f, indent=2)
-                
-        except Exception as e:
-            print(f"⚠️ Erreur sauvegarde settings.json de compatibilité: {e}")
-        
-        # Si un token API est fourni, le sauvegarder séparément pour compatibilité
-        if settings.get('apiToken'):
-            token_file = os.path.join(os.path.dirname(config.get_settings_path()), 'token')
-            try:
-                with open(token_file, 'w') as f:
-                    f.write(settings['apiToken'].strip())
-                print("✅ Token API sauvegardé")
-            except Exception as e:
-                print(f"⚠️ Erreur sauvegarde token: {e}")
+            config.update_config('automation.auto_cleanup_enabled', settings['autoCleanupEnabled'])
         
         return jsonify({'success': True, 'message': 'Paramètres sauvegardés'})
         
