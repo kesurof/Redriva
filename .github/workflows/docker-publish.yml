@@ -2,9 +2,10 @@ name: Build and Push Docker Image Multi-Architecture
 
 on:
   push:
-    branches: [ main, alpha ]
+    branches: [ main, alpha, ssdv2 ]
   pull_request:
-    branches: [ main, alpha ]
+    branches: [ main, alpha, ssdv2 ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -49,6 +50,8 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=alpha,enable=${{ github.ref == 'refs/heads/alpha' }}
+            type=raw,value=ssdv2,enable=${{ github.ref == 'refs/heads/ssdv2' }}
+            type=ref,event=branch
             type=sha,prefix={{branch}}-
           labels: |
             org.opencontainers.image.title=Redriva
@@ -67,6 +70,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
+          build-args: |
+            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ github.sha }}
 
       - name: Generate artifact attestation
         if: github.event_name != 'pull_request'

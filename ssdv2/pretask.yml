@@ -1,0 +1,65 @@
+---
+- name: "Create config directory with proper ownership"
+  file:
+    path: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config"
+    state: directory
+    mode: '0755'
+    owner: "{{ lookup('env','MYUID') }}"
+    group: "{{ lookup('env','MYGID') }}"
+
+- name: "Create data directory with proper ownership"
+  file:
+    path: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data"
+    state: directory
+    mode: '0755'
+    owner: "{{ lookup('env','MYUID') }}"
+    group: "{{ lookup('env','MYGID') }}"
+
+- name: "Create .env.example template"
+  copy:
+    content: |
+      # Configuration Redriva
+      RD_TOKEN=your_real_debrid_token_here
+      RD_API_LIMIT=100
+      SYNC_INTERVAL=3600
+      LOG_LEVEL=INFO
+    dest: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env.example"
+    mode: '0644'
+    owner: "{{ lookup('env','MYUID') }}"
+    group: "{{ lookup('env','MYGID') }}"
+
+- name: "Copy .env.example to .env if it doesn't exist"
+  copy:
+    src: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env.example"
+    dest: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env"
+    remote_src: yes
+    force: no
+    owner: "{{ lookup('env','MYUID') }}"
+    group: "{{ lookup('env','MYGID') }}"
+    mode: '0644'
+
+- name: "Verify .env file exists"
+  stat:
+    path: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env"
+  register: env_file_check
+
+- name: "Fail if .env creation failed"
+  fail:
+    msg: "❌ Le fichier .env n'a pas pu être créé"
+  when: not env_file_check.stat.exists
+
+- name: "Display pretask completion"
+  debug:
+    msg: |
+      ✅ Pretasks Redriva terminées
+      ============================
+      
+      📁 Répertoires créés:
+        - Config: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
+        - Data: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
+      
+      📄 Fichiers créés:
+        - .env.example: ✅
+        - .env: {{ '✅' if env_file_check.stat.exists else '❌' }}
+      
+      🔧 Prêt pour le déploiement du container !

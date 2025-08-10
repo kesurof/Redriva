@@ -1,12 +1,18 @@
 FROM python:3.11-slim
 
+# Build arguments
+ARG BUILDTIME
+ARG VERSION=dev
+
 # Labels pour SSDV2
 LABEL maintainer="Kesurof"
 LABEL description="Redriva - Gestionnaire Real-Debrid"
 LABEL version="2.0"
 LABEL org.opencontainers.image.source="https://github.com/kesurof/Redriva"
-LABEL org.opencontainers.image.ref.name="alpha"
+LABEL org.opencontainers.image.ref.name="ssdv2"
 LABEL org.opencontainers.image.title="redriva-ssdv2"
+LABEL org.opencontainers.image.created="${BUILDTIME}"
+LABEL org.opencontainers.image.revision="${VERSION}"
 LABEL ssdv2.category="media"
 LABEL ssdv2.subcategory="downloader"
 LABEL ssdv2.tags="real-debrid,torrent,media"
