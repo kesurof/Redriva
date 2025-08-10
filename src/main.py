@@ -143,7 +143,7 @@ def handle_sigint(signum, frame):
 signal.signal(signal.SIGINT, handle_sigint)
 
 # Configuration via gestionnaire centralisé
-from config_manager import config_manager, get_config
+from config_manager import get_config
 
 # Configuration avec nouvelles valeurs centralisées
 RD_API_URL = "https://api.real-debrid.com/rest/1.0/torrents"
@@ -152,7 +152,7 @@ RD_API_URL = "https://api.real-debrid.com/rest/1.0/torrents"
 def get_db_path():
     """Récupère le chemin de la base de données via le gestionnaire de configuration"""
     config = get_config()
-    return config.get_database_path()
+    return config.get_db_path()
 
 # Utilisation du gestionnaire de configuration pour les paramètres
 config = get_config()

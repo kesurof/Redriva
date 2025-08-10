@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from flask import request, jsonify, render_template, flash
 
 # Import du gestionnaire de configuration
-from config_manager import config_manager, get_config
+from config_manager import get_config
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -38,7 +38,7 @@ class SymlinkDatabase:
         if db_path is None:
             # Utiliser la configuration centralisée pour le chemin de la base
             config = get_config()
-            self.db_path = config.get_database_path()
+            self.db_path = config.get_db_path()
         else:
             self.db_path = db_path
         
@@ -109,14 +109,10 @@ class SymlinkDatabase:
         try:
             config = get_config()
             
-            # Mettre à jour chaque paramètre
-            for key, value in config_data.items():
-                config.set(f'symlink.{key}', value)
+            # TODO: Implémenter la sauvegarde dans le ConfigManager simplifié
+            # Pour l'instant, on sauvegarde uniquement en base locale
             
-            # Sauvegarder
-            config.save()
-            
-            # Aussi sauvegarder dans la base locale pour compatibilité
+            # Sauvegarder dans la base locale pour compatibilité
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 

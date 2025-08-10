@@ -27,7 +27,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import du gestionnaire de configuration
-from config_manager import config_manager, get_config, load_token, get_database_path
+from config_manager import get_config, load_token, get_database_path
 
 from main import (
     sync_smart, sync_all_v2, sync_torrents_only,
@@ -170,7 +170,7 @@ else:
 
 # Configuration adaptée pour Docker et environnements locaux
 # Configuration Flask depuis le gestionnaire centralisé
-flask_config = config_manager.get_flask_config()
+flask_config = get_config().get_flask_config()
 app.config['HOST'] = flask_config['host']
 app.config['PORT'] = flask_config['port']
 app.config['DEBUG'] = flask_config['debug']
