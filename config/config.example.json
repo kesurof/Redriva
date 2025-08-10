@@ -1,0 +1,30 @@
+{
+  "version": "2.0",
+  "setup_completed": false,
+  "realdebrid": {
+    "token": "",
+    "api_limit": 100,
+    "max_concurrent": 50,
+    "batch_size": 250
+  },
+  "sonarr": {
+    "url": "",
+    "api_key": "",
+    "enabled": false
+  },
+  "radarr": {
+    "url": "",
+    "api_key": "",
+    "enabled": false
+  },
+  "app": {
+    "sync_interval": 3600,
+    "log_level": "INFO",
+    "flask_debug": false
+  },
+  "flask": {
+    "host": "0.0.0.0",
+    "port": 5000,
+    "debug": false
+  }
+}
