@@ -15,6 +15,18 @@
     owner: "{{ lookup('env','MYUID') }}"
     group: "{{ lookup('env','MYGID') }}"
 
+- name: "Ensure config directory is writable"
+  file:
+    path: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config"
+    mode: '0777'
+    state: directory
+
+- name: "Ensure data directory is writable"
+  file:
+    path: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data"
+    mode: '0777'
+    state: directory
+
 - name: "Display pretask completion"
   debug:
     msg: |
@@ -25,4 +37,5 @@
         - Config: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
         - Data: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
       
-      � Configuration se fera via l'interface web au premier démarrage !
+      🔐 Permissions configurées (777 pour éviter les conflits Docker)
+      🌐 Configuration se fera via l'interface web au premier démarrage !

@@ -22,6 +22,12 @@ pg_env:
   PUID: "{{ lookup('env','MYUID') }}"
   PGID: "{{ lookup('env','MYGID') }}"
   TZ: "{{ lookup('env','TZ') }}"
+  # Variables optionnelles pour configuration automatique
+  # RD_TOKEN: "{{ rd_token | default('') }}"
+  # SONARR_URL: "{{ sonarr_url | default('') }}"
+  # SONARR_API_KEY: "{{ sonarr_api_key | default('') }}"
+  # RADARR_URL: "{{ radarr_url | default('') }}"
+  # RADARR_API_KEY: "{{ radarr_api_key | default('') }}"
 # tags spécifiques à ajouter à la construction du docker
 specific_docker_info:
   ports:

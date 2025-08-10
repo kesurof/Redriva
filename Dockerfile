@@ -33,10 +33,12 @@ ENV RD_TOKEN="" \
 RUN apt-get update && apt-get install -y \
     curl \
     sqlite3 \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Création utilisateur non-root
-RUN useradd -u 1000 -d /app -s /bin/bash redriva
+RUN useradd -u 1000 -d /app -s /bin/bash redriva && \
+    echo "redriva ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Configuration de l'application
 WORKDIR /app
@@ -50,10 +52,41 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 # Création des répertoires et configuration initiale
 RUN mkdir -p data medias config && \
-    # Copier l'exemple vers le fichier de config s'il n'existe pas \
-    cp ./config/config.example.json ./config/config.json && \
-    # Rendre le script d'entrée exécutable \
+    cat > ./config/config.example.json << 'EOF'
+{
+  "token": "",
+  "setup_completed": false,
+  "auto_sync": true,
+  "sync_interval": 300,
+  "database_path": "/app/data/redriva.db",
+  "sonarr": {
+    "enabled": false,
+    "url": "",
+    "api_key": ""
+  },
+  "radarr": {
+    "enabled": false,
+    "url": "",
+    "api_key": ""
+  },
+  "symlink": {
+    "enabled": true,
+    "media_path": "/app/medias",
+    "workers": 4,
+    "sonarr_enabled": false,
+    "sonarr_url": "",
+    "sonarr_api_key": "",
+    "radarr_enabled": false,
+    "radarr_url": "",
+    "radarr_api_key": ""
+  }
+}
+EOF
+
+# Copier l'exemple vers le fichier de config et configurer les permissions
+RUN cp ./config/config.example.json ./config/config.json && \
     chmod +x ./docker-entrypoint.sh && \
+    chmod 755 /app/data /app/config /app/medias && \
     chown -R redriva:redriva /app
 
 # Healthcheck

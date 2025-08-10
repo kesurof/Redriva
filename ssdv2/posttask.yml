@@ -11,32 +11,57 @@
   register: container_check
   ignore_errors: yes
 
+- name: "Check if web interface is accessible"
+  uri:
+    url: "http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}"
+    method: GET
+    status_code: 200
+  register: web_check
+  retries: 10
+  delay: 3
+  ignore_errors: yes
+  when: container_check.rc == 0
+
 - name: "Display setup information"
   debug:
     msg: |
-      � Redriva déployé avec succès !
-      ================================
+      🚀 REDRIVA DÉPLOYÉ AVEC SUCCÈS !
+      =================================
       
-      🌐 Interface web: http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}
+      🌐 Interface Web: http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}
+      📁 Config Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
+      � Data Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
       
-      🔧 Configuration :
-        - Rendez-vous sur l'interface web pour configurer votre token Real-Debrid
-        - Configurez Sonarr/Radarr si nécessaire
-        - La configuration se fait maintenant via l'interface web !
+      �🔧 Configuration initiale:
+      • Rendez-vous sur l'interface web pour configurer vos torrents
+      • Configurez vos répertoires source et destination
+      • Activez le nettoyage intelligent des liens symboliques
       
-      📁 Répertoires de données :
-        - Config: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
-        - Data: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
+      � Commandes utiles:
+      • sudo docker logs {{ pgrole }}             (voir les logs)
+      • sudo docker restart {{ pgrole }}          (redémarrer le service)
+      • sudo docker exec -it {{ pgrole }} bash    (accès au conteneur)
       
-      📚 Documentation : Consultez le README pour plus d'informations
+      ✅ Interface web: {{ 'Accessible' if web_check.status == 200 else 'En cours de démarrage' }}
+      ✅ Redriva est prêt à l'emploi !
   when: container_check.rc == 0
 
 - name: "Display error if container failed to start"
   debug:
     msg: |
-      ❌ Erreur lors du démarrage de Redriva
-      ====================================
+      ❌ ERREUR LORS DU DÉMARRAGE DE REDRIVA
+      =====================================
       
-      Le container n'a pas pu démarrer. Vérifiez les logs :
-      docker logs {{ pgrole }}
+      Le container n'a pas pu démarrer. Actions de dépannage :
+      
+      🔍 Vérifiez les logs :
+      sudo docker logs {{ pgrole }}
+      
+      🔧 Vérifiez les permissions :
+      ls -la {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/
+      
+      🔄 Essayez de redémarrer :
+      sudo docker restart {{ pgrole }}
+      
+      📁 Vérifiez l'espace disque disponible
   when: container_check.rc != 0
