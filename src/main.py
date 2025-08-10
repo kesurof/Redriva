@@ -142,14 +142,28 @@ def handle_sigint(signum, frame):
 
 signal.signal(signal.SIGINT, handle_sigint)
 
-# Configuration via variables d'environnement avec valeurs par défaut optimisées
+# Configuration via gestionnaire centralisé
+from config_manager import config_manager, get_config
+
+# Configuration avec nouvelles valeurs centralisées
 RD_API_URL = "https://api.real-debrid.com/rest/1.0/torrents"
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/redriva.db'))
-MAX_CONCURRENT = int(os.getenv('RD_MAX_CONCURRENT', '50'))    # Requêtes simultanées
-BATCH_SIZE = int(os.getenv('RD_BATCH_SIZE', '250'))          # Taille des batches
-QUOTA_WAIT_TIME = int(os.getenv('RD_QUOTA_WAIT', '60'))      # Attente quota global (sec)
-TORRENT_QUOTA_WAIT = int(os.getenv('RD_TORRENT_WAIT', '10')) # Attente quota torrent (sec)
-PAGE_WAIT_TIME = float(os.getenv('RD_PAGE_WAIT', '1.0'))     # Attente entre pages (sec)
+
+# Fonction pour obtenir le chemin de la base de données
+def get_db_path():
+    """Récupère le chemin de la base de données via le gestionnaire de configuration"""
+    config = get_config()
+    return config.get_database_path()
+
+# Utilisation du gestionnaire de configuration pour les paramètres
+config = get_config()
+MAX_CONCURRENT = config.get('real_debrid.max_concurrent', 50)
+BATCH_SIZE = config.get('real_debrid.batch_size', 250)
+QUOTA_WAIT_TIME = config.get('real_debrid.quota_wait', 60)
+TORRENT_QUOTA_WAIT = config.get('real_debrid.torrent_wait', 10)
+PAGE_WAIT_TIME = config.get('real_debrid.page_wait', 1.0)
+
+# DB_PATH sera défini dynamiquement
+DB_PATH = None
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                         SECTION 2: UTILITAIRES ET HELPERS                 ║
@@ -248,9 +262,10 @@ def create_tables():
     - torrent_details: Détails complets des torrents
     - sync_progress: Progression des synchronisations (pour reprise)
     """
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    db_path = get_db_path()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     # Table principale des torrents (informations de base)
@@ -366,10 +381,10 @@ def clear_database():
 
 def load_token():
     """
-    Récupère le token Real-Debrid depuis config/.env uniquement
+    Récupère le token Real-Debrid depuis la configuration centralisée
     Gère tous les cas d'erreurs possibles pour éviter Header Injection
     
-    Source unique: Fichier config/.env
+    Source: Configuration centralisée (conf.json) ou variables d'environnement
     
     Returns:
         str: Token Real-Debrid valide et nettoyé
@@ -398,30 +413,65 @@ def load_token():
             return None
             
         # Étape 5 : Validation longueur (tokens RD font généralement 40-60 caractères)
-        if len(token) < 20 or len(token) > 100:
+        if len(token) < 30 or len(token) > 80:
             return None
             
         return token
     
-    # Chargement des variables d'environnement depuis config/.env
-    load_env_file()
-    
-    # Source unique : Variable RD_TOKEN depuis config/.env
-    env_token = os.environ.get("RD_TOKEN")
+    # Priorité 1: Variable d'environnement (Docker/Système)
+    env_token = os.getenv('RD_TOKEN')
     if env_token:
-        cleaned_token = clean_token(env_token)
-        if cleaned_token:
-            logging.debug("✅ Token récupéré depuis config/.env")
-            return cleaned_token
+        cleaned = clean_token(env_token)
+        if cleaned:
+            logging.info("🔑 Token chargé depuis variable d'environnement")
+            return cleaned
         else:
-            logging.error("⚠️ Token dans config/.env invalide (caractères interdits ou longueur incorrecte)")
+            logging.warning("⚠️ Token d'environnement invalide")
+    
+    # Priorité 2: Configuration centralisée (conf.json)
+    config = get_config()
+    config_token = config.get_real_debrid_token()
+    if config_token:
+        cleaned = clean_token(config_token)
+        if cleaned:
+            logging.info("🔑 Token chargé depuis configuration centralisée")
+            return cleaned
+        else:
+            logging.warning("⚠️ Token de configuration invalide")
+    
+    # Priorité 3: Ancien fichier token pour compatibilité
+    try:
+        token_paths = [
+            os.path.join(os.path.dirname(__file__), '../data/token'),
+            os.path.join(os.path.dirname(__file__), '../config/token'),
+            '/app/data/token'
+        ]
+        
+        for token_path in token_paths:
+            if os.path.exists(token_path):
+                with open(token_path, 'r') as f:
+                    file_token = f.read().strip()
+                    cleaned = clean_token(file_token)
+                    if cleaned:
+                        logging.info(f"🔑 Token chargé depuis fichier: {token_path}")
+                        # Migrer vers la configuration centralisée
+                        config.set('tokens.real_debrid', cleaned)
+                        config.save()
+                        logging.info("🔄 Token migré vers configuration centralisée")
+                        return cleaned
+                    else:
+                        logging.warning(f"⚠️ Token du fichier {token_path} invalide")
+                        
+    except Exception as e:
+        logging.warning(f"⚠️ Erreur lecture fichier token: {e}")
     
     # Aucun token valide trouvé
-    logging.error("❌ Aucun token Real-Debrid valide trouvé")
-    logging.error("💡 Configuration requise :")
-    logging.error("   1. Copiez config/.env.example vers config/.env")
-    logging.error("   2. Modifiez config/.env et remplacez 'votre_token_ici' par votre vrai token")
-    logging.error("   3. Obtenez votre token sur : https://real-debrid.com/apitoken")
+    print("\n❌ ERREUR: Aucun token Real-Debrid valide trouvé")
+    print("\n📋 Solutions possibles:")
+    print("   1. Variable d'environnement: export RD_TOKEN='votre_token'")
+    print("   2. Configuration centralisée: modifier config/conf.json")
+    print("   3. Interface web: aller dans Paramètres > Real-Debrid")
+    print("\n🔗 Obtenir votre token: https://real-debrid.com/apitoken")
     
     sys.exit(1)
 

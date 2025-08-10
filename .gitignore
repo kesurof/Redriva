@@ -1,5 +1,7 @@
-# Fichiers sensibles
+# Fichiers sensibles - Configuration centralisée
 config/.env
+config/.env.*
+config/conf.json
 config/rd_token.conf
 config/*.conf
 *.token
@@ -12,12 +14,22 @@ data/
 
 # Variables d'environnement
 .env
+.env*
 .env.local
 .env.production
+.env.development
 
 # Logs
 logs/
 *.log
+
+# Fichiers de test et validation (temporaires)
+test_*.py
+validate_*.py
+deploy.sh
+*_test.json
+validation_*.log
+benchmark_*.json
 
 # Cache Python
 __pycache__/
@@ -46,10 +58,13 @@ wheels/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+.Spotlight-V100
+.Trashes
 
 # Scripts de build Docker locaux
 scripts/build-multiarch.sh
@@ -59,3 +74,19 @@ docker-build-*
 # Cache Docker et buildx
 .docker/
 buildx-cache/
+
+# Volumes Docker en développement
+medias/
+volumes/
+
+# Secrets et certificats
+*.pem
+*.key
+*.crt
+secrets/
+
+# Backup et fichiers temporaires
+*.backup
+*.tmp
+*.swp
+backup_*

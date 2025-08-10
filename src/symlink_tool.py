@@ -20,21 +20,12 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from flask import request, jsonify, render_template, flash
 
+# Import du gestionnaire de configuration
+from config_manager import config_manager, get_config
+
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Configuration par défaut avec support des variables d'environnement Docker
-DEFAULT_CONFIG = {
-    'media_path': os.getenv('REDRIVA_MEDIA_PATH', '/app/medias'),
-    'workers': int(os.getenv('REDRIVA_WORKERS', '4')),
-    'sonarr_enabled': False,
-    'sonarr_url': '',
-    'sonarr_api_key': '',
-    'radarr_enabled': False,
-    'radarr_url': '',
-    'radarr_api_key': ''
-}
 
 # Variables globales pour la gestion des tâches
 active_scans = {}
@@ -45,12 +36,9 @@ class SymlinkDatabase:
     
     def __init__(self, db_path=None):
         if db_path is None:
-            # Utilise une variable d'environnement ou un chemin par défaut pour Docker
-            default_db_path = os.getenv('REDRIVA_DB_PATH', '/app/data/redriva.db')
-            # Pour le développement local, utiliser le chemin relatif
-            if not os.path.exists(os.path.dirname(default_db_path)):
-                default_db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'redriva.db')
-            self.db_path = default_db_path
+            # Utiliser la configuration centralisée pour le chemin de la base
+            config = get_config()
+            self.db_path = config.get_database_path()
         else:
             self.db_path = db_path
         
@@ -96,44 +84,52 @@ class SymlinkDatabase:
             raise
 
     def get_config(self) -> Dict[str, Any]:
-        """Récupère la configuration complète"""
+        """Récupère la configuration complète depuis le gestionnaire centralisé"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT key, value FROM symlink_config')
-                config_data = dict(cursor.fetchall())
-                
-                # Merge avec la config par défaut
-                config = DEFAULT_CONFIG.copy()
-                for key, value in config_data.items():
-                    if key.endswith('_enabled'):
-                        config[key] = value.lower() == 'true'
-                    elif key == 'workers':
-                        config[key] = int(value) if value.isdigit() else DEFAULT_CONFIG[key]
-                    else:
-                        config[key] = value
-                
-                return config
+            config = get_config()
+            return config.get_symlink_config()
                 
         except Exception as e:
             logger.error(f"❌ Erreur récupération config: {e}")
-            return DEFAULT_CONFIG.copy()
+            # Configuration par défaut en cas d'erreur
+            return {
+                'enabled': True,
+                'media_path': '/app/medias',
+                'workers': 4,
+                'sonarr_enabled': False,
+                'sonarr_url': 'http://localhost:8989',
+                'sonarr_api_key': '',
+                'radarr_enabled': False,
+                'radarr_url': 'http://localhost:7878',
+                'radarr_api_key': ''
+            }
 
-    def save_config(self, config: Dict[str, Any]) -> bool:
-        """Sauvegarde la configuration"""
+    def save_config(self, config_data: Dict[str, Any]) -> bool:
+        """Sauvegarde la configuration dans le gestionnaire centralisé"""
         try:
+            config = get_config()
+            
+            # Mettre à jour chaque paramètre
+            for key, value in config_data.items():
+                config.set(f'symlink.{key}', value)
+            
+            # Sauvegarder
+            config.save()
+            
+            # Aussi sauvegarder dans la base locale pour compatibilité
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                for key, value in config.items():
+                for key, value in config_data.items():
                     cursor.execute('''
                         INSERT OR REPLACE INTO symlink_config (key, value, updated_at)
                         VALUES (?, ?, CURRENT_TIMESTAMP)
                     ''', (key, str(value)))
                 
                 conn.commit()
-                return True
-                
+            logger.info("✅ Configuration symlink sauvegardée")
+            return True
+            
         except Exception as e:
             logger.error(f"❌ Erreur sauvegarde config: {e}")
             return False

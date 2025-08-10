@@ -25,22 +25,35 @@ from datetime import datetime
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Import du gestionnaire de configuration
+from config_manager import config_manager, get_config, load_token, get_database_path
+
 from main import (
-    DB_PATH, load_token, sync_smart, sync_all_v2, sync_torrents_only,
+    sync_smart, sync_all_v2, sync_torrents_only,
     show_stats, diagnose_errors, get_db_stats, format_size, get_status_emoji,
     create_tables, sync_details_only, ACTIVE_STATUSES, ERROR_STATUSES, COMPLETED_STATUSES,
-    fetch_torrent_detail, upsert_torrent_detail, log_event
+    fetch_torrent_detail, upsert_torrent_detail, log_event, get_db_path
 )
+
+# Utilisation de la configuration centralisée - DB_PATH sera dynamique
+def get_current_db_path():
+    """Récupère le chemin actuel de la base de données"""
+    return get_db_path()
+
+# Pour compatibilité, DB_PATH pointe vers la fonction
+DB_PATH = get_current_db_path()
 
 # INITIALISATION AUTOMATIQUE DE LA BASE DE DONNÉES
 def init_database_if_needed():
     """Initialise la base de données si elle n'existe pas ou est incomplète"""
     try:
+        db_path = get_db_path()
         print("🔧 Vérification de la base de données...")
-        log_event('DB_CHECK_START', path=DB_PATH)
+        log_event('DB_CHECK_START', path=db_path)
 
         # Vérifier si la base existe
-        if not os.path.exists(DB_PATH):
+        if not os.path.exists(db_path):
             print("📂 Base de données non trouvée, création en cours...")
             create_tables()
             print("✅ Base de données créée avec succès")
@@ -50,7 +63,7 @@ def init_database_if_needed():
         # Vérifier l'intégrité des tables
         try:
             import sqlite3
-            with sqlite3.connect(DB_PATH) as conn:
+            with sqlite3.connect(db_path) as conn:
                 c = conn.cursor()
 
                 # Vérifier que les tables principales existent
@@ -156,9 +169,11 @@ else:
     print("⚠️ Symlink Manager désactivé - module non disponible")
 
 # Configuration adaptée pour Docker et environnements locaux
-app.config['HOST'] = os.getenv('FLASK_HOST', '0.0.0.0')  # 0.0.0.0 pour Docker, configurable via env
-app.config['PORT'] = int(os.getenv('FLASK_PORT', '5000'))  # Port configurable via env
-app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'  # Debug activé par défaut en dev
+# Configuration Flask depuis le gestionnaire centralisé
+flask_config = config_manager.get_flask_config()
+app.config['HOST'] = flask_config['host']
+app.config['PORT'] = flask_config['port']
+app.config['DEBUG'] = flask_config['debug']
 
 # Ajout de gestionnaires d'erreur pour diagnostiquer le problème
 @app.errorhandler(403)
@@ -2168,22 +2183,34 @@ def get_processing_torrents():
 def get_settings():
     """API pour récupérer les paramètres actuels"""
     try:
-        # Charger les paramètres depuis la base de données ou un fichier de configuration
+        config = get_config()
+        
+        # Récupérer tous les paramètres depuis la configuration centralisée
         settings = {
             'apiToken': '',  # Ne jamais renvoyer le token réel pour des raisons de sécurité
+            'mediaPath': config.get_media_path(),
+            'workersCount': config.get('workers.count', 3),
+            'sonarr': config.get_sonarr_config(),
+            'radarr': config.get_radarr_config(),
+            'autoSyncEnabled': config.get('automation.auto_sync_enabled', False),
+            'syncInterval': config.get('automation.sync_interval', 300),
+            'autoCleanupEnabled': config.get('automation.auto_cleanup_enabled', False)
         }
         
-        # Essayer de charger les paramètres existants
+        # Aussi charger depuis l'ancien settings.json pour compatibilité
         try:
-            settings_file = os.path.join(os.path.dirname(DB_PATH), 'settings.json')
+            settings_file = config.get_settings_path()
             if os.path.exists(settings_file):
                 with open(settings_file, 'r') as f:
                     saved_settings = json.load(f)
-                    settings.update(saved_settings)
+                    # Merger les anciens paramètres mais privilégier la nouvelle config
+                    for key in ['mediaPath', 'workersCount']:
+                        if key in saved_settings and key not in settings:
+                            settings[key] = saved_settings[key]
                     # Ne jamais inclure le token dans la réponse
                     settings['apiToken'] = ''
         except Exception as e:
-            print(f"⚠️ Erreur lecture paramètres: {e}")
+            print(f"⚠️ Erreur lecture anciens paramètres: {e}")
         
         return jsonify({'success': True, 'settings': settings})
         
@@ -2199,31 +2226,74 @@ def save_settings():
         if not settings:
             return jsonify({'success': False, 'error': 'Données manquantes'})
         
-        # Créer le répertoire de configuration s'il n'existe pas
-        config_dir = os.path.dirname(DB_PATH)
-        os.makedirs(config_dir, exist_ok=True)
+        config = get_config()
         
-        settings_file = os.path.join(config_dir, 'settings.json')
+        # Mettre à jour la configuration centralisée
+        if 'apiToken' in settings and settings['apiToken']:
+            config.set('tokens.real_debrid', settings['apiToken'])
         
-        # Charger les paramètres existants
-        existing_settings = {}
-        if os.path.exists(settings_file):
-            try:
-                with open(settings_file, 'r') as f:
-                    existing_settings = json.load(f)
-            except:
-                pass
+        if 'mediaPath' in settings:
+            if config.is_docker:
+                config.set('paths.media', settings['mediaPath'])
+            else:
+                config.set('paths.media_dev', settings['mediaPath'])
         
-        # Mettre à jour avec les nouveaux paramètres
-        existing_settings.update(settings)
+        if 'workersCount' in settings:
+            config.set('workers.count', settings['workersCount'])
         
-        # Sauvegarder dans le fichier
-        with open(settings_file, 'w') as f:
-            json.dump(existing_settings, f, indent=2)
+        # Paramètres Sonarr
+        if 'sonarr' in settings:
+            sonarr = settings['sonarr']
+            config.set('sonarr.enabled', sonarr.get('enabled', False))
+            config.set('sonarr.url', sonarr.get('url', ''))
+            config.set('sonarr.api_key', sonarr.get('apiKey', ''))
         
-        # Si un token API est fourni, le sauvegarder séparément
+        # Paramètres Radarr
+        if 'radarr' in settings:
+            radarr = settings['radarr']
+            config.set('radarr.enabled', radarr.get('enabled', False))
+            config.set('radarr.url', radarr.get('url', ''))
+            config.set('radarr.api_key', radarr.get('apiKey', ''))
+        
+        # Paramètres d'automatisation
+        if 'autoSyncEnabled' in settings:
+            config.set('automation.auto_sync_enabled', settings['autoSyncEnabled'])
+        if 'syncInterval' in settings:
+            config.set('automation.sync_interval', settings['syncInterval'])
+        if 'autoCleanupEnabled' in settings:
+            config.set('automation.auto_cleanup_enabled', settings['autoCleanupEnabled'])
+        
+        # Sauvegarder la configuration
+        config.save()
+        
+        # Aussi maintenir la compatibilité avec l'ancien settings.json
+        try:
+            settings_file = config.get_settings_path()
+            config_dir = os.path.dirname(settings_file)
+            os.makedirs(config_dir, exist_ok=True)
+            
+            # Charger les paramètres existants
+            existing_settings = {}
+            if os.path.exists(settings_file):
+                try:
+                    with open(settings_file, 'r') as f:
+                        existing_settings = json.load(f)
+                except:
+                    pass
+            
+            # Mettre à jour avec les nouveaux paramètres
+            existing_settings.update(settings)
+            
+            # Sauvegarder dans l'ancien format pour compatibilité
+            with open(settings_file, 'w') as f:
+                json.dump(existing_settings, f, indent=2)
+                
+        except Exception as e:
+            print(f"⚠️ Erreur sauvegarde settings.json de compatibilité: {e}")
+        
+        # Si un token API est fourni, le sauvegarder séparément pour compatibilité
         if settings.get('apiToken'):
-            token_file = os.path.join(config_dir, 'token')
+            token_file = os.path.join(os.path.dirname(config.get_settings_path()), 'token')
             try:
                 with open(token_file, 'w') as f:
                     f.write(settings['apiToken'].strip())
@@ -2416,7 +2486,7 @@ if __name__ == '__main__':
     try:
         app.run(host=app.config['HOST'], 
                 port=app.config['PORT'], 
-                debug=True,  # Force debug mode
+                debug=app.config['DEBUG'],
                 threaded=True,
                 use_reloader=False)
     except KeyboardInterrupt:

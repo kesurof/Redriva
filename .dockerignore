@@ -20,7 +20,8 @@ venv/
 
 # Local data and config (mounted as volumes)
 data/
-config/
+config/.env*
+config/conf.*.json
 *.db
 *.db-journal
 *.log
