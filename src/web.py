@@ -873,7 +873,8 @@ def settings():
         symlink_available = SYMLINK_AVAILABLE
         
         return render_template('settings.html', 
-                             symlink_available=symlink_available)
+                             symlink_available=symlink_available,
+                             config={'RD_TOKEN': load_token()})
     except Exception as e:
         print(f"❌ Erreur page settings: {e}")
         flash("Erreur lors du chargement des paramètres", 'error')
