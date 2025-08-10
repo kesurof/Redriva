@@ -175,6 +175,58 @@ app.config['HOST'] = flask_config['host']
 app.config['PORT'] = flask_config['port']
 app.config['DEBUG'] = flask_config['debug']
 
+# ROUTES DE SETUP INITIAL
+@app.before_request
+def check_setup():
+    """Vérifie si l'application nécessite un setup initial"""
+    config = get_config()
+    
+    # Ignorer les routes de setup et les assets
+    if request.endpoint in ['setup_page', 'setup_save', 'static'] or request.path.startswith('/assets'):
+        return
+    
+    # Rediriger vers setup si nécessaire
+    if config.needs_setup():
+        return redirect('/setup')
+
+@app.route('/setup')
+def setup_page():
+    """Page de configuration initiale"""
+    return render_template('setup.html')
+
+@app.route('/setup', methods=['POST'])
+def setup_save():
+    """Sauvegarde de la configuration initiale"""
+    try:
+        config = get_config()
+        
+        # Récupérer les données du formulaire
+        setup_data = {
+            'rd_token': request.form.get('rd_token', '').strip(),
+            'sonarr_url': request.form.get('sonarr_url', '').strip(),
+            'sonarr_api_key': request.form.get('sonarr_api_key', '').strip(),
+            'radarr_url': request.form.get('radarr_url', '').strip(),
+            'radarr_api_key': request.form.get('radarr_api_key', '').strip(),
+        }
+        
+        # Validation du token obligatoire
+        if not setup_data['rd_token']:
+            flash('❌ Le token Real-Debrid est obligatoire', 'error')
+            return render_template('setup.html')
+        
+        # Sauvegarder la configuration
+        if config.save_setup_config(setup_data):
+            flash('✅ Configuration sauvegardée avec succès !', 'success')
+            return redirect('/')
+        else:
+            flash('❌ Erreur lors de la sauvegarde', 'error')
+            return render_template('setup.html')
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur setup : {e}")
+        flash(f'❌ Erreur : {e}', 'error')
+        return render_template('setup.html')
+
 # Ajout de gestionnaires d'erreur pour diagnostiquer le problème
 @app.errorhandler(403)
 def forbidden_error(error):

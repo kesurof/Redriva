@@ -13,8 +13,7 @@ services:
       - PGID=${PGID:-1000}
       - TZ=${TZ:-Europe/Paris}
     
-    env_file:
-      - ./config/.env
+  # env_file supprimé, configuration via interface web
     
     ports:
       - "5000:5000"
@@ -22,7 +21,7 @@ services:
     volumes:
       # Configuration et données
       - ./config:/app/config:rw
-      - ./config/.env:/app/.env:ro
+  # - ./config/.env:/app/.env:ro (supprimé, non utilisé)
       - ./data:/app/data:rw
       
       # Intégrations SSDV2

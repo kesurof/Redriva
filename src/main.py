@@ -78,26 +78,6 @@ COMPLETED_STATUSES = (
 # Tous les statuts connus (pour validation)
 ALL_KNOWN_STATUSES = ACTIVE_STATUSES + ERROR_STATUSES + COMPLETED_STATUSES
 
-def load_env_file():
-    """
-    Charge les variables d'environnement depuis le fichier config/.env
-    
-    Permet une configuration flexible sans modifier le code.
-    Variables supportées: RD_TOKEN, RD_MAX_CONCURRENT, RD_BATCH_SIZE, etc.
-    """
-    env_file = Path(__file__).parent.parent / 'config' / '.env'
-    if env_file.exists():
-        with open(env_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    # Ne pas écraser les variables déjà définies
-                    if key.strip() not in os.environ:
-                        os.environ[key.strip()] = value.strip()
-
-# Chargement des variables d'environnement depuis .env
-load_env_file()
 
 # Configuration du logging avec format enrichi
 logging.basicConfig(
@@ -2033,29 +2013,21 @@ def show_interactive_menu():
 
 def get_token():
     """
-    Récupère le token avec vérification et messages d'aide - Version sécurisée
-    
+    Récupère le token Real-Debrid depuis la configuration centralisée
     Returns:
         str/None: Token valide ou None si non trouvé
-    
-    Note: Utilise load_token() qui inclut la sécurisation contre Header Injection
     """
     try:
-        return load_token()  # Utilise la version sécurisée de la section API
+        return load_token()
     except SystemExit:
-        # load_token() fait un sys.exit() si pas de token
         print("\n❌ ERREUR : Token Real-Debrid non trouvé !")
-        print("🔧 Veuillez configurer votre token :")
-        print("   • Variable d'environnement : export RD_TOKEN='votre_token'")
-        print("   • Fichier config : cp config/rd_token.conf.example config/rd_token.conf")
-        print("   • Fichier .env : cp .env.example .env")
+        print("🔧 Veuillez configurer votre token via l'interface web de Redriva.")
         return None
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                        SECTION 9: POINT D'ENTRÉE PRINCIPAL                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
-def main():
     """
     Point d'entrée principal avec support menu interactif et arguments CLI
     
@@ -2069,7 +2041,6 @@ def main():
     - Diagnostic : --diagnose-errors
     - Maintenance : --details-only, --clear, --torrents-only
     """
-    load_env_file()  # Charger les variables d'environnement au début
     
     parser = argparse.ArgumentParser(description="Redriva - Synchroniseur Real-Debrid vers SQLite")
     

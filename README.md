@@ -56,7 +56,6 @@ docker-compose up -d
 ./ssdv2-setup.sh
 
 # 2. Configuration token
-nano /opt/seedbox/docker/$USER/redriva/config/.env
 
 # 3. Déploiement via SSDV2
 # Ajoutez redriva à votre configuration SSDV2
@@ -166,7 +165,6 @@ nano config/conf.json
 # Modifiez la section "tokens" > "real_debrid"
 
 # Option B: Via variable d'environnement
-nano config/.env
 # Remplacez 'votre_token_ici' par votre vrai token
 
 # 4. Lancer en mode développement
@@ -194,7 +192,6 @@ nano config/conf.json
 # Modifiez la section "tokens" > "real_debrid"
 
 # Option B: Via variable d'environnement Docker
-nano config/.env
 # Remplacez 'votre_token_ici' par votre vrai token
 
 # 4. Lancer avec Docker
@@ -248,7 +245,6 @@ Redriva utilise maintenant un système de configuration centralisé basé sur le
    ```
 5. **Option B** - Variable d'environnement :
    ```bash
-   nano config/.env
    # Modifiez RD_TOKEN=votre_token_ici
    ```
 
@@ -357,7 +353,6 @@ cd redriva
 ./install-ssdv2.sh
 
 # Configuration du token
-nano /opt/seedbox/docker/${USER}/redriva/config/.env
 # Modifier: RD_TOKEN=votre_token_real_debrid
 
 # Déploiement avec Ansible
@@ -368,7 +363,7 @@ ansible-playbook site.yml -t redriva
 ### Configuration manuelle
 
 1. **Fichiers de configuration SSDV2** (voir documentation projetssd)
-   - `pretask.yml` - Création des répertoires et configuration .env
+  - `pretask.yml` - Création des répertoires (configuration via interface web)
    - `posttask.yml` - Vérification santé et configuration token
    - `redriva.yml` - Configuration Docker avec volumes SSDV2
 

@@ -1,12 +1,6 @@
 # Fichiers sensibles - Configuration centralisée
 config/.env
-config/.env.*
-config/conf.json
-config/rd_token.conf
-config/*.conf
-*.token
 
-# Base de données locale
 data/
 *.db
 *.sqlite

@@ -65,11 +65,11 @@ pg_volumes:
 ```
 
 ### Modifier les variables d'environnement
-Éditez `pretask.yml` section `.env.example` :
+La configuration se fait désormais via l'interface web au premier démarrage :
 ```yaml
 content: |
   # Configuration Redriva
-  RD_TOKEN=your_real_debrid_token_here
+  (Configurez votre token Real-Debrid via l'interface web)
   # Ajoutez vos variables ici
 ```
 

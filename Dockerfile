@@ -19,8 +19,7 @@ LABEL ssdv2.tags="real-debrid,torrent,media"
 
 # Variables d'environnement
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
-    RD_TOKEN=your_real_debrid_token_here
+    PYTHONPATH=/app/src
 
 # Installation dépendances système
 RUN apt-get update && apt-get install -y \

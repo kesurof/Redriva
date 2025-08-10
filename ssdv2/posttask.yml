@@ -1,81 +1,42 @@
 ---
-- name: "Wait for container to be ready"
-  wait_for:
-    host: "127.0.0.1"
-    port: 5000
-    timeout: 60
+- name: "Wait for Redriva container to be running"
+  shell: |
+    for i in {1..30}; do
+      if docker ps --filter "name={{ pgrole }}" --filter "status=running" | grep -q "{{ pgrole }}"; then
+        exit 0
+      fi
+      sleep 2
+    done
+    exit 1
+  register: container_check
   ignore_errors: yes
 
-- name: "Test health endpoint"
-  uri:
-    url: "http://localhost:5000/api/health"
-    method: GET
-    timeout: 10
-  register: health_check
-  ignore_errors: yes
-
-- name: "Check if token is default"
-  shell: grep -q "your_real_debrid_token_here" "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env"
-  register: default_token_check
-  ignore_errors: yes
-  changed_when: false
-
-- name: "Prompt for Real-Debrid token"
-  pause:
-    prompt: |
-      
-      🔑 Configuration du token Real-Debrid
-      =====================================
-      
-      Veuillez coller votre token Real-Debrid ci-dessous :
-      (Obtenez-le sur : https://real-debrid.com/apitoken)
-      
-      Token
-  register: rd_token_input
-  when: default_token_check.rc == 0
-
-- name: "Update .env file with token"
-  lineinfile:
-    path: "{{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env"
-    regexp: '^RD_TOKEN='
-    line: "RD_TOKEN={{ rd_token_input.user_input }}"
-    backup: yes
-  when: rd_token_input.user_input is defined and rd_token_input.user_input != ""
-
-- name: "Restart container after token update"
-  docker_container:
-    name: "{{ pgrole }}"
-    state: started
-    restart: yes
-  when: rd_token_input.user_input is defined and rd_token_input.user_input != ""
-
-- name: "Display deployment status"
+- name: "Display setup information"
   debug:
     msg: |
-      🚀 Déploiement Redriva terminé !
-      =================================
+      � Redriva déployé avec succès !
+      ================================
       
-      {% if health_check.status == 200 %}
-      ✅ Status: Opérationnel
-      {% else %}
-      ⚠️  Status: En cours de démarrage
-      {% endif %}
+      🌐 Interface web: http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}
       
-      {% if rd_token_input.user_input is defined and rd_token_input.user_input != "" %}
-      🔑 Token configuré: ✅
-      {% else %}
-      🔑 Token: ⚠️  Configurez manuellement dans le fichier .env
-      {% endif %}
+      🔧 Configuration :
+        - Rendez-vous sur l'interface web pour configurer votre token Real-Debrid
+        - Configurez Sonarr/Radarr si nécessaire
+        - La configuration se fait maintenant via l'interface web !
       
-      🌐 Interface web: https://{{ sub[pgrole][pgrole] if sub_enabled else pgrole }}.{{ user.domain }}
-      📊 Health check: http://localhost:5000/api/health
+      📁 Répertoires de données :
+        - Config: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
+        - Data: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
       
-      📝 Configuration:
-        - Éditez: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config/.env
-        - Token RD: https://real-debrid.com/apitoken
-        - Logs: docker logs {{ pgrole }}
+      📚 Documentation : Consultez le README pour plus d'informations
+  when: container_check.rc == 0
+
+- name: "Display error if container failed to start"
+  debug:
+    msg: |
+      ❌ Erreur lors du démarrage de Redriva
+      ====================================
       
-      🔧 Commandes utiles:
-        - Sync: docker exec {{ pgrole }} python src/main.py --sync-smart
-        - Stats: docker exec {{ pgrole }} python src/main.py --stats --compact
-        - Restart: docker restart {{ pgrole }}
+      Le container n'a pas pu démarrer. Vérifiez les logs :
+      docker logs {{ pgrole }}
+  when: container_check.rc != 0

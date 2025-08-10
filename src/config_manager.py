@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
 """
-Configuration Manager simplifié pour Redriva
+Configuration Manager avec setup web interactif
 Gère automatiquement les environnements dev/local et SSDV2/Docker
 """
 
 import os
 import json
 import logging
+import base64
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 class ConfigManager:
-    """Gestionnaire de configuration simplifié"""
+    """Gestionnaire de configuration avec setup web interactif"""
     
     def __init__(self):
         self.is_docker = self._detect_docker()
+        self.config_path = self._get_config_path()
         self.config = self._load_config()
+        
+    def _get_config_path(self) -> Path:
+        """Détermine le chemin du fichier de configuration"""
+        if self.is_docker:
+            return Path("/app/config/config.json")
+        else:
+            return Path(__file__).parent.parent / "config" / "config.json"
     
     def _detect_docker(self) -> bool:
         """Détecte si on est dans Docker/SSDV2"""
@@ -29,22 +38,71 @@ class ConfigManager:
         )
     
     def _load_config(self) -> Dict[str, Any]:
-        """Charge la configuration"""
-        if self.is_docker:
-            config_path = '/app/config/config.json'
-        else:
-            config_path = Path(__file__).parent.parent / 'config' / 'config.json'
-        
+        """Charge la configuration depuis le fichier JSON"""
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            if self.config_path.exists():
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    logger.info(f"✅ Configuration chargée depuis {self.config_path}")
+                    return config
+            else:
+                # Créer la configuration par défaut
+                default_config = self._get_default_config()
+                self._save_config(default_config)
+                logger.info(f"✅ Configuration par défaut créée : {self.config_path}")
+                return default_config
         except Exception as e:
-            logger.warning(f"Configuration par défaut utilisée: {e}")
-            return {
-                "realdebrid": {"api_url": "https://api.real-debrid.com/rest/1.0"},
-                "flask": {"host": "0.0.0.0", "port": 5000},
-                "logging": {"level": "INFO"}
+            logger.error(f"❌ Erreur chargement config : {e}")
+            return self._get_default_config()
+    
+    def _get_default_config(self) -> Dict[str, Any]:
+        """Configuration par défaut pour premier démarrage"""
+        return {
+            "version": "2.0",
+            "setup_completed": False,
+            "realdebrid": {
+                "token": "",
+                "api_limit": 100,
+                "max_concurrent": 50,
+                "batch_size": 250
+            },
+            "sonarr": {
+                "url": "",
+                "api_key": "",
+                "enabled": False
+            },
+            "radarr": {
+                "url": "",
+                "api_key": "",
+                "enabled": False
+            },
+            "app": {
+                "sync_interval": 3600,
+                "log_level": "INFO",
+                "flask_debug": False
+            },
+            "flask": {
+                "host": "0.0.0.0",
+                "port": 5000,
+                "debug": False
             }
+        }
+    
+    def _save_config(self, config: Dict[str, Any]) -> bool:
+        """Sauvegarde la configuration"""
+        try:
+            # Créer le répertoire parent si nécessaire
+            self.config_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            
+            self.config = config  # Mettre à jour l'instance
+            logger.info(f"✅ Configuration sauvegardée : {self.config_path}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Erreur sauvegarde config : {e}")
+            return False
     
     def get(self, key: str, default: Any = None) -> Any:
         """Récupère une valeur de configuration"""
@@ -59,23 +117,10 @@ class ConfigManager:
         
         return value
     
-    def get_token(self) -> Optional[str]:
-        """Récupère le token Real-Debrid"""
-        # Priorité : variable d'environnement > fichier token
-        token = os.environ.get('RD_TOKEN')
-        if token and token != 'your_real_debrid_token_here':
-            return token
-        
-        # Fichier token pour développement local
-        if not self.is_docker:
-            token_file = Path(__file__).parent.parent / 'data' / 'token'
-            if token_file.exists():
-                try:
-                    return token_file.read_text().strip()
-                except Exception:
-                    pass
-        
-        return None
+    # Nouvelles méthodes pour setup web interactif
+    def is_setup_completed(self) -> bool:
+        """Vérifie si le setup initial est terminé"""
+        return self.config.get('setup_completed', False)
     
     def get_db_path(self) -> str:
         """Récupère le chemin de la base de données"""
@@ -98,6 +143,90 @@ class ConfigManager:
             'port': self.get('flask.port', 5000),
             'debug': self.get('flask.debug', False)
         }
+
+    # Nouvelles méthodes pour setup web interactif
+    def is_setup_completed(self) -> bool:
+        """Vérifie si le setup initial est terminé"""
+        return self.config.get('setup_completed', False)
+    
+    def needs_setup(self) -> bool:
+        """Vérifie si l'application a besoin d'être configurée"""
+        if not self.is_setup_completed():
+            return True
+        
+        # Vérifier que le token est configuré
+        token = self.config.get('realdebrid', {}).get('token', '')
+        return not token or token == ''
+    
+    def get_setup_status(self) -> Dict[str, Any]:
+        """Retourne le statut du setup"""
+        config = self.config
+        rd_config = config.get('realdebrid', {})
+        
+        return {
+            'setup_completed': config.get('setup_completed', False),
+            'has_token': bool(rd_config.get('token')),
+            'has_sonarr': bool(config.get('sonarr', {}).get('url')),
+            'has_radarr': bool(config.get('radarr', {}).get('url')),
+            'needs_setup': self.needs_setup()
+        }
+    
+    def save_setup_config(self, setup_data: Dict[str, Any]) -> bool:
+        """Sauvegarde la configuration du setup initial"""
+        try:
+            # Mettre à jour la configuration
+            if 'rd_token' in setup_data:
+                self.config['realdebrid']['token'] = setup_data['rd_token']
+            
+            if 'sonarr_url' in setup_data:
+                self.config['sonarr']['url'] = setup_data['sonarr_url']
+                self.config['sonarr']['enabled'] = bool(setup_data['sonarr_url'])
+            
+            if 'sonarr_api_key' in setup_data:
+                self.config['sonarr']['api_key'] = setup_data['sonarr_api_key']
+            
+            if 'radarr_url' in setup_data:
+                self.config['radarr']['url'] = setup_data['radarr_url']
+                self.config['radarr']['enabled'] = bool(setup_data['radarr_url'])
+            
+            if 'radarr_api_key' in setup_data:
+                self.config['radarr']['api_key'] = setup_data['radarr_api_key']
+            
+            # Marquer le setup comme terminé
+            self.config['setup_completed'] = True
+            
+            # Sauvegarder
+            return self._save_config(self.config)
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur sauvegarde setup : {e}")
+            return False
+    
+    def get_token(self) -> Optional[str]:
+        """Récupère le token Real-Debrid depuis la configuration centralisée"""
+        return self.config.get('realdebrid', {}).get('token')
+    
+    def update_config(self, key: str, value: Any) -> bool:
+        """Met à jour une valeur de configuration"""
+        try:
+            keys = key.split('.')
+            config = self.config
+            
+            # Naviguer jusqu'au niveau parent
+            for k in keys[:-1]:
+                if k not in config:
+                    config[k] = {}
+                config = config[k]
+            
+            # Mettre à jour la valeur
+            config[keys[-1]] = value
+            
+            # Sauvegarder
+            return self._save_config(self.config)
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur mise à jour config : {e}")
+            return False
 
 # Instance globale
 _config = None
