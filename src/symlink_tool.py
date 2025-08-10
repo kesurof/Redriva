@@ -194,6 +194,64 @@ class SymlinkDatabase:
             logger.error(f"❌ Erreur récupération scans: {e}")
             return []
 
+    def get_scan_by_id(self, scan_id: str) -> Optional[Dict]:
+        """Récupère un scan par son ID"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT id, status, config, results, started_at, completed_at, error_message
+                    FROM symlink_scans 
+                    WHERE id = ?
+                ''', (scan_id,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return {
+                        'id': row[0],
+                        'status': row[1],
+                        'config': json.loads(row[2]) if row[2] else {},
+                        'results': json.loads(row[3]) if row[3] else {},
+                        'started_at': row[4],
+                        'completed_at': row[5],
+                        'error_message': row[6]
+                    }
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur récupération scan {scan_id}: {e}")
+            return None
+
+    def delete_scan(self, scan_id: str) -> bool:
+        """Supprime un scan"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM symlink_scans WHERE id = ?', (scan_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur suppression scan {scan_id}: {e}")
+            return False
+
+    def create_scan(self, scan_id: str, config: Dict) -> bool:
+        """Crée une nouvelle entrée de scan"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO symlink_scans 
+                    (id, status, config, started_at)
+                    VALUES (?, 'running', ?, CURRENT_TIMESTAMP)
+                ''', (scan_id, json.dumps(config)))
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur création scan {scan_id}: {e}")
+            return False
+
 # Instance globale de la base de données
 db = None
 
@@ -203,6 +261,10 @@ class WebSymlinkChecker:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
         self.cancelled = False
+    
+    def cancel(self):
+        """Annule le scan en cours"""
+        self.cancelled = True
         
     def scan_directories(self, directories: List[str], mode: str = 'dry-run', 
                         depth: str = 'basic', progress_callback=None) -> Dict[str, Any]:
@@ -512,6 +574,62 @@ def register_symlink_routes(app):
             return jsonify({'success': True, 'scans': scans})
         except Exception as e:
             logger.error(f"❌ Erreur historique scans: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/symlink/scan/details/<scan_id>')
+    def api_scan_details(scan_id):
+        """API pour récupérer les détails d'un scan"""
+        try:
+            scan = db.get_scan_by_id(scan_id)
+            if scan:
+                return jsonify({'success': True, 'scan': scan})
+            else:
+                return jsonify({'success': False, 'error': 'Scan non trouvé'}), 404
+        except Exception as e:
+            logger.error(f"❌ Erreur détails scan: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/symlink/scan/delete/<scan_id>', methods=['POST'])
+    def api_delete_scan(scan_id):
+        """API pour supprimer un scan"""
+        try:
+            if db.delete_scan(scan_id):
+                return jsonify({'success': True, 'message': 'Scan supprimé'})
+            else:
+                return jsonify({'success': False, 'error': 'Scan non trouvé'}), 404
+        except Exception as e:
+            logger.error(f"❌ Erreur suppression scan: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    
+    @app.route('/api/symlink/scan/restart/<scan_id>', methods=['POST'])
+    def api_restart_scan(scan_id):
+        """API pour relancer un scan avec la même configuration"""
+        try:
+            # Récupérer la configuration du scan original
+            scan = db.get_scan_by_id(scan_id)
+            if not scan:
+                return jsonify({'success': False, 'error': 'Scan original non trouvé'}), 404
+            
+            # Récupérer la configuration du scan
+            config = scan.get('config', {})
+            if not config:
+                return jsonify({'success': False, 'error': 'Configuration du scan non trouvée'}), 400
+            
+            # Créer un nouveau scan avec la même configuration
+            new_scan_id = str(uuid.uuid4())
+            task_manager.start_scan(new_scan_id, config)
+            
+            # Enregistrer le nouveau scan en base
+            db.create_scan(new_scan_id, config)
+            
+            return jsonify({
+                'success': True, 
+                'scan_id': new_scan_id,
+                'message': 'Scan relancé avec la même configuration'
+            })
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur redémarrage scan: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
     
     @app.route('/api/symlink/test/services', methods=['POST'])

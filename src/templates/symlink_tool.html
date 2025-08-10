@@ -3,733 +3,221 @@
 {% block title %}Symlink Manager - Redriva{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h2>🔗 Symlink Manager</h2>
-    <p>Gestionnaire de liens symboliques pour vos médias</p>
-</div>
 
-<!-- Navigation par onglets -->
-<div class="tabs-container">
-    <div class="tabs-nav">
-        <button class="tab-item active" data-tab="resume" onclick="switchTab('resume')">📊 Résumé</button>
-        <button class="tab-item" data-tab="scanner" onclick="switchTab('scanner')">🔍 Scanner</button>
-        <button class="tab-item" data-tab="config" onclick="switchTab('config')">⚙️ Configuration</button>
-    </div>
-</div>
-
-<!-- Onglet Résumé -->
-<div id="resume-tab" class="tab-pane active">
-    <div class="card">
-        <h3>📈 Statistiques récentes</h3>
-        <div class="stats-grid">
-            <div class="stat-card primary">
-                <h4>Scans effectués</h4>
-                <div class="stat-value" id="total-scans">{{ recent_scans|length }}</div>
-            </div>
-            <div class="stat-card success">
-                <h4>Dernier scan</h4>
-                <div class="stat-value" id="last-scan">
-                    {% if recent_scans %}
-                        {{ recent_scans[0].started_at[:10] }}
-                    {% else %}
-                        Aucun
-                    {% endif %}
-                </div>
-            </div>
-            <div class="stat-card warning">
-                <h4>Problèmes détectés</h4>
-                <div class="stat-value" id="total-issues">
-                    {% set total_issues = 0 %}
-                    {% for scan in recent_scans %}
-                        {% if scan.results and scan.results.summary %}
-                            {% set total_issues = total_issues + scan.results.summary.total_broken %}
-                        {% endif %}
-                    {% endfor %}
-                    {{ total_issues }}
-                </div>
-            </div>
-            <div class="stat-card danger">
-                <h4>Liens cassés</h4>
-                <div class="stat-value" id="broken-links">
-                    {% set broken_links = 0 %}
-                    {% for scan in recent_scans %}
-                        {% if scan.results and scan.results.summary %}
-                            {% set broken_links = broken_links + scan.results.summary.total_broken %}
-                        {% endif %}
-                    {% endfor %}
-                    {{ broken_links }}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <h3>📋 Historique des scans</h3>
-        <div class="table-responsive">
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Statut</th>
-                        <th>Date de début</th>
-                        <th>Durée</th>
-                        <th>Répertoires</th>
-                        <th>Problèmes</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for scan in recent_scans %}
-                    <tr>
-                        <td><code>{{ scan.id[:8] }}</code></td>
-                        <td>
-                            {% if scan.status == 'completed' %}
-                                <span class="badge badge-success">✅ Terminé</span>
-                            {% elif scan.status == 'running' %}
-                                <span class="badge badge-primary">🔄 En cours</span>
-                            {% elif scan.status == 'error' %}
-                                <span class="badge badge-danger">❌ Erreur</span>
-                            {% elif scan.status == 'cancelled' %}
-                                <span class="badge badge-warning">🛑 Annulé</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ scan.started_at }}</td>
-                        <td>
-                            {% if scan.completed_at %}
-                                {{ ((scan.completed_at | int) - (scan.started_at | int)) }}s
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if scan.config and scan.config.directories %}
-                                {{ scan.config.directories|length }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if scan.results and scan.results.summary %}
-                                {{ scan.results.summary.total_broken }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td>
-                            <button class="btn btn-sm btn-secondary" onclick="viewScanDetails('{{ scan.id }}')">
-                                👁️ Voir
-                            </button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center">
-                            <em>Aucun scan effectué</em>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Onglet Scanner -->
-<div id="scanner-tab" class="tab-pane">
-    <div class="card">
-        <h3>🔍 Nouveau scan</h3>
-        
-        <div class="form-section">
-            <h4>1. Sélection des répertoires</h4>
-            <button class="btn btn-primary" onclick="loadDirectories()">
-                📁 Charger les répertoires
-            </button>
-            <div id="directories-loading" style="display: none;">
-                <p>🔄 Chargement...</p>
-            </div>
-            <div id="directories-list" class="directories-grid">
-                <!-- Les répertoires seront chargés ici -->
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h4>2. Configuration du scan</h4>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="scan-mode">Mode d'exécution:</label>
-                    <select id="scan-mode" class="form-control">
-                        <option value="dry-run">🧪 Test (dry-run)</option>
-                        <option value="real">🚀 Réel (modifications)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="scan-depth">Profondeur du scan:</label>
-                    <select id="scan-depth" class="form-control">
-                        <option value="basic">⚡ Basique (rapide)</option>
-                        <option value="full">🔍 Complet (avec ffprobe)</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h4>3. Lancement</h4>
-            <button class="btn btn-success btn-lg" onclick="startScan()" id="start-scan-btn">
-                🚀 Démarrer le scan
-            </button>
-            <button class="btn btn-danger btn-lg" onclick="cancelScan()" id="cancel-scan-btn" style="display: none;">
-                🛑 Annuler
-            </button>
-        </div>
-
-        <!-- Zone de progression -->
-        <div id="scan-progress" class="progress-section" style="display: none;">
-            <h4>📊 Progression</h4>
-            <div class="progress-bar">
-                <div id="progress-fill" class="progress-fill"></div>
-            </div>
-            <div id="progress-text" class="progress-text">0%</div>
-            <div id="progress-details" class="progress-details">
-                Initialisation...
-            </div>
-        </div>
-
-        <!-- Résultats -->
-        <div id="scan-results" class="results-section" style="display: none;">
-            <h4>📋 Résultats</h4>
-            <div id="results-content"></div>
-        </div>
-    </div>
-</div>
-
-<!-- Onglet Configuration -->
-<div id="config-tab" class="tab-pane">
-    <div class="card">
-        <h3>⚙️ Configuration</h3>
-        
-        <form id="config-form">
-            <!-- Layout en 2 colonnes principales -->
-            <div class="config-layout">
-                <!-- Colonne 1: Configuration système -->
-                <div class="config-column">
-                    <div class="form-section compact system-config">
-                        <h4>📁 Chemins et performance</h4>
-                        <div class="form-group">
-                            <label for="media-path">Chemin des médias:</label>
-                            <input type="text" id="media-path" class="form-control" 
-                                   value="{{ config.media_path }}" 
-                                   placeholder="Exemple: /app/medias ou /mnt/medias">
-                        </div>
-                        <div class="form-group">
-                            <label for="workers">Nombre de workers:</label>
-                            <input type="number" id="workers" class="form-control compact-input" 
-                                   value="{{ config.workers }}" 
-                                   min="1" max="16">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Colonne 2: Intégrations services -->
-                <div class="config-column">
-                    <div class="form-section compact sonarr-config">
-                        <h4>📺 Intégration Sonarr</h4>
-                        <div class="service-config">
-                            <div class="form-group checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="sonarr-enabled" 
-                                           {% if config.sonarr_enabled %}checked{% endif %}>
-                                    <span>Activer l'intégration Sonarr</span>
-                                </label>
-                            </div>
-                            <div class="service-fields">
-                                <div class="form-group">
-                                    <label for="sonarr-url">URL Sonarr:</label>
-                                    <input type="url" id="sonarr-url" class="form-control medium-input" 
-                                           value="{{ config.sonarr_url }}" 
-                                           placeholder="http://localhost:8989">
-                                </div>
-                                <div class="form-group">
-                                    <label for="sonarr-api-key">Clé API Sonarr:</label>
-                                    <input type="text" id="sonarr-api-key" class="form-control medium-input" 
-                                           value="{{ config.sonarr_api_key }}" 
-                                           placeholder="Votre clé API Sonarr">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section compact radarr-config">
-                        <h4>🎬 Intégration Radarr</h4>
-                        <div class="service-config">
-                            <div class="form-group checkbox-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="radarr-enabled" 
-                                           {% if config.radarr_enabled %}checked{% endif %}>
-                                    <span>Activer l'intégration Radarr</span>
-                                </label>
-                            </div>
-                            <div class="service-fields">
-                                <div class="form-group">
-                                    <label for="radarr-url">URL Radarr:</label>
-                                    <input type="url" id="radarr-url" class="form-control medium-input" 
-                                           value="{{ config.radarr_url }}" 
-                                           placeholder="http://localhost:7878">
-                                </div>
-                                <div class="form-group">
-                                    <label for="radarr-api-key">Clé API Radarr:</label>
-                                    <input type="text" id="radarr-api-key" class="form-control medium-input" 
-                                           value="{{ config.radarr_api_key }}" 
-                                           placeholder="Votre clé API Radarr">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Actions en bas, pleine largeur -->
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="detectServices()">
-                    🔍 Auto-détecter les services
-                </button>
-                <button type="button" class="btn btn-warning" onclick="testServices()">
-                    🧪 Tester les connexions
-                </button>
-                <button type="submit" class="btn btn-success">
-                    💾 Sauvegarder
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Zone de notifications -->
-<div id="notifications" class="notifications-container"></div>
+<!-- Conteneur de notifications -->
+<div id="toast-container" class="toast-container"></div>
 
 <style>
-/* Styles pour les onglets modernes */
-.tabs-container {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-    overflow: hidden;
+/* === VARIABLES CSS === */
+:root {
+  --primary-color: #2196F3;
+  --primary-gradient: linear-gradient(135deg, #2196F3, #1976D2);
+  --success-color: #4CAF50;
+  --warning-color: #FF9800;
+  --error-color: #f44336;
+  --text-color: #333;
+  --text-muted: #6c757d;
+  --border-color: #e0e0e0;
+  --bg-light: #f8f9fa;
+  --shadow-light: 0 2px 8px rgba(0,0,0,0.1);
+  --shadow-medium: 0 4px 16px rgba(0,0,0,0.15);
+  --border-radius: 8px;
+  --border-radius-lg: 12px;
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.tabs-nav {
-    display: flex;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
-    position: relative;
+/* === ANIMATIONS === */
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* === BASE STYLES === */
+.card {
+  background: white;
+  border: none;
+  border-radius: var(--border-radius-lg);
+  margin-bottom: 20px;
+  padding: 24px;
+  box-shadow: var(--shadow-light);
+  border-left: 4px solid var(--primary-color);
+  transition: var(--transition);
+}
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-medium); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  text-decoration: none;
+  box-shadow: var(--shadow-light);
+}
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-medium); }
+
+.btn-primary { background: var(--primary-gradient); color: white; }
+.btn-success { background: linear-gradient(135deg, var(--success-color), #388E3C); color: white; }
+.btn-warning { background: linear-gradient(135deg, var(--warning-color), #e0a800); color: #212529; }
+.btn-danger { background: linear-gradient(135deg, var(--error-color), #c82333); color: white; }
+.btn-secondary { background: linear-gradient(135deg, #6c757d, #5a6268); color: white; }
+
+/* === COMPONENTS === */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1002;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.tab-item {
-    flex: 1;
-    background: none;
-    border: none;
-    padding: 15px 20px;
-    cursor: pointer;
-    font-size: 16px;
-    font-weight: 500;
-    color: #6c757d;
-    transition: all 0.3s ease;
-    position: relative;
-    border-bottom: 3px solid transparent;
+.toast {
+  background: white;
+  padding: 16px 20px;
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  border-left: 4px solid;
+  min-width: 300px;
+  transform: translateX(380px);
+  opacity: 0;
+  transition: var(--transition);
+  color: var(--text-color);
+  font-weight: 500;
+}
+.toast.show { transform: translateX(0); opacity: 1; }
+.toast.success { border-left-color: var(--success-color); background: linear-gradient(135deg, #f1f8e9, #e8f5e8); color: #2e7d32; }
+.toast.error { border-left-color: var(--error-color); background: linear-gradient(135deg, #ffebee, #fde7e7); color: #c62828; }
+.toast.warning { border-left-color: var(--warning-color); background: linear-gradient(135deg, #fff8e1, #ffecb3); color: #ef6c00; }
+.toast.info { border-left-color: var(--primary-color); background: linear-gradient(135deg, #e3f2fd, #bbdefb); color: #1565c0; }
+
+.table-responsive { 
+  overflow-x: auto; 
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-light);
 }
 
-.tab-item:hover {
-    background: #e9ecef;
-    color: #495057;
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.table th {
+  font-weight: 600;
+  color: var(--text-color);
+  border: none;
+  padding: 16px;
+  font-size: 14px;
+  background: var(--bg-light);
+}
+.table td {
+  border: none;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: var(--transition);
+}
+.table tbody tr:hover {
+  background: rgba(33, 150, 243, 0.05);
+  transform: scale(1.001);
 }
 
-.tab-item.active {
-    color: #3498db;
-    background: white;
-    border-bottom-color: #3498db;
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
 
-.tab-pane {
-    display: none;
+.modal-content {
+  background: white;
+  border-radius: var(--border-radius-lg);
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.15);
 }
 
-.tab-pane.active {
-    display: block;
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-/* Styles pour les formulaires - Material Design Cards */
-.form-section {
-    margin-bottom: 30px;
-    padding: 24px;
-    border: none;
-    border-radius: 12px;
-    background: white;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    border-left: 4px solid #3498db;
-    transition: all 0.3s ease;
-    position: relative;
+.close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 5px;
+  border-radius: 50%;
+  transition: var(--transition);
 }
-
-.form-section:hover {
-    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.12);
-    transform: translateY(-2px);
-}
-
-.form-section.compact {
-    margin-bottom: 20px;
-    padding: 20px;
-}
-
-/* Couleurs d'accent par section */
-.form-section.system-config {
-    border-left-color: #4CAF50;
-}
-
-.form-section.service-config {
-    border-left-color: #9b59b6;
-}
-
-.form-section.sonarr-config {
-    border-left-color: #2196F3;
-}
-
-.form-section.radarr-config {
-    border-left-color: #FF9800;
-}
-
-.form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 8px;
-    color: #2c3e50;
-    font-size: 14px;
-    letter-spacing: 0.25px;
-}
-
-.form-section h4 {
-    margin: 0 0 20px 0;
-    color: #2c3e50;
-    font-size: 18px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+.close:hover { background: var(--bg-light); color: var(--error-color); }
 
 .form-control {
-    width: 100%;
-    padding: 12px 16px;
-    border: 2px solid #e1e8ed;
-    border-radius: 8px;
-    font-size: 14px;
-    background: #ffffff;
-    transition: all 0.3s ease;
-    font-family: inherit;
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e1e8ed;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #ffffff;
+  transition: all 0.3s ease;
+  font-family: inherit;
 }
 
 .form-control:focus {
-    outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-    background: #fdfdfd;
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  background: #fdfdfd;
 }
 
 .form-control:hover {
-    border-color: #bdc3c7;
-}
-
-/* Nouveaux styles pour le layout optimisé de la configuration */
-.config-layout {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.config-column {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-/* Largeurs adaptatives pour les champs */
-.compact-input {
-    max-width: 120px;
-}
-
-.medium-input {
-    max-width: 300px;
-}
-
-/* Styles pour les checkboxes et services - Material Design */
-.service-config {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.checkbox-group {
-    margin-bottom: 16px;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    color: #2c3e50;
-    padding: 8px 0;
-    transition: color 0.3s ease;
-}
-
-.checkbox-label:hover {
-    color: #3498db;
-}
-
-.checkbox-label input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    margin: 0;
-    cursor: pointer;
-    accent-color: #3498db;
-    transform: scale(1.1);
-}
-
-.checkbox-label span {
-    user-select: none;
-    font-size: 15px;
-}
-
-.service-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding-left: 32px;
-    border-left: 3px solid #ecf0f1;
-    margin-left: 16px;
-    position: relative;
-}
-
-.service-fields::before {
-    content: '';
-    position: absolute;
-    left: -3px;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background: linear-gradient(to bottom, #3498db, #2ecc71);
-    opacity: 0.6;
-}
-
-.form-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    margin-top: 32px;
-    padding: 20px 0;
-    border-top: 2px solid #ecf0f1;
-}
-
-/* Améliorations des boutons - Material Design */
-.btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.3s ease;
-    font-weight: 500;
-    font-size: 14px;
-    letter-spacing: 0.25px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, #3498db, #2980b9);
-    color: white;
-}
-
-.btn-success {
-    background: linear-gradient(135deg, #2ecc71, #27ae60);
-    color: white;
-}
-
-.btn-warning {
-    background: linear-gradient(135deg, #f39c12, #e67e22);
-    color: white;
-}
-
-.btn-secondary {
-    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-    color: white;
-}
-
-/* Styles pour les répertoires */
-.directories-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 15px;
-    margin-top: 15px;
-}
-
-.directory-card {
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    padding: 15px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.directory-card:hover {
-    border-color: #3498db;
-    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
-}
-
-.directory-card.selected {
-    border-color: #2ecc71;
-    background: #d4edda;
-}
-
-.directory-name {
-    font-weight: 600;
-    color: #2c3e50;
-    margin-bottom: 5px;
-}
-
-.directory-path {
-    font-size: 12px;
-    color: #6c757d;
-    margin-bottom: 5px;
-}
-
-.directory-size {
-    font-size: 11px;
-    color: #28a745;
-}
-
-/* Styles pour la progression */
-.progress-section {
-    margin-top: 30px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 8px;
+  border-color: #bdc3c7;
 }
 
 .progress-bar {
-    width: 100%;
-    height: 20px;
-    background: #e9ecef;
-    border-radius: 10px;
-    overflow: hidden;
-    margin: 10px 0;
+  width: 100%;
+  height: 20px;
+  background: #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 10px 0;
 }
 
 .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #3498db, #2ecc71);
-    width: 0%;
-    transition: width 0.3s ease;
+  height: 100%;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+  width: 0%;
+  transition: width 0.3s ease;
 }
 
-.progress-text {
-    text-align: center;
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.progress-details {
-    margin-top: 10px;
-    font-size: 14px;
-    color: #6c757d;
-}
-
-/* Styles pour les résultats */
-.results-section {
-    margin-top: 30px;
-    padding: 20px;
-    background: white;
-    border-radius: 8px;
-    border: 1px solid #e9ecef;
-}
-
-.result-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.result-card {
-    text-align: center;
-    padding: 15px;
-    border-radius: 8px;
-    color: white;
-}
-
-.result-card.files { background: #3498db; }
-.result-card.symlinks { background: #9b59b6; }
-.result-card.broken { background: #e74c3c; }
-.result-card.issues { background: #f39c12; }
-
-/* Styles pour les notifications */
-.notifications-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
-}
-
-.notification {
-    background: #2c3e50;
-    color: white;
-    padding: 15px 20px;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    animation: slideIn 0.3s ease;
-}
-
-.notification.success { background: #2ecc71; }
-.notification.error { background: #e74c3c; }
-.notification.warning { background: #f39c12; }
-
-@keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-/* Styles pour les badges */
 .badge {
-    display: inline-block;
-    padding: 4px 8px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 12px;
-    text-transform: uppercase;
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 12px;
+  text-transform: uppercase;
 }
 
 .badge-success { background: #d4edda; color: #155724; }
@@ -737,494 +225,1057 @@
 .badge-danger { background: #f8d7da; color: #721c24; }
 .badge-warning { background: #fff3cd; color: #856404; }
 
-/* Responsive */
+/* === RESPONSIVE === */
 @media (max-width: 768px) {
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-    
-    .directories-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .form-actions {
-        flex-direction: column;
-    }
-    
-    .tabs-nav {
-        flex-direction: column;
-    }
-    
-    .tab-item {
-        text-align: left;
-        border-bottom: 1px solid #e9ecef;
-        border-right: 3px solid transparent;
-    }
-    
-    .tab-item.active {
-        border-bottom-color: #e9ecef;
-        border-right-color: #3498db;
-    }
-    
-    /* Nouveaux styles responsive pour le layout de configuration */
-    .config-layout {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-    
-    .medium-input,
-    .compact-input {
-        max-width: 100%;
-    }
-    
-    .card {
-        margin: 10px;
-    }
+  .toast-container { bottom: 10px; right: 10px; left: 10px; }
+  .toast { max-width: none; min-width: auto; }
+  .modal-content { width: 95%; margin: 0; height: 100vh; max-height: 100vh; border-radius: 0; }
+  .btn { padding: 6px 12px; font-size: 12px; }
+  .card { padding: 16px; }
+}
+
+@media (max-width: 480px) {
+  .btn { padding: 4px 8px; font-size: 11px; }
+  .card { padding: 12px; }
 }
 </style>
+
+<!-- En-tête avec actions -->
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2 style="margin: 0; color: var(--text-color); font-weight: 600; display: flex; align-items: center; gap: 12px;">
+      🔗 Gestionnaire de liens symboliques
+    </h2>
+  </div>
+  
+  <!-- Filtres et actions intégrés -->
+  <div style="background: var(--bg-light); padding: 20px; border-radius: var(--border-radius-lg); border: 2px solid var(--border-color);">
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+      
+      <!-- Recherche -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="search-scans" style="font-weight: 600; color: var(--text-color);">Recherche:</label>
+        <input type="text" id="search-scans" placeholder="ID scan, répertoire ou statut" 
+               style="padding: 10px 14px; border: 2px solid var(--border-color); border-radius: var(--border-radius); min-width: 250px; background: white;">
+      </div>
+      
+      <button type="button" onclick="filterScans()" class="btn btn-primary">🔍 Filtrer</button>
+      <button type="button" onclick="clearFilters()" class="btn btn-secondary">🗑️ Effacer</button>
+      
+      <div style="height: 30px; width: 1px; background: #ddd; margin: 0 5px;"></div>
+      
+      <!-- Actions principales -->
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button type="button" onclick="loadDirectories()" class="btn btn-primary">📁 Charger répertoires</button>
+        <button type="button" onclick="startQuickScan()" class="btn btn-success">🚀 Scan rapide</button>
+        <button type="button" onclick="showNewScanModal()" class="btn btn-warning">🔧 Scan avancé</button>
+        <button type="button" onclick="refreshData()" class="btn btn-secondary">🔄 Actualiser</button>
+      </div>
+      
+      <div style="height: 30px; width: 1px; background: #ddd; margin: 0 5px;"></div>
+      
+      <!-- Configuration rapide -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: 600; color: var(--text-color);">⚙️ Config:</span>
+        <button type="button" onclick="showConfigModal()" class="btn btn-secondary">🛠️ Paramètres</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Statistiques rapides -->
+<div class="card">
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px;">
+    <div class="stat-item" style="text-align: center; padding: 20px; border-radius: var(--border-radius-lg); background: white; box-shadow: var(--shadow-light); border-left: 4px solid var(--primary-color);">
+      <div style="font-size: 2em; font-weight: 700; color: var(--primary-color); margin-bottom: 8px;" id="total-scans-stat">{{ recent_scans|length }}</div>
+      <div style="font-size: 14px; color: var(--text-muted); font-weight: 600;">Total scans</div>
+    </div>
+    
+    <div class="stat-item" style="text-align: center; padding: 20px; border-radius: var(--border-radius-lg); background: white; box-shadow: var(--shadow-light); border-left: 4px solid var(--success-color);">
+      <div style="font-size: 1.8em; font-weight: 700; color: var(--success-color); margin-bottom: 8px;" id="completed-scans-stat">
+        {% set completed_count = 0 %}
+        {% for scan in recent_scans %}
+          {% if scan.status == 'completed' %}
+            {% set completed_count = completed_count + 1 %}
+          {% endif %}
+        {% endfor %}
+        {{ completed_count }}
+      </div>
+      <div style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Terminés</div>
+    </div>
+    
+    <div class="stat-item" style="text-align: center; padding: 20px; border-radius: var(--border-radius-lg); background: white; box-shadow: var(--shadow-light); border-left: 4px solid var(--warning-color);">
+      <div style="font-size: 1.8em; font-weight: 700; color: var(--warning-color); margin-bottom: 8px;" id="running-scans-stat">
+        {% set running_count = 0 %}
+        {% for scan in recent_scans %}
+          {% if scan.status == 'running' %}
+            {% set running_count = running_count + 1 %}
+          {% endif %}
+        {% endfor %}
+        {{ running_count }}
+      </div>
+      <div style="font-size: 13px; color: var(--text-muted); font-weight: 600;">En cours</div>
+    </div>
+    
+    <div class="stat-item" style="text-align: center; padding: 20px; border-radius: var(--border-radius-lg); background: white; box-shadow: var(--shadow-light); border-left: 4px solid var(--error-color);">
+      <div style="font-size: 1.8em; font-weight: 700; color: var(--error-color); margin-bottom: 8px;" id="broken-links-stat">
+        {% set total_broken = 0 %}
+        {% for scan in recent_scans %}
+          {% if scan.results and scan.results.summary %}
+            {% set total_broken = total_broken + scan.results.summary.total_broken %}
+          {% endif %}
+        {% endfor %}
+        {{ total_broken }}
+      </div>
+      <div style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Liens cassés</div>
+    </div>
+  </div>
+</div>
+
+<!-- Table des scans -->
+<div class="card">
+  <div id="scans-container">
+    {% if recent_scans %}
+    <div class="table-responsive">
+      <table class="table table-striped table-hover">
+        <thead>
+          <tr>
+            <th style="width: 3%;"><input type="checkbox" id="selectAllScans" onchange="toggleSelectAllScans(this)"></th>
+            <th style="width: 12%;">ID</th>
+            <th style="width: 12%;">Statut</th>
+            <th style="width: 15%;">Date début</th>
+            <th style="width: 10%;">Durée</th>
+            <th style="width: 8%;">Répertoires</th>
+            <th style="width: 8%;">Fichiers</th>
+            <th style="width: 8%;">Symlinks</th>
+            <th style="width: 8%;">Cassés</th>
+            <th style="width: 16%;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="scans-table-body">
+          {% for scan in recent_scans %}
+          <tr data-scan-id="{{ scan.id }}" class="scan-row">
+            <td><input type="checkbox" class="scan-checkbox" value="{{ scan.id }}" onchange="updateScanSelectionActions()"></td>
+            <td style="font-family: monospace;">
+              <code>{{ scan.id[:8] }}</code>
+              {% if scan.status == 'running' %}
+              <div style="margin-top: 4px;">
+                <span style="background: #cce7ff; color: #004085; padding: 2px 6px; border-radius: 4px; font-size: 11px;">
+                  🔄 Actif
+                </span>
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              {% if scan.status == 'completed' %}
+                <span class="badge badge-success">✅ Terminé</span>
+              {% elif scan.status == 'running' %}
+                <span class="badge badge-primary">🔄 En cours</span>
+              {% elif scan.status == 'error' %}
+                <span class="badge badge-danger">❌ Erreur</span>
+              {% elif scan.status == 'cancelled' %}
+                <span class="badge badge-warning">🛑 Annulé</span>
+              {% endif %}
+            </td>
+            <td style="font-family: monospace;">{{ scan.started_at }}</td>
+            <td style="font-family: monospace;">
+              {% if scan.completed_at %}
+                {{ ((scan.completed_at | int) - (scan.started_at | int)) }}s
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td style="text-align: center;">
+              {% if scan.config and scan.config.directories %}
+                {{ scan.config.directories|length }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td style="text-align: center;">
+              {% if scan.results and scan.results.summary %}
+                {{ scan.results.summary.total_files or 0 }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td style="text-align: center;">
+              {% if scan.results and scan.results.summary %}
+                {{ scan.results.summary.total_symlinks or 0 }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td style="text-align: center;">
+              {% if scan.results and scan.results.summary %}
+                <span style="color: var(--error-color); font-weight: 600;">{{ scan.results.summary.total_broken or 0 }}</span>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>
+              <div style="display: flex; gap: 3px; justify-content: center;">
+                <button onclick="viewScanDetails('{{ scan.id }}')" class="btn btn-sm btn-primary" title="Voir détails">👁️</button>
+                {% if scan.status == 'running' %}
+                <button onclick="cancelScan('{{ scan.id }}')" class="btn btn-sm btn-danger" title="Annuler">🛑</button>
+                {% endif %}
+                {% if scan.status in ['completed', 'error', 'cancelled'] %}
+                <button onclick="restartScan('{{ scan.id }}')" class="btn btn-sm btn-warning" title="Relancer">🔄</button>
+                <button onclick="deleteScan('{{ scan.id }}')" class="btn btn-sm btn-danger" title="Supprimer">🗑️</button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <!-- État vide -->
+    <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+      <div style="font-size: 4em; opacity: 0.3; margin-bottom: 20px;">🔗</div>
+      <h3>Aucun scan effectué</h3>
+      <p>Commencez par charger les répertoires et lancer un scan.</p>
+      <button onclick="loadDirectories()" class="btn btn-primary">📁 Charger répertoires</button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Zone de progression en temps réel -->
+<div id="live-progress" class="card" style="display: none;">
+  <h3>📊 Scan en cours</h3>
+  <div id="progress-container">
+    <div class="progress-bar">
+      <div id="progress-fill" class="progress-fill"></div>
+    </div>
+    <div id="progress-text" style="text-align: center; font-weight: 600; margin: 10px 0;">0%</div>
+    <div id="progress-details" style="font-size: 14px; color: var(--text-muted);">
+      Initialisation...
+    </div>
+  </div>
+</div>
+</style>
+<!-- Modal unifié -->
+<div id="universalModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle">Chargement...</h3>
+      <button class="close" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modalBody">
+      <div style="text-align: center; padding: 40px;">
+        <div style="font-size: 2em; animation: spin 2s linear infinite;">🔄</div>
+        <div style="margin-top: 10px;">Chargement...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de scan avancé -->
+<div id="scanModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🔧 Configuration du scan avancé</h3>
+      <button class="close" onclick="closeScanModal()">&times;</button>
+    </div>
+    <div id="scanModalBody">
+      <div style="margin-bottom: 20px;">
+        <h4>📁 Sélection des répertoires</h4>
+        <button class="btn btn-primary" onclick="loadDirectoriesInModal()">
+          📁 Charger les répertoires
+        </button>
+        <div id="directories-loading-modal" style="display: none; margin: 10px 0;">
+          <p>🔄 Chargement...</p>
+        </div>
+        <div id="directories-list-modal" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 15px;">
+          <!-- Les répertoires seront chargés ici -->
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h4>⚙️ Configuration</h4>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+          <div>
+            <label for="scan-mode-modal">Mode d'exécution:</label>
+            <select id="scan-mode-modal" class="form-control">
+              <option value="dry-run">🧪 Test (dry-run)</option>
+              <option value="real">🚀 Réel (modifications)</option>
+            </select>
+          </div>
+          <div>
+            <label for="scan-depth-modal">Profondeur du scan:</label>
+            <select id="scan-depth-modal" class="form-control">
+              <option value="basic">⚡ Basique (rapide)</option>
+              <option value="full">🔍 Complet (avec ffprobe)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeScanModal()">Annuler</button>
+        <button class="btn btn-success" onclick="startAdvancedScan()">🚀 Démarrer le scan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de configuration -->
+<div id="configModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>⚙️ Configuration symlink</h3>
+      <button class="close" onclick="closeConfigModal()">&times;</button>
+    </div>
+    <div id="configModalBody">
+      <form id="config-form">
+        <div style="margin-bottom: 20px;">
+          <h4>📁 Chemins et performance</h4>
+          <div style="margin-bottom: 15px;">
+            <label for="media-path-modal">Chemin des médias:</label>
+            <input type="text" id="media-path-modal" class="form-control" 
+                   value="{{ config.media_path if config else '' }}" 
+                   placeholder="Exemple: /app/medias ou /mnt/medias">
+          </div>
+          <div style="margin-bottom: 15px;">
+            <label for="workers-modal">Nombre de workers:</label>
+            <input type="number" id="workers-modal" class="form-control" 
+                   value="{{ config.workers if config else '4' }}" 
+                   min="1" max="16" style="max-width: 150px;">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h4>📺 Intégration Sonarr</h4>
+          <div style="margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 10px;">
+              <input type="checkbox" id="sonarr-enabled-modal" 
+                     {% if config and config.sonarr_enabled %}checked{% endif %}>
+              <span>Activer l'intégration Sonarr</span>
+            </label>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div>
+              <label for="sonarr-url-modal">URL Sonarr:</label>
+              <input type="url" id="sonarr-url-modal" class="form-control" 
+                     value="{{ config.sonarr_url if config else '' }}" 
+                     placeholder="http://localhost:8989">
+            </div>
+            <div>
+              <label for="sonarr-api-key-modal">Clé API Sonarr:</label>
+              <input type="text" id="sonarr-api-key-modal" class="form-control" 
+                     value="{{ config.sonarr_api_key if config else '' }}" 
+                     placeholder="Votre clé API Sonarr">
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h4>🎬 Intégration Radarr</h4>
+          <div style="margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 10px;">
+              <input type="checkbox" id="radarr-enabled-modal" 
+                     {% if config and config.radarr_enabled %}checked{% endif %}>
+              <span>Activer l'intégration Radarr</span>
+            </label>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div>
+              <label for="radarr-url-modal">URL Radarr:</label>
+              <input type="url" id="radarr-url-modal" class="form-control" 
+                     value="{{ config.radarr_url if config else '' }}" 
+                     placeholder="http://localhost:7878">
+            </div>
+            <div>
+              <label for="radarr-api-key-modal">Clé API Radarr:</label>
+              <input type="text" id="radarr-api-key-modal" class="form-control" 
+                     value="{{ config.radarr_api_key if config else '' }}" 
+                     placeholder="Votre clé API Radarr">
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" onclick="detectServices()">
+            🔍 Auto-détecter
+          </button>
+          <button type="button" class="btn btn-warning" onclick="testServices()">
+            🧪 Tester
+          </button>
+          <button type="submit" class="btn btn-success">
+            💾 Sauvegarder
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-// Variables globales
+// === VARIABLES GLOBALES ===
+let selectedDirectories = [];
 let currentScanId = null;
 let scanPollingInterval = null;
-let selectedDirectories = [];
+let selectedScans = new Set();
 
-// Gestion des onglets
-function switchTab(tabName) {
-    // Masquer tous les onglets
-    document.querySelectorAll('.tab-pane').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Désactiver tous les boutons
-    document.querySelectorAll('.tab-item').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Afficher l'onglet sélectionné
-    document.getElementById(tabName + '-tab').classList.add('active');
-    
-    // Activer le bouton correspondant
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    
-    // Sauvegarder l'onglet actuel
-    localStorage.setItem('symlink-active-tab', tabName);
+// === UTILITAIRES ===
+function showToast(message, type = 'success') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = message;
+  document.getElementById('toast-container').appendChild(toast);
+  setTimeout(() => toast.classList.add('show'), 100);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
-// Restaurer l'onglet au chargement
-document.addEventListener('DOMContentLoaded', function() {
-    const activeTab = localStorage.getItem('symlink-active-tab') || 'resume';
-    const tabButton = document.querySelector(`[data-tab="${activeTab}"]`);
-    if (tabButton) {
-        switchTab(activeTab);
-    }
-});
-
-// Gestion des notifications
-function showNotification(message, type = 'info') {
-    const container = document.getElementById('notifications');
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    
-    container.appendChild(notification);
-    
-    // Suppression automatique après 5 secondes
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.parentNode.removeChild(notification);
-        }
-    }, 5000);
+function showLoading(show = true, message = 'Chargement...') {
+  let loader = document.getElementById('global-loader');
+  if (show && !loader) {
+    loader = document.createElement('div');
+    loader.id = 'global-loader';
+    loader.innerHTML = `<div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;"><div style="text-align: center;"><div style="font-size: 2em; margin-bottom: 10px;">⏳</div>${message}</div></div>`;
+    document.body.appendChild(loader);
+  } else if (!show && loader) {
+    loader.remove();
+  }
 }
 
-// Chargement des répertoires
+// === GESTION DES MODAUX ===
+function closeModal() {
+  document.getElementById('universalModal').style.display = 'none';
+}
+
+function showScanModal() {
+  document.getElementById('scanModal').style.display = 'flex';
+}
+
+function closeScanModal() {
+  document.getElementById('scanModal').style.display = 'none';
+}
+
+function showNewScanModal() {
+  showScanModal();
+}
+
+function showConfigModal() {
+  document.getElementById('configModal').style.display = 'flex';
+}
+
+function closeConfigModal() {
+  document.getElementById('configModal').style.display = 'none';
+}
+
+// === GESTION DES RÉPERTOIRES ===
 async function loadDirectories() {
-    const loadingDiv = document.getElementById('directories-loading');
-    const listDiv = document.getElementById('directories-list');
+  showLoading(true, 'Chargement des répertoires...');
+  try {
+    const response = await fetch('/api/symlink/directories');
+    const data = await response.json();
     
-    loadingDiv.style.display = 'block';
-    listDiv.innerHTML = '';
-    
-    try {
-        const response = await fetch('/api/symlink/directories');
-        const data = await response.json();
-        
-        if (data.success) {
-            displayDirectories(data.directories);
-        } else {
-            showNotification('Erreur lors du chargement des répertoires: ' + data.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Erreur de connexion: ' + error.message, 'error');
-    } finally {
-        loadingDiv.style.display = 'none';
-    }
-}
-
-// Affichage des répertoires
-function displayDirectories(directories) {
-    const listDiv = document.getElementById('directories-list');
-    
-    if (directories.length === 0) {
-        listDiv.innerHTML = '<p class="text-center">Aucun répertoire trouvé dans le chemin des médias.</p>';
-        return;
-    }
-    
-    directories.forEach(dir => {
-        const card = document.createElement('div');
-        card.className = 'directory-card';
-        card.onclick = () => toggleDirectory(dir.path, card);
-        
-        card.innerHTML = `
-            <div class="directory-name">📁 ${dir.name}</div>
-            <div class="directory-path">${dir.path}</div>
-            <div class="directory-size">${dir.size} éléments</div>
-        `;
-        
-        listDiv.appendChild(card);
-    });
-}
-
-// Sélection/désélection des répertoires
-function toggleDirectory(path, card) {
-    const index = selectedDirectories.indexOf(path);
-    
-    if (index === -1) {
-        selectedDirectories.push(path);
-        card.classList.add('selected');
+    if (data.success) {
+      showToast(`${data.directories.length} répertoires trouvés`, 'success');
+      console.log('Répertoires chargés:', data.directories);
     } else {
-        selectedDirectories.splice(index, 1);
-        card.classList.remove('selected');
+      showToast('Erreur lors du chargement des répertoires: ' + data.error, 'error');
     }
-    
-    console.log('Répertoires sélectionnés:', selectedDirectories);
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  } finally {
+    showLoading(false);
+  }
 }
 
-// Démarrage d'un scan
-async function startScan() {
-    if (selectedDirectories.length === 0) {
-        showNotification('Veuillez sélectionner au moins un répertoire', 'warning');
-        return;
+async function loadDirectoriesInModal() {
+  const loadingDiv = document.getElementById('directories-loading-modal');
+  const listDiv = document.getElementById('directories-list-modal');
+  
+  loadingDiv.style.display = 'block';
+  listDiv.innerHTML = '';
+  
+  try {
+    const response = await fetch('/api/symlink/directories');
+    const data = await response.json();
+    
+    if (data.success) {
+      displayDirectoriesInModal(data.directories);
+    } else {
+      showToast('Erreur lors du chargement des répertoires: ' + data.error, 'error');
     }
-    
-    const mode = document.getElementById('scan-mode').value;
-    const depth = document.getElementById('scan-depth').value;
-    
-    const config = {
-        directories: selectedDirectories,
-        mode: mode,
-        depth: depth,
-        workers: parseInt(document.getElementById('workers').value) || 4
-    };
-    
-    try {
-        const response = await fetch('/api/symlink/scan/start', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            currentScanId = data.scan_id;
-            showScanProgress();
-            startScanPolling();
-            showNotification('Scan démarré avec succès', 'success');
-        } else {
-            showNotification('Erreur lors du démarrage: ' + data.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Erreur de connexion: ' + error.message, 'error');
-    }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  } finally {
+    loadingDiv.style.display = 'none';
+  }
 }
 
-// Affichage de la zone de progression
-function showScanProgress() {
-    document.getElementById('scan-progress').style.display = 'block';
-    document.getElementById('scan-results').style.display = 'none';
-    document.getElementById('start-scan-btn').style.display = 'none';
-    document.getElementById('cancel-scan-btn').style.display = 'inline-block';
+function displayDirectoriesInModal(directories) {
+  const listDiv = document.getElementById('directories-list-modal');
+  
+  if (directories.length === 0) {
+    listDiv.innerHTML = '<p style="text-align: center; grid-column: 1 / -1;">Aucun répertoire trouvé dans le chemin des médias.</p>';
+    return;
+  }
+  
+  directories.forEach(dir => {
+    const card = document.createElement('div');
+    card.className = 'directory-card-modal';
+    card.style.cssText = `
+      background: white;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    `;
+    card.onclick = () => toggleDirectoryInModal(dir.path, card);
+    
+    card.innerHTML = `
+      <div style="font-weight: 600; color: #2c3e50; margin-bottom: 5px;">📁 ${dir.name}</div>
+      <div style="font-size: 11px; color: #6c757d; margin-bottom: 5px;">${dir.path}</div>
+      <div style="font-size: 10px; color: #28a745;">${dir.size} éléments</div>
+    `;
+    
+    listDiv.appendChild(card);
+  });
 }
 
-// Polling du statut du scan
+function toggleDirectoryInModal(path, card) {
+  const index = selectedDirectories.indexOf(path);
+  
+  if (index === -1) {
+    selectedDirectories.push(path);
+    card.style.borderColor = '#2ecc71';
+    card.style.background = '#d4edda';
+  } else {
+    selectedDirectories.splice(index, 1);
+    card.style.borderColor = '#e9ecef';
+    card.style.background = 'white';
+  }
+}
+
+// === GESTION DES SCANS ===
+async function startQuickScan() {
+  if (!confirm('Démarrer un scan rapide sur tous les répertoires disponibles ?')) {
+    return;
+  }
+  
+  // D'abord charger les répertoires disponibles
+  try {
+    const response = await fetch('/api/symlink/directories');
+    const data = await response.json();
+    
+    if (data.success && data.directories && data.directories.length > 0) {
+      // Utiliser tous les répertoires disponibles
+      const allDirectories = data.directories.map(dir => dir.path);
+      
+      const config = {
+        directories: allDirectories,
+        mode: 'dry-run',
+        depth: 'basic',
+        workers: 4
+      };
+      
+      await startScan(config);
+    } else {
+      showToast('Aucun répertoire trouvé. Vérifiez la configuration du chemin des médias.', 'warning');
+    }
+  } catch (error) {
+    showToast('Erreur lors du chargement des répertoires: ' + error.message, 'error');
+  }
+}
+
+async function startAdvancedScan() {
+  if (selectedDirectories.length === 0) {
+    showToast('Veuillez sélectionner au moins un répertoire', 'warning');
+    return;
+  }
+  
+  const mode = document.getElementById('scan-mode-modal').value;
+  const depth = document.getElementById('scan-depth-modal').value;
+  
+  const config = {
+    directories: selectedDirectories,
+    mode: mode,
+    depth: depth,
+    workers: 4
+  };
+  
+  closeScanModal();
+  await startScan(config);
+}
+
+async function startScan(config) {
+  try {
+    const response = await fetch('/api/symlink/scan/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(config)
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentScanId = data.scan_id;
+      showLiveProgress();
+      startScanPolling();
+      showToast('Scan démarré avec succès', 'success');
+    } else {
+      showToast('Erreur lors du démarrage: ' + data.error, 'error');
+    }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
+}
+
+function showLiveProgress() {
+  document.getElementById('live-progress').style.display = 'block';
+}
+
+function hideLiveProgress() {
+  document.getElementById('live-progress').style.display = 'none';
+}
+
+// === POLLING DU SCAN ===
 function startScanPolling() {
-    if (scanPollingInterval) {
-        clearInterval(scanPollingInterval);
-    }
-    
-    scanPollingInterval = setInterval(async () => {
-        if (!currentScanId) return;
-        
-        try {
-            const response = await fetch(`/api/symlink/scan/status/${currentScanId}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                updateScanProgress(data.status);
-                
-                if (['completed', 'error', 'cancelled'].includes(data.status.status)) {
-                    stopScanPolling();
-                    showScanResults(data.status);
-                }
-            }
-        } catch (error) {
-            console.error('Erreur polling:', error);
-        }
-    }, 2000);
-}
-
-// Mise à jour de la progression
-function updateScanProgress(status) {
-    const progressFill = document.getElementById('progress-fill');
-    const progressText = document.getElementById('progress-text');
-    const progressDetails = document.getElementById('progress-details');
-    
-    if (status.progress !== undefined) {
-        progressFill.style.width = status.progress + '%';
-        progressText.textContent = status.progress + '%';
-    }
-    
-    if (status.current_task) {
-        progressDetails.textContent = status.current_task;
-    }
-}
-
-// Arrêt du polling
-function stopScanPolling() {
-    if (scanPollingInterval) {
-        clearInterval(scanPollingInterval);
-        scanPollingInterval = null;
-    }
-    
-    document.getElementById('start-scan-btn').style.display = 'inline-block';
-    document.getElementById('cancel-scan-btn').style.display = 'none';
-}
-
-// Annulation d'un scan
-async function cancelScan() {
+  if (scanPollingInterval) {
+    clearInterval(scanPollingInterval);
+  }
+  
+  scanPollingInterval = setInterval(async () => {
     if (!currentScanId) return;
     
     try {
-        const response = await fetch(`/api/symlink/scan/cancel/${currentScanId}`, {
-            method: 'POST'
-        });
+      const response = await fetch(`/api/symlink/scan/status/${currentScanId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        updateScanProgress(data.status);
         
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification('Scan annulé', 'warning');
-            stopScanPolling();
-            currentScanId = null;
-        } else {
-            showNotification('Erreur lors de l\'annulation: ' + data.error, 'error');
+        if (['completed', 'error', 'cancelled'].includes(data.status.status)) {
+          stopScanPolling();
+          showScanResults(data.status);
         }
+      }
     } catch (error) {
-        showNotification('Erreur de connexion: ' + error.message, 'error');
+      console.error('Erreur polling:', error);
     }
+  }, 2000);
 }
 
-// Affichage des résultats
+function updateScanProgress(status) {
+  const progressFill = document.getElementById('progress-fill');
+  const progressText = document.getElementById('progress-text');
+  const progressDetails = document.getElementById('progress-details');
+  
+  if (status.progress !== undefined) {
+    progressFill.style.width = status.progress + '%';
+    progressText.textContent = status.progress + '%';
+  }
+  
+  if (status.current_task) {
+    progressDetails.textContent = status.current_task;
+  }
+}
+
+function stopScanPolling() {
+  if (scanPollingInterval) {
+    clearInterval(scanPollingInterval);
+    scanPollingInterval = null;
+  }
+  currentScanId = null;
+}
+
 function showScanResults(status) {
-    document.getElementById('scan-progress').style.display = 'none';
-    document.getElementById('scan-results').style.display = 'block';
-    
-    const resultsContent = document.getElementById('results-content');
-    
-    if (status.status === 'completed' && status.results) {
-        const results = status.results;
-        const summary = results.summary || {};
-        
-        resultsContent.innerHTML = `
-            <div class="result-summary">
-                <div class="result-card files">
-                    <h4>Fichiers</h4>
-                    <div class="stat-value">${summary.total_files || 0}</div>
-                </div>
-                <div class="result-card symlinks">
-                    <h4>Symlinks</h4>
-                    <div class="stat-value">${summary.total_symlinks || 0}</div>
-                </div>
-                <div class="result-card broken">
-                    <h4>Liens cassés</h4>
-                    <div class="stat-value">${summary.total_broken || 0}</div>
-                </div>
-                <div class="result-card issues">
-                    <h4>Problèmes</h4>
-                    <div class="stat-value">${summary.directories_with_issues || 0}</div>
-                </div>
-            </div>
-            <div class="results-details">
-                <h5>Détails par répertoire:</h5>
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Répertoire</th>
-                                <th>Fichiers</th>
-                                <th>Symlinks</th>
-                                <th>Cassés</th>
-                                <th>Statut</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${Object.entries(results.directories || {}).map(([path, data]) => `
-                                <tr>
-                                    <td><code>${path}</code></td>
-                                    <td>${data.files_count || 0}</td>
-                                    <td>${data.symlinks_count || 0}</td>
-                                    <td>${data.broken_symlinks ? data.broken_symlinks.length : 0}</td>
-                                    <td>
-                                        ${data.status === 'scanned' ? '✅ Scanné' : 
-                                          data.status === 'error' ? '❌ Erreur' : 
-                                          data.status === 'not_found' ? '❓ Introuvable' : data.status}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-        
-        showNotification('Scan terminé avec succès', 'success');
-    } else if (status.status === 'error') {
-        resultsContent.innerHTML = `
-            <div class="alert alert-danger">
-                <h5>❌ Erreur pendant le scan</h5>
-                <p>${status.error || 'Erreur inconnue'}</p>
-            </div>
-        `;
-        showNotification('Erreur pendant le scan', 'error');
-    } else if (status.status === 'cancelled') {
-        resultsContent.innerHTML = `
-            <div class="alert alert-warning">
-                <h5>🛑 Scan annulé</h5>
-                <p>Le scan a été interrompu par l'utilisateur.</p>
-            </div>
-        `;
-    }
-    
-    currentScanId = null;
+  if (status.status === 'completed') {
+    showToast('Scan terminé avec succès', 'success');
+    setTimeout(() => {
+      refreshData();
+      hideLiveProgress();
+    }, 2000);
+  } else if (status.status === 'error') {
+    showToast('Erreur pendant le scan: ' + (status.error || 'Erreur inconnue'), 'error');
+    hideLiveProgress();
+  } else if (status.status === 'cancelled') {
+    showToast('Scan annulé', 'warning');
+    hideLiveProgress();
+  }
 }
 
-// Sauvegarde de la configuration
-document.getElementById('config-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
+// === ACTIONS SUR LES SCANS ===
+async function cancelScan(scanId) {
+  if (!confirm('Annuler ce scan ?')) return;
+  
+  try {
+    const response = await fetch(`/api/symlink/scan/cancel/${scanId}`, {
+      method: 'POST'
+    });
     
-    const config = {
-        media_path: document.getElementById('media-path').value,
-        workers: parseInt(document.getElementById('workers').value),
-        sonarr_enabled: document.getElementById('sonarr-enabled').checked,
-        sonarr_url: document.getElementById('sonarr-url').value,
-        sonarr_api_key: document.getElementById('sonarr-api-key').value,
-        radarr_enabled: document.getElementById('radarr-enabled').checked,
-        radarr_url: document.getElementById('radarr-url').value,
-        radarr_api_key: document.getElementById('radarr-api-key').value
-    };
-    
-    try {
-        const response = await fetch('/api/symlink/config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification('Configuration sauvegardée', 'success');
-        } else {
-            showNotification('Erreur de sauvegarde: ' + data.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Erreur de connexion: ' + error.message, 'error');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Scan annulé', 'warning');
+      refreshData();
+    } else {
+      showToast('Erreur lors de l\'annulation: ' + data.error, 'error');
+    }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
+}
+
+async function deleteScan(scanId) {
+  if (!confirm('Supprimer ce scan ?')) return;
+  
+  try {
+    const response = await fetch(`/api/symlink/scan/delete/${scanId}`, {
+      method: 'POST'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Scan supprimé', 'success');
+      const row = document.querySelector(`tr[data-scan-id="${scanId}"]`);
+      if (row) {
+        row.style.opacity = '0.5';
+        setTimeout(() => refreshData(), 1000);
+      }
+    } else {
+      showToast('Erreur lors de la suppression: ' + data.error, 'error');
+    }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
+}
+
+async function restartScan(scanId) {
+  if (!confirm('Relancer ce scan avec la même configuration ?')) return;
+  
+  try {
+    const response = await fetch(`/api/symlink/scan/restart/${scanId}`, {
+      method: 'POST'
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentScanId = data.scan_id;
+      showLiveProgress();
+      startScanPolling();
+      showToast('Scan relancé', 'success');
+    } else {
+      showToast('Erreur lors du redémarrage: ' + data.error, 'error');
+    }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
+}
+
+function viewScanDetails(scanId) {
+  const modal = document.getElementById('universalModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalBody = document.getElementById('modalBody');
+  
+  modalTitle.textContent = `Détails du scan ${scanId.substring(0, 8)}`;
+  modalBody.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div style="font-size: 2em; animation: spin 2s linear infinite;">🔄</div>
+      <div style="margin-top: 10px;">Chargement des détails...</div>
+    </div>
+  `;
+  
+  modal.style.display = 'flex';
+  
+  // Charger les détails du scan
+  fetch(`/api/symlink/scan/details/${scanId}`)
+    .then(r => {
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+      }
+      return r.json();
+    })
+    .then(data => {
+      if (data.success) {
+        displayScanDetails(data.scan);
+      } else {
+        modalBody.innerHTML = `<div style="color: var(--error-color); text-align: center;">Erreur: ${data.error}</div>`;
+      }
+    })
+    .catch(err => {
+      modalBody.innerHTML = `<div style="color: var(--error-color); text-align: center;">Erreur de connexion: ${err.message}</div>`;
+    });
+}
+
+function displayScanDetails(scan) {
+  const modalBody = document.getElementById('modalBody');
+  
+  let content = `
+    <div style="margin-bottom: 20px;">
+      <h4>📊 Informations générales</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+        <div><strong>ID:</strong> ${scan.id}</div>
+        <div><strong>Statut:</strong> ${scan.status}</div>
+        <div><strong>Début:</strong> ${scan.started_at}</div>
+        <div><strong>Fin:</strong> ${scan.completed_at || 'En cours'}</div>
+      </div>
+    </div>
+  `;
+  
+  if (scan.results && scan.results.summary) {
+    const summary = scan.results.summary;
+    content += `
+      <div style="margin-bottom: 20px;">
+        <h4>📈 Résumé</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+          <div style="text-align: center; padding: 15px; background: var(--bg-light); border-radius: 8px;">
+            <div style="font-size: 1.5em; font-weight: 600; color: var(--primary-color);">${summary.total_files || 0}</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Fichiers</div>
+          </div>
+          <div style="text-align: center; padding: 15px; background: var(--bg-light); border-radius: 8px;">
+            <div style="font-size: 1.5em; font-weight: 600; color: var(--success-color);">${summary.total_symlinks || 0}</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Symlinks</div>
+          </div>
+          <div style="text-align: center; padding: 15px; background: var(--bg-light); border-radius: 8px;">
+            <div style="font-size: 1.5em; font-weight: 600; color: var(--error-color);">${summary.total_broken || 0}</div>
+            <div style="font-size: 12px; color: var(--text-muted);">Cassés</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  if (scan.results && scan.results.directories) {
+    content += `
+      <div>
+        <h4>📁 Détails par répertoire</h4>
+        <div style="max-height: 300px; overflow-y: auto;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: var(--bg-light);">
+                <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Répertoire</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">Fichiers</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">Symlinks</th>
+                <th style="padding: 8px; text-align: center; border-bottom: 1px solid #ddd;">Cassés</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(scan.results.directories).map(([path, data]) => `
+                <tr>
+                  <td style="padding: 8px; border-bottom: 1px solid #eee;"><code style="font-size: 11px;">${path}</code></td>
+                  <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">${data.files_count || 0}</td>
+                  <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee;">${data.symlinks_count || 0}</td>
+                  <td style="padding: 8px; text-align: center; border-bottom: 1px solid #eee; color: var(--error-color); font-weight: 600;">${data.broken_symlinks ? data.broken_symlinks.length : 0}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+  
+  modalBody.innerHTML = content;
+}
+
+// === CONFIGURATION ===
+document.getElementById('config-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const config = {
+    media_path: document.getElementById('media-path-modal').value,
+    workers: parseInt(document.getElementById('workers-modal').value),
+    sonarr_enabled: document.getElementById('sonarr-enabled-modal').checked,
+    sonarr_url: document.getElementById('sonarr-url-modal').value,
+    sonarr_api_key: document.getElementById('sonarr-api-key-modal').value,
+    radarr_enabled: document.getElementById('radarr-enabled-modal').checked,
+    radarr_url: document.getElementById('radarr-url-modal').value,
+    radarr_api_key: document.getElementById('radarr-api-key-modal').value
+  };
+  
+  try {
+    const response = await fetch('/api/symlink/config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(config)
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      showToast('Configuration sauvegardée', 'success');
+      closeConfigModal();
+    } else {
+      showToast('Erreur de sauvegarde: ' + data.error, 'error');
+    }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
 });
 
-// Test des services
 async function testServices() {
-    const config = {
-        sonarr_enabled: document.getElementById('sonarr-enabled').checked,
-        sonarr_url: document.getElementById('sonarr-url').value,
-        sonarr_api_key: document.getElementById('sonarr-api-key').value,
-        radarr_enabled: document.getElementById('radarr-enabled').checked,
-        radarr_url: document.getElementById('radarr-url').value,
-        radarr_api_key: document.getElementById('radarr-api-key').value
-    };
+  const config = {
+    sonarr_enabled: document.getElementById('sonarr-enabled-modal').checked,
+    sonarr_url: document.getElementById('sonarr-url-modal').value,
+    sonarr_api_key: document.getElementById('sonarr-api-key-modal').value,
+    radarr_enabled: document.getElementById('radarr-enabled-modal').checked,
+    radarr_url: document.getElementById('radarr-url-modal').value,
+    radarr_api_key: document.getElementById('radarr-api-key-modal').value
+  };
+  
+  try {
+    const response = await fetch('/api/symlink/test/services', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(config)
+    });
     
-    try {
-        const response = await fetch('/api/symlink/test/services', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            const results = data.results;
-            
-            Object.entries(results).forEach(([service, result]) => {
-                const type = result.success ? 'success' : 'error';
-                const message = `${service.toUpperCase()}: ${result.message}`;
-                showNotification(message, type);
-            });
-        } else {
-            showNotification('Erreur lors du test: ' + data.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Erreur de connexion: ' + error.message, 'error');
+    const data = await response.json();
+    
+    if (data.success) {
+      const results = data.results;
+      
+      Object.entries(results).forEach(([service, result]) => {
+        const type = result.success ? 'success' : 'error';
+        const message = `${service.toUpperCase()}: ${result.message}`;
+        showToast(message, type);
+      });
+    } else {
+      showToast('Erreur lors du test: ' + data.error, 'error');
     }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
 }
 
-// Auto-détection des services
 async function detectServices() {
-    try {
-        const response = await fetch('/api/symlink/services/detect', {
-            method: 'POST'
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            const detected = data.detected;
-            
-            if (detected.sonarr) {
-                document.getElementById('sonarr-url').value = detected.sonarr.url;
-                document.getElementById('sonarr-enabled').checked = true;
-                showNotification(`Sonarr détecté: ${detected.sonarr.container}`, 'success');
-            }
-            
-            if (detected.radarr) {
-                document.getElementById('radarr-url').value = detected.radarr.url;
-                document.getElementById('radarr-enabled').checked = true;
-                showNotification(`Radarr détecté: ${detected.radarr.container}`, 'success');
-            }
-            
-            if (!detected.sonarr && !detected.radarr) {
-                showNotification('Aucun service détecté', 'warning');
-            }
-        } else {
-            showNotification('Erreur lors de la détection: ' + data.error, 'error');
-        }
-    } catch (error) {
-        showNotification('Erreur de connexion: ' + error.message, 'error');
+  try {
+    const response = await fetch('/api/symlink/services/detect', {
+      method: 'POST'
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      const detected = data.detected;
+      
+      if (detected.sonarr) {
+        document.getElementById('sonarr-url-modal').value = detected.sonarr.url;
+        document.getElementById('sonarr-enabled-modal').checked = true;
+        showToast(`Sonarr détecté: ${detected.sonarr.container}`, 'success');
+      }
+      
+      if (detected.radarr) {
+        document.getElementById('radarr-url-modal').value = detected.radarr.url;
+        document.getElementById('radarr-enabled-modal').checked = true;
+        showToast(`Radarr détecté: ${detected.radarr.container}`, 'success');
+      }
+      
+      if (!detected.sonarr && !detected.radarr) {
+        showToast('Aucun service détecté', 'warning');
+      }
+    } else {
+      showToast('Erreur lors de la détection: ' + data.error, 'error');
     }
+  } catch (error) {
+    showToast('Erreur de connexion: ' + error.message, 'error');
+  }
 }
 
-// Visualisation des détails d'un scan
-function viewScanDetails(scanId) {
-    // Implémentation pour afficher les détails d'un scan
-    showNotification(`Affichage des détails du scan ${scanId}`, 'info');
+// === FILTRES ET RECHERCHE ===
+function filterScans() {
+  const searchValue = document.getElementById('search-scans').value.toLowerCase();
+  const rows = document.querySelectorAll('.scan-row');
+  
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(searchValue) ? '' : 'none';
+  });
 }
+
+function clearFilters() {
+  document.getElementById('search-scans').value = '';
+  const rows = document.querySelectorAll('.scan-row');
+  rows.forEach(row => {
+    row.style.display = '';
+  });
+}
+
+// === SÉLECTION MULTIPLE ===
+function toggleSelectAllScans(checkbox) {
+  const checkboxes = document.querySelectorAll('.scan-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = checkbox.checked;
+    if (checkbox.checked) {
+      selectedScans.add(cb.value);
+    } else {
+      selectedScans.delete(cb.value);
+    }
+  });
+  updateScanSelectionActions();
+}
+
+function updateScanSelectionActions() {
+  selectedScans.clear();
+  document.querySelectorAll('.scan-checkbox:checked').forEach(cb => {
+    selectedScans.add(cb.value);
+  });
+  
+  console.log('Scans sélectionnés:', selectedScans.size);
+}
+
+// === ACTUALISATION ===
+function refreshData() {
+  showLoading(true, 'Actualisation...');
+  setTimeout(() => {
+    location.reload();
+  }, 1000);
+}
+
+// === RECHERCHE EN TEMPS RÉEL ===
+document.getElementById('search-scans').addEventListener('input', function() {
+  filterScans();
+});
+
+// === INITIALISATION ===
+document.addEventListener('DOMContentLoaded', function() {
+  // Vérifier s'il y a un scan en cours au chargement
+  const runningRows = document.querySelectorAll('.scan-row');
+  runningRows.forEach(row => {
+    const statusBadge = row.querySelector('.badge-primary');
+    if (statusBadge && statusBadge.textContent.includes('En cours')) {
+      const scanId = row.getAttribute('data-scan-id');
+      if (scanId) {
+        currentScanId = scanId;
+        showLiveProgress();
+        startScanPolling();
+      }
+    }
+  });
+});
 </script>
 {% endblock %}

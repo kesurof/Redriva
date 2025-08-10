@@ -56,6 +56,12 @@
                 </div>
                 <div class="token-debug">
                     <small>Token: <span id="token-present">{{ 'Configuré' if config.RD_TOKEN else 'Non configuré' }}</span></small>
+                    <small>Version: <span id="config-version">{{ config.version or 'N/A' }}</span></small>
+                    <small>Setup: <span id="setup-status">{{ '✅ Complété' if config.setup_completed else '⚠️ Incomplet' }}</span></small>
+                    <small>DB: <span id="db-path" title="{{ config.db_path or 'N/A' }}">{{ '✅ Configuré' if config.db_path else '❌ Manquant' }}</span></small>
+                    <small>Sonarr: <span id="sonarr-status">{{ '✅ Activé' if config.sonarr_enabled else '⚪ Désactivé' }}</span></small>
+                    <small>Radarr: <span id="radarr-status">{{ '✅ Activé' if config.radarr_enabled else '⚪ Désactivé' }}</span></small>
+                    <small>Symlink: <span id="symlink-status">{{ '✅ Activé' if config.symlink_enabled else '⚪ Désactivé' }}</span></small>
                 </div>
             </div>
         </div>
@@ -200,6 +206,25 @@
 .token-actions { display: flex; gap: 6px; }
 .token-debug { padding: 8px 12px; background: #e9ecef; border-radius: 6px; font-family: monospace; font-size: 12px; color: var(--secondary); }
 
+/* Grille de configuration */
+.config-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;
+    padding: 16px; background: #f8f9fa; border-radius: 8px; margin-top: 16px;
+}
+.config-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid var(--info);
+    font-size: 13px; transition: var(--transition);
+}
+.config-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.config-item strong { color: var(--dark); font-weight: 600; }
+.config-item span { color: var(--secondary); font-weight: 500; }
+.config-item.rd-user { border-left-color: var(--success); }
+#config-info-display h5 {
+    margin: 16px 0 8px 0; color: var(--dark); font-size: 1.1rem; font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+}
+
 /* Endpoints et inputs */
 .endpoint-list { display: flex; flex-direction: column; gap: 12px; }
 .endpoint-row { 
@@ -340,6 +365,23 @@ const CONFIG = {
     baseUrl: 'https://api.real-debrid.com/rest/1.0',
     proxyUrl: '/api/proxy-rd',
     
+    // Informations de configuration étendues
+    redrivaConfig: {
+        version: '{{ config.version or "" }}',
+        setup_completed: {{ config.setup_completed|tojson }},
+        api_limit: {{ config.api_limit or 100 }},
+        max_concurrent: {{ config.max_concurrent or 50 }},
+        batch_size: {{ config.batch_size or 250 }},
+        sonarr_enabled: {{ config.sonarr_enabled|tojson }},
+        sonarr_url: '{{ config.sonarr_url or "" }}',
+        radarr_enabled: {{ config.radarr_enabled|tojson }},
+        radarr_url: '{{ config.radarr_url or "" }}',
+        symlink_enabled: {{ config.symlink_enabled|tojson }},
+        symlink_workers: {{ config.symlink_workers or 4 }},
+        db_path: '{{ config.db_path or "" }}',
+        media_path: '{{ config.media_path or "" }}'
+    },
+    
     // Configuration des onglets
     tabs: {
         token: { icon: '🔑', label: 'Token', title: 'Status du Token' },
@@ -354,7 +396,10 @@ const CONFIG = {
         local: { icon: '🏠', label: 'Local', title: 'Endpoints Locaux' },
         sync: { icon: '🔄', label: 'Sync', title: 'Synchronisation' },
         health: { icon: '🏥', label: 'Health', title: 'Santé & Maintenance' },
-        tasks: { icon: '📊', label: 'Tasks', title: 'Gestion des Tâches' }
+        tasks: { icon: '📊', label: 'Tasks', title: 'Gestion des Tâches' },
+        config: { icon: '⚙️', label: 'Config', title: 'Configuration Manager' },
+        symlink: { icon: '🔗', label: 'Symlink', title: 'Symlink Manager' },
+        diagnostic: { icon: '🔍', label: 'Diagnostic', title: 'Diagnostics Système' }
     },
     
     // Configuration des endpoints
@@ -417,7 +462,27 @@ const CONFIG = {
         refreshStats: { method: 'GET', path: '/api/refresh_stats', desc: 'Refresh statistiques', local: true },
         
         // Endpoints Redriva locaux - Tâches
-        taskStatus: { method: 'GET', path: '/api/task_status', desc: 'Statut tâches en cours', local: true }
+        taskStatus: { method: 'GET', path: '/api/task_status', desc: 'Statut tâches en cours', local: true },
+        
+        // Endpoints Redriva locaux - Configuration (ConfigManager)
+        configFull: { method: 'GET', path: '/api/settings', desc: 'Configuration complète', local: true },
+        configImport: { method: 'POST', path: '/api/settings/import', input: 'config-import', body: 'config', desc: 'Importer configuration', local: true, inputType: 'textarea' },
+        configExport: { method: 'GET', path: '/api/settings/export', desc: 'Exporter configuration', local: true },
+        configReset: { method: 'POST', path: '/api/settings/reset', desc: 'Reset configuration', local: true, confirm: true },
+        configUpdate: { method: 'POST', path: '/api/settings/update', input: 'config-key', input2: 'config-value', desc: 'Mettre à jour clé config', local: true, bodyCustom: true },
+        
+        // Endpoints Redriva locaux - Symlink Manager
+        symlinkConfig: { method: 'GET', path: '/api/symlink/config', desc: 'Configuration symlink', local: true },
+        symlinkConfigSave: { method: 'POST', path: '/api/symlink/config', input: 'symlink-config', body: 'config', desc: 'Sauver config symlink', local: true, inputType: 'textarea' },
+        symlinkScan: { method: 'POST', path: '/api/symlink/scan', input: 'symlink-scan-config', body: 'config', desc: 'Démarrer scan symlink', local: true, inputType: 'textarea' },
+        symlinkScans: { method: 'GET', path: '/api/symlink/scans', desc: 'Historique scans symlink', local: true },
+        symlinkScanCancel: { method: 'POST', path: '/api/symlink/scan/cancel', input: 'symlink-scan-id', body: 'scan_id', desc: 'Annuler scan symlink', local: true },
+        
+        // Endpoints Redriva locaux - Diagnostics avancés
+        diagnosticToken: { method: 'GET', path: '/api/diagnostic/token', desc: 'Diagnostic token RD', local: true },
+        diagnosticDb: { method: 'GET', path: '/api/diagnostic/database', desc: 'Diagnostic base de données', local: true },
+        diagnosticConfig: { method: 'GET', path: '/api/diagnostic/config', desc: 'Diagnostic configuration', local: true },
+        diagnosticPaths: { method: 'GET', path: '/api/diagnostic/paths', desc: 'Diagnostic chemins système', local: true }
     }
 };
 
@@ -573,7 +638,10 @@ function getEndpointsForTab(tabKey) {
         local: ['localTorrent', 'torrentStream', 'batchDelete', 'batchStatus', 'fixDeletedStatus'],
         sync: ['syncSmart', 'syncFast', 'syncTorrents'],
         health: ['localHealth', 'healthCheckAll', 'healthCleanup', 'cleanupDeleted', 'refreshStats'],
-        tasks: ['taskStatus']
+        tasks: ['taskStatus'],
+        config: ['configFull', 'configImport', 'configExport', 'configReset', 'configUpdate'],
+        symlink: ['symlinkConfig', 'symlinkConfigSave', 'symlinkScan', 'symlinkScans', 'symlinkScanCancel'],
+        diagnostic: ['diagnosticToken', 'diagnosticDb', 'diagnosticConfig', 'diagnosticPaths']
     };
     
     return (tabMappings[tabKey] || []).map(key => ({ key, ...CONFIG.endpoints[key] }));
@@ -790,6 +858,7 @@ function testEndpoint(endpointKey) {
 function checkToken() {
     if (!currentToken) {
         updateTokenStatus('❌ Token non configuré', 'error');
+        showConfigInfo();
         return;
     }
     
@@ -801,11 +870,84 @@ function checkToken() {
             if (data && data.id) {
                 const username = data.username || data.email || `User ${data.id}`;
                 updateTokenStatus(`✅ Token valide - ${username}`, 'success');
+                showConfigInfo(data);
             } else {
                 updateTokenStatus('❌ Token invalide', 'error');
+                showConfigInfo();
             }
         })
-        .catch(() => updateTokenStatus('❌ Erreur de connexion', 'error'));
+        .catch(() => {
+            updateTokenStatus('❌ Erreur de connexion', 'error');
+            showConfigInfo();
+        });
+}
+
+function showConfigInfo(rdUser = null) {
+    const configInfo = document.getElementById('config-info-display');
+    if (!configInfo) {
+        // Créer la section d'informations de configuration
+        const tokenSection = document.querySelector('.tab-content.active .section');
+        if (tokenSection) {
+            const configDiv = document.createElement('div');
+            configDiv.id = 'config-info-display';
+            configDiv.innerHTML = `
+                <h5>📊 Informations de Configuration</h5>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <strong>Version Redriva:</strong>
+                        <span>${CONFIG.redrivaConfig.version || 'N/A'}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Setup Complété:</strong>
+                        <span>${CONFIG.redrivaConfig.setup_completed ? '✅ Oui' : '❌ Non'}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Limite API:</strong>
+                        <span>${CONFIG.redrivaConfig.api_limit}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Concurrent Max:</strong>
+                        <span>${CONFIG.redrivaConfig.max_concurrent}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Batch Size:</strong>
+                        <span>${CONFIG.redrivaConfig.batch_size}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Sonarr:</strong>
+                        <span>${CONFIG.redrivaConfig.sonarr_enabled ? '✅ Activé' : '⚪ Désactivé'}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Radarr:</strong>
+                        <span>${CONFIG.redrivaConfig.radarr_enabled ? '✅ Activé' : '⚪ Désactivé'}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Symlink Manager:</strong>
+                        <span>${CONFIG.redrivaConfig.symlink_enabled ? '✅ Activé' : '⚪ Désactivé'}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>DB Path:</strong>
+                        <span title="${CONFIG.redrivaConfig.db_path}">${CONFIG.redrivaConfig.db_path ? '✅ Configuré' : '❌ Manquant'}</span>
+                    </div>
+                    <div class="config-item">
+                        <strong>Media Path:</strong>
+                        <span title="${CONFIG.redrivaConfig.media_path}">${CONFIG.redrivaConfig.media_path ? '✅ Configuré' : '❌ Manquant'}</span>
+                    </div>
+                    ${rdUser ? `
+                    <div class="config-item rd-user">
+                        <strong>RD Premium:</strong>
+                        <span>${rdUser.type === 'premium' ? '✅ Premium' : '⚠️ ' + rdUser.type}</span>
+                    </div>
+                    <div class="config-item rd-user">
+                        <strong>RD Expiration:</strong>
+                        <span>${rdUser.expiration ? new Date(rdUser.expiration).toLocaleDateString() : 'N/A'}</span>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            tokenSection.appendChild(configDiv);
+        }
+    }
 }
 
 function refreshToken() {

@@ -963,8 +963,27 @@ def settings():
 def api_test():
     """Page de test API Real-Debrid"""
     try:
-        # Passer le token pour l'affichage côté client
-        return render_template('api_test.html', config={'RD_TOKEN': load_token()})
+        # Récupérer toute la configuration depuis ConfigManager
+        config_manager = get_config()
+        
+        test_config = {
+            'RD_TOKEN': config_manager.get_token(),
+            'api_limit': config_manager.get('realdebrid.api_limit', 100),
+            'max_concurrent': config_manager.get('realdebrid.max_concurrent', 50),
+            'batch_size': config_manager.get('realdebrid.batch_size', 250),
+            'sonarr_enabled': config_manager.get('sonarr.enabled', False),
+            'sonarr_url': config_manager.get('sonarr.url', ''),
+            'radarr_enabled': config_manager.get('radarr.enabled', False),
+            'radarr_url': config_manager.get('radarr.url', ''),
+            'symlink_enabled': config_manager.get('symlink.enabled', False),
+            'symlink_workers': config_manager.get('symlink.workers', 4),
+            'db_path': config_manager.get_db_path(),
+            'media_path': config_manager.get_media_path(),
+            'version': config_manager.get('version', '2.0'),
+            'setup_completed': config_manager.get('setup_completed', False)
+        }
+        
+        return render_template('api_test.html', config=test_config)
     except Exception as e:
         print(f"❌ Erreur page API test: {e}")
         flash("Erreur lors du chargement de la page de test API", 'error')
@@ -2482,6 +2501,160 @@ def proxy_real_debrid():
     except Exception as e:
         print(f"❌ Erreur proxy_real_debrid: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ================== ENDPOINTS DE DIAGNOSTIC ==================
+
+@app.route('/api/diagnostic/token', methods=['GET'])
+def diagnostic_token():
+    """Diagnostic du token Real-Debrid"""
+    try:
+        config_manager = get_config()
+        token = config_manager.get_token()
+        
+        diagnostic = {
+            'token_configured': bool(token),
+            'token_length': len(token) if token else 0,
+            'token_format': 'valid' if token and len(token) == 40 else 'invalid' if token else 'missing',
+            'config_source': 'config_manager',
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        if token:
+            # Test de base de validité (sans appel API)
+            diagnostic['token_sample'] = f"{token[:8]}...{token[-8:]}" if len(token) >= 16 else "too_short"
+        
+        return jsonify({
+            'success': True,
+            'diagnostic': diagnostic
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/diagnostic/database', methods=['GET'])
+def diagnostic_database():
+    """Diagnostic de la base de données"""
+    try:
+        config_manager = get_config()
+        db_path = config_manager.get_db_path()
+        
+        diagnostic = {
+            'db_path': db_path,
+            'db_exists': os.path.exists(db_path),
+            'db_readable': False,
+            'db_writable': False,
+            'db_size': 0,
+            'tables_count': 0,
+            'torrents_count': 0
+        }
+        
+        if os.path.exists(db_path):
+            diagnostic['db_readable'] = os.access(db_path, os.R_OK)
+            diagnostic['db_writable'] = os.access(db_path, os.W_OK)
+            diagnostic['db_size'] = os.path.getsize(db_path)
+            
+            try:
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                
+                # Compter les tables
+                cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+                diagnostic['tables_count'] = cursor.fetchone()[0]
+                
+                # Compter les torrents
+                cursor.execute("SELECT COUNT(*) FROM torrents")
+                diagnostic['torrents_count'] = cursor.fetchone()[0]
+                
+                conn.close()
+            except Exception as db_error:
+                diagnostic['db_error'] = str(db_error)
+        
+        return jsonify({
+            'success': True,
+            'diagnostic': diagnostic
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/diagnostic/config', methods=['GET'])
+def diagnostic_config():
+    """Diagnostic de la configuration"""
+    try:
+        config_manager = get_config()
+        config_full = config_manager.get_full_config()
+        
+        diagnostic = {
+            'config_file_exists': os.path.exists(os.path.join(os.path.dirname(__file__), '..', 'config', 'config.json')),
+            'version': config_manager.get('version', 'unknown'),
+            'setup_completed': config_manager.get('setup_completed', False),
+            'sections': {
+                'realdebrid': bool(config_full.get('realdebrid')),
+                'sonarr': bool(config_full.get('sonarr')),
+                'radarr': bool(config_full.get('radarr')),
+                'symlink': bool(config_full.get('symlink')),
+                'flask': bool(config_full.get('flask')),
+                'app': bool(config_full.get('app'))
+            },
+            'services_status': {
+                'sonarr_enabled': config_manager.get('sonarr.enabled', False),
+                'radarr_enabled': config_manager.get('radarr.enabled', False),
+                'symlink_enabled': config_manager.get('symlink.enabled', False)
+            },
+            'paths': {
+                'db_path': config_manager.get_db_path(),
+                'media_path': config_manager.get_media_path()
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'diagnostic': diagnostic
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/diagnostic/paths', methods=['GET'])
+def diagnostic_paths():
+    """Diagnostic des chemins système"""
+    try:
+        config_manager = get_config()
+        
+        paths_to_check = {
+            'db_path': config_manager.get_db_path(),
+            'media_path': config_manager.get_media_path(),
+            'config_dir': os.path.join(os.path.dirname(__file__), '..', 'config'),
+            'data_dir': os.path.join(os.path.dirname(__file__), '..', 'data'),
+            'current_dir': os.getcwd(),
+            'src_dir': os.path.dirname(__file__)
+        }
+        
+        diagnostic = {}
+        for name, path in paths_to_check.items():
+            diagnostic[name] = {
+                'path': path,
+                'exists': os.path.exists(path),
+                'readable': os.access(path, os.R_OK) if os.path.exists(path) else False,
+                'writable': os.access(path, os.W_OK) if os.path.exists(path) else False,
+                'type': 'directory' if os.path.isdir(path) else 'file' if os.path.isfile(path) else 'missing'
+            }
+        
+        return jsonify({
+            'success': True,
+            'diagnostic': diagnostic
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     import signal
