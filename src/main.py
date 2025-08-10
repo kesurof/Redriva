@@ -123,6 +123,9 @@ def handle_sigint(signum, frame):
 signal.signal(signal.SIGINT, handle_sigint)
 
 # Configuration via gestionnaire centralisé
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config_manager import get_config
 
 # Configuration avec nouvelles valeurs centralisées
@@ -136,14 +139,14 @@ def get_db_path():
 
 # Utilisation du gestionnaire de configuration pour les paramètres
 config = get_config()
-MAX_CONCURRENT = config.get('real_debrid.max_concurrent', 50)
-BATCH_SIZE = config.get('real_debrid.batch_size', 250)
-QUOTA_WAIT_TIME = config.get('real_debrid.quota_wait', 60)
-TORRENT_QUOTA_WAIT = config.get('real_debrid.torrent_wait', 10)
-PAGE_WAIT_TIME = config.get('real_debrid.page_wait', 1.0)
+MAX_CONCURRENT = config.get('realdebrid.max_concurrent', 50)
+BATCH_SIZE = config.get('realdebrid.batch_size', 250)
+QUOTA_WAIT_TIME = config.get('realdebrid.quota_wait', 60)
+TORRENT_QUOTA_WAIT = config.get('realdebrid.torrent_wait', 10)
+PAGE_WAIT_TIME = config.get('realdebrid.page_wait', 1.0)
 
-# DB_PATH sera défini dynamiquement
-DB_PATH = None
+# DB_PATH sera initialisé dynamiquement via get_db_path()
+DB_PATH = get_db_path()
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║                         SECTION 2: UTILITAIRES ET HELPERS                 ║
@@ -364,7 +367,7 @@ def load_token():
     Récupère le token Real-Debrid depuis la configuration centralisée
     Gère tous les cas d'erreurs possibles pour éviter Header Injection
     
-    Source: Configuration centralisée (conf.json) ou variables d'environnement
+    Source: Configuration centralisée (config.json) ou variables d'environnement
     
     Returns:
         str: Token Real-Debrid valide et nettoyé
@@ -408,9 +411,9 @@ def load_token():
         else:
             logging.warning("⚠️ Token d'environnement invalide")
     
-    # Priorité 2: Configuration centralisée (conf.json)
+    # Priorité 2: Configuration centralisée (config.json)
     config = get_config()
-    config_token = config.get_real_debrid_token()
+    config_token = config.get_token()
     if config_token:
         cleaned = clean_token(config_token)
         if cleaned:
@@ -435,8 +438,7 @@ def load_token():
                     if cleaned:
                         logging.info(f"🔑 Token chargé depuis fichier: {token_path}")
                         # Migrer vers la configuration centralisée
-                        config.set('tokens.real_debrid', cleaned)
-                        config.save()
+                        config.update_config('realdebrid.token', cleaned)
                         logging.info("🔄 Token migré vers configuration centralisée")
                         return cleaned
                     else:
@@ -449,7 +451,7 @@ def load_token():
     print("\n❌ ERREUR: Aucun token Real-Debrid valide trouvé")
     print("\n📋 Solutions possibles:")
     print("   1. Variable d'environnement: export RD_TOKEN='votre_token'")
-    print("   2. Configuration centralisée: modifier config/conf.json")
+    print("   2. Configuration centralisée: modifier config/config.json")
     print("   3. Interface web: aller dans Paramètres > Real-Debrid")
     print("\n🔗 Obtenir votre token: https://real-debrid.com/apitoken")
     
@@ -2028,6 +2030,7 @@ def get_token():
 # ║                        SECTION 9: POINT D'ENTRÉE PRINCIPAL                ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
+def main():
     """
     Point d'entrée principal avec support menu interactif et arguments CLI
     
