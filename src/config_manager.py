@@ -249,6 +249,32 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"❌ Erreur mise à jour config : {e}")
             return False
+    
+    def reset_to_defaults(self) -> bool:
+        """Réinitialise la configuration avec les valeurs par défaut"""
+        try:
+            default_config = self._get_default_config()
+            return self._save_config(default_config)
+        except Exception as e:
+            logger.error(f"❌ Erreur réinitialisation config : {e}")
+            return False
+    
+    def get_full_config(self) -> Dict[str, Any]:
+        """Retourne la configuration complète (sans tokens sensibles)"""
+        config_copy = self.config.copy()
+        # Masquer le token pour des raisons de sécurité
+        if 'realdebrid' in config_copy and 'token' in config_copy['realdebrid']:
+            config_copy['realdebrid'] = config_copy['realdebrid'].copy()
+            config_copy['realdebrid']['token'] = ''
+        return config_copy
+    
+    def set_full_config(self, new_config: Dict[str, Any]) -> bool:
+        """Met à jour la configuration complète"""
+        try:
+            return self._save_config(new_config)
+        except Exception as e:
+            logger.error(f"❌ Erreur mise à jour config complète : {e}")
+            return False
 
 # Instance globale
 _config = None

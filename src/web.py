@@ -39,9 +39,9 @@ from main import (
 # Utilisation de la configuration centralisée - DB_PATH sera dynamique
 def get_current_db_path():
     """Récupère le chemin actuel de la base de données"""
-    return get_db_path()
+    return get_database_path()
 
-# Pour compatibilité, DB_PATH pointe vers la fonction
+# Pour compatibilité, DB_PATH pointe vers le résultat de la fonction
 DB_PATH = get_current_db_path()
 
 # INITIALISATION AUTOMATIQUE DE LA BASE DE DONNÉES
@@ -1917,7 +1917,6 @@ def check_single_torrent_health(torrent_id):
     """API pour vérifier la santé d'un torrent spécifique via api/torrent/stream"""
     try:
         log_event('HEALTH_SINGLE_START', torrent_id=torrent_id)
-        from main import load_token
         token = load_token()
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -2030,7 +2029,6 @@ def check_single_torrent_health(torrent_id):
 def check_all_files_health():
     """API pour vérifier la santé de tous les liens de fichiers - TÂCHE EN ARRIÈRE-PLAN"""
     try:
-        from main import load_token
         token = load_token()
         
         if not token:
@@ -2067,7 +2065,6 @@ def cleanup_unavailable_files():
     """API pour nettoyer les fichiers indisponibles et notifier Sonarr/Radarr"""
     try:
         log_event('UNAVAILABLE_CLEAN_START')
-        from main import load_token
         token = load_token()
         
         with sqlite3.connect(DB_PATH) as conn:
@@ -2330,14 +2327,13 @@ def save_settings():
 def reset_settings():
     """API pour réinitialiser les paramètres"""
     try:
-        config_dir = os.path.dirname(DB_PATH)
-        settings_file = os.path.join(config_dir, 'settings.json')
+        config = get_config()
         
-        # Supprimer le fichier de paramètres
-        if os.path.exists(settings_file):
-            os.remove(settings_file)
-        
-        return jsonify({'success': True, 'message': 'Paramètres réinitialisés'})
+        # Réinitialiser la configuration avec les valeurs par défaut
+        if config.reset_to_defaults():
+            return jsonify({'success': True, 'message': 'Paramètres réinitialisés'})
+        else:
+            return jsonify({'success': False, 'error': 'Erreur lors de la réinitialisation'})
         
     except Exception as e:
         print(f"❌ Erreur reset_settings: {e}")
@@ -2350,19 +2346,14 @@ def export_settings():
         from flask import send_file
         import tempfile
         
-        config_dir = os.path.dirname(DB_PATH)
-        settings_file = os.path.join(config_dir, 'settings.json')
+        config = get_config()
         
-        settings = {}
-        if os.path.exists(settings_file):
-            with open(settings_file, 'r') as f:
-                settings = json.load(f)
+        # Récupérer la configuration actuelle (sans le token pour sécurité)
+        export_config = config.get_full_config()
         
         # Créer un fichier temporaire pour l'export
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
-            # Ne pas inclure le token pour des raisons de sécurité
-            export_settings = {k: v for k, v in settings.items() if k != 'apiToken'}
-            json.dump(export_settings, f, indent=2)
+            json.dump(export_config, f, indent=2)
             temp_file = f.name
         
         return send_file(temp_file, as_attachment=True, 
@@ -2381,15 +2372,21 @@ def import_settings():
         if not settings:
             return jsonify({'success': False, 'error': 'Données manquantes'})
         
-        config_dir = os.path.dirname(DB_PATH)
-        os.makedirs(config_dir, exist_ok=True)
-        settings_file = os.path.join(config_dir, 'settings.json')
+        config = get_config()
         
-        # Sauvegarder les paramètres importés
-        with open(settings_file, 'w') as f:
-            json.dump(settings, f, indent=2)
+        # Valider que les paramètres importés ont une structure valide
+        if not isinstance(settings, dict):
+            return jsonify({'success': False, 'error': 'Format de configuration invalide'})
         
-        return jsonify({'success': True, 'message': 'Paramètres importés'})
+        # Merger avec la configuration existante pour préserver les données importantes
+        current_config = config.config.copy()
+        current_config.update(settings)
+        
+        # Sauvegarder la nouvelle configuration
+        if config.set_full_config(current_config):
+            return jsonify({'success': True, 'message': 'Paramètres importés'})
+        else:
+            return jsonify({'success': False, 'error': 'Erreur lors de l\'import'})
         
     except Exception as e:
         print(f"❌ Erreur import_settings: {e}")
