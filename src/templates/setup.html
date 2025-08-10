@@ -6,15 +6,20 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>🚀 Configuration Redriva</title>
     <style>
-        /* Variables CSS cohérentes avec base.html */
+        /* Variables CSS */
         :root {
             --primary-color: #667eea;
             --secondary-color: #764ba2;
             --text-color: #2c3e50;
-            --bg-color: #f5f5f5;
+            --text-muted: #6c757d;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --white: #ffffff;
-            --border-radius: 8px;
-            --shadow: 0 2px 8px rgba(0,0,0,0.1);
+            --success: #28a745;
+            --danger: #dc3545;
+            --border-light: #e9ecef;
+            --border-radius: 12px;
+            --shadow-light: 0 4px 16px rgba(0,0,0,0.08);
+            --shadow-hover: 0 8px 32px rgba(102, 126, 234, 0.2);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -26,75 +31,161 @@
         }
         
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: var(--bg-gradient);
             min-height: 100vh;
             line-height: 1.6;
             color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            gap: 20px;
         }
         
-        .container {
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            min-height: 100vh;
+        /* Container principal */
+        .setup-container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-light);
+            overflow: hidden;
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 500px;
+        }
+        
+        /* Header */
+        .setup-header {
+            background: var(--bg-gradient);
+            color: var(--white);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+        
+        .setup-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="40" cy="80" r="1.5" fill="rgba(255,255,255,0.05)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+        
+        .setup-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        
+        .setup-subtitle {
+            opacity: 0.9;
+            font-size: 1rem;
+            position: relative;
+            margin-bottom: 1.5rem;
+        }
+        
+        .setup-features {
+            position: relative;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            line-height: 1.8;
+        }
+        
+        .setup-features div {
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Contenu du formulaire */
+        .setup-content {
+            padding: 2rem;
+            overflow-y: auto;
+        }
+        
+        /* Messages flash */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            position: relative;
+            border: none;
+            font-size: 0.9rem;
+        }
+        
+        .alert-success {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            color: var(--success);
+        }
+        
+        .alert-danger {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            color: var(--danger);
+        }
+        
+        .alert-dismissible {
+            padding-right: 3rem;
+        }
+        
+        .btn-close {
+            position: absolute;
+            top: 50%;
+            right: 1rem;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            opacity: 0.6;
+            transition: var(--transition);
+            width: 24px;
+            height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        .setup-card {
-            background: var(--white);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-            width: 100%;
-            max-width: 500px;
+        .btn-close:hover {
+            opacity: 1;
         }
         
-        .step-header {
-            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
-            color: var(--white);
-            padding: 2rem;
-            text-align: center;
-        }
-        
-        .step-number {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.2);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin-right: 1rem;
-        }
-        
-        .step-content {
-            padding: 2rem;
-        }
-        
-        /* Styles de formulaire cohérents */
+        /* Groupes de formulaire */
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.2rem;
         }
         
         .form-label {
             display: block;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
             font-weight: 600;
             color: var(--text-color);
+            font-size: 0.85rem;
+        }
+        
+        .required {
+            color: var(--danger);
+            margin-left: 4px;
         }
         
         .form-control {
             width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e9ecef;
-            border-radius: var(--border-radius);
-            font-size: 16px;
+            padding: 0.6rem 0.8rem;
+            border: 2px solid var(--border-light);
+            border-radius: 6px;
+            font-size: 0.9rem;
             transition: var(--transition);
             background: var(--white);
+            font-family: inherit;
         }
         
         .form-control:focus {
@@ -103,380 +194,380 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
+        .form-control::placeholder {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+        
         .form-text {
-            font-size: 14px;
-            color: #6c757d;
-            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.3rem;
+            line-height: 1.4;
         }
         
         .form-text a {
             color: var(--primary-color);
             text-decoration: none;
+            font-weight: 500;
         }
         
         .form-text a:hover {
             text-decoration: underline;
         }
         
-        /* Boutons */
-        .btn {
-            display: inline-block;
-            padding: 12px 24px;
-            border: none;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-size: 16px;
+        /* Sections */
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.8rem;
+            gap: 0.5rem;
+        }
+        
+        .section-title {
             font-weight: 600;
-            text-decoration: none;
-            text-align: center;
-            transition: var(--transition);
-            min-height: 48px;
+            color: var(--text-color);
+            font-size: 0.9rem;
         }
         
-        .btn-primary {
-            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
-            color: var(--white);
-            width: 100%;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-        }
-        
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        /* Messages d'alerte */
-        .alert {
-            padding: 12px 16px;
-            border-radius: var(--border-radius);
-            margin-bottom: 1rem;
-            position: relative;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .alert-danger {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .alert-dismissible {
-            padding-right: 50px;
-        }
-        
-        .btn-close {
-            position: absolute;
-            top: 50%;
-            right: 16px;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            opacity: 0.5;
-            padding: 4px;
-        }
-        
-        .btn-close:hover {
-            opacity: 1;
+        .optional-badge {
+            background: rgba(118, 75, 162, 0.1);
+            color: var(--secondary-color);
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 500;
         }
         
         /* Séparateur */
         .separator {
-            margin: 2rem 0;
+            margin: 1.5rem 0;
             border: none;
             height: 1px;
-            background: #e9ecef;
+            background: linear-gradient(90deg, transparent, var(--border-light), transparent);
         }
         
-        /* Badge optionnel */
-        .optional-badge {
-            background: rgba(118, 75, 162, 0.1);
-            color: var(--secondary-color);
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
-            font-size: 0.85rem;
-            margin-left: 8px;
+        /* Bouton principal */
+        .btn-submit {
+            width: 100%;
+            padding: 0.8rem;
+            border: none;
+            border-radius: 6px;
+            background: var(--bg-gradient);
+            color: var(--white);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            margin-top: 1rem;
         }
         
-        /* Icônes simples avec Unicode */
-        .icon {
-            margin-right: 8px;
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
         }
         
-        .footer-text {
+        .btn-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-submit::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: var(--transition);
+        }
+        
+        .btn-submit:hover::before {
+            left: 100%;
+        }
+        
+        /* Footer */
+        .setup-footer {
             text-align: center;
-            margin-top: 2rem;
             color: rgba(255,255,255,0.8);
-            font-size: 14px;
+            font-size: 0.85rem;
         }
         
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .setup-card {
-                margin: 20px 0;
-            }
-            
-            .step-header,
-            .step-content {
-                padding: 1.5rem;
-            }
-        }
-        
-        /* Animation de chargement */
+        /* Spinner de chargement */
         .spinner {
             display: inline-block;
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border: 2px solid rgba(255,255,255,0.3);
             border-radius: 50%;
             border-top-color: var(--white);
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
         }
         
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .setup-container {
+                grid-template-columns: 1fr;
+                max-width: 480px;
+            }
+            
+            .setup-header {
+                order: 1;
+                padding: 1.5rem;
+            }
+            
+            .setup-content {
+                order: 2;
+                padding: 1.5rem;
+            }
+            
+            .setup-title {
+                font-size: 1.5rem;
+            }
+            
+            .setup-subtitle {
+                font-size: 0.9rem;
+            }
+            
+            .setup-features {
+                font-size: 0.8rem;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            body {
+                padding: 10px;
+            }
+            
+            .setup-header,
+            .setup-content {
+                padding: 1.25rem;
+            }
+            
+            .form-control {
+                font-size: 16px; /* Évite le zoom sur iOS */
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .section-header {
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+            
+            .optional-badge {
+                align-self: flex-start;
+            }
+        }
+        
+        /* Animation d'entrée */
+        .setup-container {
+            animation: slideUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="setup-card">
-            <div class="step-header">
-                <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
-                    <div class="step-number">1</div>
-                    <h1 style="margin: 0;">🚀 Configuration Redriva</h1>
-                </div>
-                <p style="margin: 0; opacity: 0.8;">Configurons votre gestionnaire Real-Debrid</p>
-            </div>
-            
-            <div class="step-content">
-                <!-- Messages flash -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible">
-                                {{ message|safe }}
-                                <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-                
-                <form id="setupForm" method="POST" action="/setup">
-                    <!-- Real-Debrid Token -->
-                    <div class="form-group">
-                        <label for="rd_token" class="form-label">
-                            <span class="icon">�</span>
-                            <strong>Token Real-Debrid</strong>
-                            <span style="color: #dc3545;">*</span>
-                        </label>
-                        <input type="password" class="form-control" id="rd_token" 
-                               name="rd_token" placeholder="Votre token Real-Debrid" required>
-                        <div class="form-text">
-                            <span class="icon">ℹ️</span>
-                            Obtenez votre token sur 
-                            <a href="https://real-debrid.com/apitoken" target="_blank">
-                                real-debrid.com/apitoken ↗️
-                            </a>
-                        </div>
-                    </div>
-
-                    <hr class="separator">
-
-                    <!-- Sonarr Configuration -->
-                    <div class="form-group">
-                        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
-                            <span class="icon">📺</span>
-                            <strong>Sonarr</strong>
-                            <span class="optional-badge">Optionnel</span>
-                        </div>
-                        
-                        <div style="margin-bottom: 1rem;">
-                            <label for="sonarr_url" class="form-label">URL Sonarr</label>
-                            <input type="url" class="form-control" id="sonarr_url" 
-                                   name="sonarr_url" placeholder="http://localhost:8989">
-                        </div>
-                        
-                        <div>
-                            <label for="sonarr_api_key" class="form-label">Clé API Sonarr</label>
-                            <input type="password" class="form-control" id="sonarr_api_key" 
-                                   name="sonarr_api_key" placeholder="Clé API Sonarr">
-                        </div>
-                    </div>
-
-                    <hr class="separator">
-
-                    <!-- Radarr Configuration -->
-                    <div class="form-group">
-                        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
-                            <span class="icon">🎬</span>
-                            <strong>Radarr</strong>
-                            <span class="optional-badge">Optionnel</span>
-                        </div>
-                        
-                        <div style="margin-bottom: 1rem;">
-                            <label for="radarr_url" class="form-label">URL Radarr</label>
-                            <input type="url" class="form-control" id="radarr_url" 
-                                   name="radarr_url" placeholder="http://localhost:7878">
-                        </div>
-                        
-                        <div>
-                            <label for="radarr_api_key" class="form-label">Clé API Radarr</label>
-                            <input type="password" class="form-control" id="radarr_api_key" 
-                                   name="radarr_api_key" placeholder="Clé API Radarr">
-                        </div>
-                    </div>
-
-                    <div style="margin-top: 2rem;">
-                        <button type="submit" class="btn btn-primary">
-                            <span class="icon">🚀</span>
-                            Démarrer Redriva
-                        </button>
-                    </div>
-                </form>
+    <div class="setup-container">
+        <!-- Header -->
+        <div class="setup-header">
+            <h1 class="setup-title">🚀 Configuration Redriva</h1>
+            <p class="setup-subtitle">Configurons votre gestionnaire Real-Debrid</p>
+            <div class="setup-features">
+                <div>📺 Intégration Sonarr & Radarr</div>
+                <div>⚡ Téléchargements instantanés</div>
+                <div>🎯 Interface moderne et intuitive</div>
+                <div>🔐 Configuration sécurisée</div>
             </div>
         </div>
         
-        <div class="footer-text">
-            <span class="icon">🛡️</span>
-            Vos données restent locales et sécurisées
+        <!-- Contenu -->
+        <div class="setup-content">
+            <!-- Messages flash -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible">
+                            {{ message|safe }}
+                            <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">×</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <!-- Formulaire -->
+            <form id="setupForm" method="POST" action="/setup">
+                <!-- Token Real-Debrid -->
+                <div class="form-group">
+                    <label for="rd_token" class="form-label">
+                        🔑 Token Real-Debrid<span class="required">*</span>
+                    </label>
+                    <input type="password" 
+                           class="form-control" 
+                           id="rd_token" 
+                           name="rd_token" 
+                           placeholder="Votre token Real-Debrid" 
+                           required
+                           autocomplete="off">
+                    <div class="form-text">
+                        ℹ️ Obtenez votre token sur 
+                        <a href="https://real-debrid.com/apitoken" target="_blank" rel="noopener">
+                            real-debrid.com/apitoken ↗️
+                        </a>
+                    </div>
+                </div>
+
+                <hr class="separator">
+
+                <!-- Configuration Sonarr -->
+                <div class="form-group">
+                    <div class="section-header">
+                        <span class="section-title">📺 Sonarr</span>
+                        <span class="optional-badge">Optionnel</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="sonarr_url" class="form-label">URL Sonarr</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="sonarr_url" 
+                               name="sonarr_url" 
+                               placeholder="http://localhost:8989">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="sonarr_api_key" class="form-label">Clé API Sonarr</label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="sonarr_api_key" 
+                               name="sonarr_api_key" 
+                               placeholder="Clé API Sonarr"
+                               autocomplete="off">
+                    </div>
+                </div>
+
+                <hr class="separator">
+
+                <!-- Configuration Radarr -->
+                <div class="form-group">
+                    <div class="section-header">
+                        <span class="section-title">🎬 Radarr</span>
+                        <span class="optional-badge">Optionnel</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="radarr_url" class="form-label">URL Radarr</label>
+                        <input type="url" 
+                               class="form-control" 
+                               id="radarr_url" 
+                               name="radarr_url" 
+                               placeholder="http://localhost:7878">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="radarr_api_key" class="form-label">Clé API Radarr</label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="radarr_api_key" 
+                               name="radarr_api_key" 
+                               placeholder="Clé API Radarr"
+                               autocomplete="off">
+                    </div>
+                </div>
+
+                <!-- Bouton de soumission -->
+                <button type="submit" class="btn-submit" id="submitBtn">
+                    🚀 Démarrer Redriva
+                </button>
+            </form>
         </div>
     </div>
+    
+    <!-- Footer -->
+    <div class="setup-footer">
+        🛡️ Vos données restent locales et sécurisées
     </div>
 
     <script>
-        // Validation du formulaire
+        // Gestion du formulaire
         document.getElementById('setupForm').addEventListener('submit', function(e) {
-            const token = document.getElementById('rd_token').value;
-            const submitBtn = this.querySelector('button[type="submit"]');
+            const token = document.getElementById('rd_token').value.trim();
+            const submitBtn = document.getElementById('submitBtn');
             
+            // Validation du token
             if (!token || token.length < 10) {
                 e.preventDefault();
-                alert('⚠️ Veuillez entrer un token Real-Debrid valide');
+                alert('⚠️ Veuillez entrer un token Real-Debrid valide (minimum 10 caractères)');
+                document.getElementById('rd_token').focus();
                 return false;
             }
             
             // Feedback visuel pendant la soumission
             const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<span class="spinner"></span> Configuration en cours...';
+            submitBtn.innerHTML = '<span class="spinner"></span>Configuration en cours...';
             submitBtn.disabled = true;
             
-            // En cas d'erreur, restaurer le bouton après quelques secondes
+            // Restaurer le bouton en cas d'erreur après 15 secondes
             setTimeout(() => {
                 if (submitBtn.disabled) {
                     submitBtn.innerHTML = originalText;
                     submitBtn.disabled = false;
                 }
-            }, 10000);
+            }, 15000);
         });
 
-        // Auto-focus sur le token
+        // Auto-focus et effets d'amélioration UX
         document.addEventListener('DOMContentLoaded', function() {
+            // Focus automatique sur le champ token
             document.getElementById('rd_token').focus();
-        });
-    </script>
-</body>
-</html>                            <hr class="my-4">
-
-                            <!-- Sonarr Configuration -->
-                            <div class="mb-4">
-                                <div class="d-flex align-items-center mb-3">
-                                    <i class="fas fa-tv text-success me-2"></i>
-                                    <strong>Sonarr</strong>
-                                    <span class="optional-badge ms-2">Optionnel</span>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="sonarr_url" class="form-label">URL Sonarr</label>
-                                        <input type="url" class="form-control" id="sonarr_url" 
-                                               name="sonarr_url" placeholder="http://sonarr:8989">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="sonarr_api_key" class="form-label">Clé API</label>
-                                        <input type="text" class="form-control" id="sonarr_api_key" 
-                                               name="sonarr_api_key" placeholder="Clé API Sonarr">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Radarr Configuration -->
-                            <div class="mb-4">
-                                <div class="d-flex align-items-center mb-3">
-                                    <i class="fas fa-film text-warning me-2"></i>
-                                    <strong>Radarr</strong>
-                                    <span class="optional-badge ms-2">Optionnel</span>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="radarr_url" class="form-label">URL Radarr</label>
-                                        <input type="url" class="form-control" id="radarr_url" 
-                                               name="radarr_url" placeholder="http://radarr:7878">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="radarr_api_key" class="form-label">Clé API</label>
-                                        <input type="text" class="form-control" id="radarr_api_key" 
-                                               name="radarr_api_key" placeholder="Clé API Radarr">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="d-grid gap-2">
-                                <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-rocket me-2"></i>
-                                    Démarrer Redriva
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            
+            // Amélioration de l'accessibilité
+            const inputs = document.querySelectorAll('.form-control');
+            inputs.forEach(input => {
+                input.addEventListener('blur', function() {
+                    if (this.value.trim()) {
+                        this.style.borderColor = 'var(--success)';
+                    }
+                });
                 
-                <div class="text-center mt-4">
-                    <small class="text-light opacity-75">
-                        <i class="fas fa-shield-alt me-1"></i>
-                        Vos données restent locales et sécurisées
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Validation du formulaire
-        document.getElementById('setupForm').addEventListener('submit', function(e) {
-            const token = document.getElementById('rd_token').value;
-            const submitBtn = this.querySelector('button[type="submit"]');
-            
-            if (!token || token.length < 10) {
-                e.preventDefault();
-                alert('⚠️ Veuillez entrer un token Real-Debrid valide');
-                return false;
-            }
-            
-            // Feedback visuel pendant la soumission
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Configuration en cours...';
-            submitBtn.disabled = true;
+                input.addEventListener('focus', function() {
+                    this.style.borderColor = 'var(--primary-color)';
+                });
+            });
         });
-
-        // Auto-focus sur le token
-        document.getElementById('rd_token').focus();
+        
+        // Validation en temps réel du token
+        document.getElementById('rd_token').addEventListener('input', function(e) {
+            const value = e.target.value.trim();
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (value.length >= 10) {
+                e.target.style.borderColor = 'var(--success)';
+                submitBtn.style.opacity = '1';
+            } else {
+                e.target.style.borderColor = value.length > 0 ? 'var(--danger)' : 'var(--border-light)';
+                submitBtn.style.opacity = '0.7';
+            }
+        });
     </script>
 </body>
 </html>

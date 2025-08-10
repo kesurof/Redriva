@@ -1,5 +1,8 @@
 # Fichiers sensibles - Configuration centralisée
 config/.env
+config/config.json
+config/*.json
+!config/config.example.json
 
 data/
 *.db

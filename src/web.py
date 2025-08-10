@@ -200,12 +200,12 @@ def setup_save():
     try:
         config = get_config()
         
-        # Debug - afficher les données reçues
+        # Debug - afficher les données reçues (sans les tokens)
         print(f"🔧 Données du formulaire reçues :")
         for key, value in request.form.items():
             print(f"   {key}: {'[HIDDEN]' if 'token' in key or 'key' in key else value}")
         
-        # Récupérer les données du formulaire
+        # ⚠️ SÉCURITÉ : Ne jamais logger les tokens/clés
         setup_data = {
             'rd_token': request.form.get('rd_token', '').strip(),
             'sonarr_url': request.form.get('sonarr_url', '').strip(),
@@ -220,6 +220,7 @@ def setup_save():
             return render_template('setup.html')
         
         print(f"🔧 Tentative de sauvegarde de la configuration...")
+        print(f"🔒 RAPPEL SÉCURITÉ : Tokens stockés localement et exclus de Git")
         
         # Sauvegarder la configuration
         if config.save_setup_config(setup_data):

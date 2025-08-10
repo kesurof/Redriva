@@ -42,10 +42,16 @@ python src/web.py
 ### Mode Docker
 
 ```bash
-# 1. Variables d'environnement
-export RD_TOKEN="votre_token_real_debrid"
+# Option 1: Variables d'environnement (recommandé)
+docker run -p 5000:5000 \
+  -e RD_TOKEN="votre_token_real_debrid" \
+  -e SONARR_URL="http://localhost:8989" \
+  -e SONARR_API_KEY="votre_clé_sonarr" \
+  -e RADARR_URL="http://localhost:7878" \
+  -e RADARR_API_KEY="votre_clé_radarr" \
+  ghcr.io/kesurof/redriva:ssdv2
 
-# 2. Démarrage
+# Option 2: Docker Compose
 docker-compose up -d
 ```
 
@@ -67,6 +73,10 @@ docker-compose up -d
 
 ### Variables d'environnement (Docker/SSDV2)
 - `RD_TOKEN` : Token Real-Debrid (obligatoire)
+- `SONARR_URL` : URL de Sonarr (optionnel)
+- `SONARR_API_KEY` : Clé API Sonarr (optionnel)
+- `RADARR_URL` : URL de Radarr (optionnel)
+- `RADARR_API_KEY` : Clé API Radarr (optionnel)
 - `PUID/PGID` : ID utilisateur (SSDV2)
 - `TZ` : Fuseau horaire
 

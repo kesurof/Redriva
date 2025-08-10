@@ -46,10 +46,18 @@ class ConfigManager:
                     logger.info(f"✅ Configuration chargée depuis {self.config_path}")
                     return config
             else:
-                # Créer la configuration par défaut
-                default_config = self._get_default_config()
+                # Essayer de créer depuis le fichier exemple
+                example_path = self.config_path.parent / "config.example.json"
+                if example_path.exists():
+                    with open(example_path, 'r', encoding='utf-8') as f:
+                        default_config = json.load(f)
+                    logger.info(f"✅ Configuration créée depuis {example_path}")
+                else:
+                    # Fallback vers la configuration par défaut
+                    default_config = self._get_default_config()
+                    logger.info("✅ Configuration par défaut créée")
+                
                 self._save_config(default_config)
-                logger.info(f"✅ Configuration par défaut créée : {self.config_path}")
                 return default_config
         except Exception as e:
             logger.error(f"❌ Erreur chargement config : {e}")

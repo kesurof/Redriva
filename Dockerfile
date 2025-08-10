@@ -21,6 +21,14 @@ LABEL ssdv2.tags="real-debrid,torrent,media"
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src
 
+# Variables de configuration (vides par défaut, définies au runtime)
+# Utilisez -e RD_TOKEN="votre_token" lors du docker run
+ENV RD_TOKEN="" \
+    SONARR_URL="" \
+    SONARR_API_KEY="" \
+    RADARR_URL="" \
+    RADARR_API_KEY=""
+
 # Installation dépendances système
 RUN apt-get update && apt-get install -y \
     curl \
@@ -35,12 +43,17 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie du code
+# Copie du code et configuration
 COPY src/ ./src/
-COPY config/config.json ./config/config.json
+COPY config/config.example.json ./config/config.example.json
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
-# Création des répertoires
-RUN mkdir -p data medias && \
+# Création des répertoires et configuration initiale
+RUN mkdir -p data medias config && \
+    # Copier l'exemple vers le fichier de config s'il n'existe pas \
+    cp ./config/config.example.json ./config/config.json && \
+    # Rendre le script d'entrée exécutable \
+    chmod +x ./docker-entrypoint.sh && \
     chown -R redriva:redriva /app
 
 # Healthcheck
@@ -53,5 +66,6 @@ EXPOSE 5000
 # Utilisateur non-root
 USER redriva
 
-# Commande par défaut
+# Point d'entrée et commande par défaut
+ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["python", "src/web.py"]
