@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from flask import request, jsonify, render_template, flash
 
 # Import du gestionnaire de configuration
-from config_manager import get_config
+from config_manager import ConfigManager
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO)
@@ -31,13 +31,26 @@ logger = logging.getLogger(__name__)
 active_scans = {}
 scan_results = {}
 
+# Configuration par défaut pour le symlink tool
+DEFAULT_CONFIG = {
+    'enabled': True,
+    'media_path': '/app/medias',
+    'workers': 4,
+    'sonarr_enabled': False,
+    'sonarr_url': 'http://localhost:8989',
+    'sonarr_api_key': '',
+    'radarr_enabled': False,
+    'radarr_url': 'http://localhost:7878',
+    'radarr_api_key': ''
+}
+
 class SymlinkDatabase:
     """Gestionnaire de base de données pour le Symlink Manager"""
     
     def __init__(self, db_path=None):
         if db_path is None:
             # Utiliser la configuration centralisée pour le chemin de la base
-            config = get_config()
+            config = ConfigManager()
             self.db_path = config.get_db_path()
         else:
             self.db_path = db_path
@@ -86,7 +99,7 @@ class SymlinkDatabase:
     def get_config(self) -> Dict[str, Any]:
         """Récupère la configuration complète depuis le gestionnaire centralisé"""
         try:
-            config = get_config()
+            config = ConfigManager()
             return config.get_symlink_config()
                 
         except Exception as e:
@@ -107,12 +120,13 @@ class SymlinkDatabase:
     def save_config(self, config_data: Dict[str, Any]) -> bool:
         """Sauvegarde la configuration dans le gestionnaire centralisé"""
         try:
-            config = get_config()
+            config = ConfigManager()
             
-            # TODO: Implémenter la sauvegarde dans le ConfigManager simplifié
-            # Pour l'instant, on sauvegarde uniquement en base locale
+            # Sauvegarder dans la configuration centralisée
+            for key, value in config_data.items():
+                config.update_config(f'symlink.{key}', value)
             
-            # Sauvegarder dans la base locale pour compatibilité
+            # Sauvegarder dans la base locale pour compatibilité avec les scans
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 

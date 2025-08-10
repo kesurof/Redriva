@@ -259,6 +259,28 @@ class ConfigManager:
             logger.error(f"❌ Erreur réinitialisation config : {e}")
             return False
     
+    def get_symlink_config(self) -> Dict[str, Any]:
+        """Récupère la configuration symlink avec valeurs par défaut"""
+        symlink_config = self.config.get('symlink', {})
+        
+        # Configuration par défaut
+        default_config = {
+            'enabled': True,
+            'media_path': self.get_media_path(),
+            'workers': 4,
+            'sonarr_enabled': self.get('sonarr.enabled', False),
+            'sonarr_url': self.get('sonarr.url', 'http://localhost:8989'),
+            'sonarr_api_key': self.get('sonarr.api_key', ''),
+            'radarr_enabled': self.get('radarr.enabled', False),
+            'radarr_url': self.get('radarr.url', 'http://localhost:7878'),
+            'radarr_api_key': self.get('radarr.api_key', '')
+        }
+        
+        # Fusionner avec la config existante
+        result = default_config.copy()
+        result.update(symlink_config)
+        return result
+    
     def get_full_config(self) -> Dict[str, Any]:
         """Retourne la configuration complète (sans tokens sensibles)"""
         config_copy = self.config.copy()
