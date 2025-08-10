@@ -174,23 +174,35 @@ class ConfigManager:
     def save_setup_config(self, setup_data: Dict[str, Any]) -> bool:
         """Sauvegarde la configuration du setup initial"""
         try:
-            # Mettre à jour la configuration
-            if 'rd_token' in setup_data:
+            # Mettre à jour la configuration Real-Debrid
+            if 'rd_token' in setup_data and setup_data['rd_token']:
+                if 'realdebrid' not in self.config:
+                    self.config['realdebrid'] = {}
                 self.config['realdebrid']['token'] = setup_data['rd_token']
             
-            if 'sonarr_url' in setup_data:
-                self.config['sonarr']['url'] = setup_data['sonarr_url']
-                self.config['sonarr']['enabled'] = bool(setup_data['sonarr_url'])
+            # Configuration Sonarr (optionnelle)
+            if 'sonarr_url' in setup_data or 'sonarr_api_key' in setup_data:
+                if 'sonarr' not in self.config:
+                    self.config['sonarr'] = {}
+                
+                if 'sonarr_url' in setup_data:
+                    self.config['sonarr']['url'] = setup_data['sonarr_url']
+                    self.config['sonarr']['enabled'] = bool(setup_data['sonarr_url'])
+                
+                if 'sonarr_api_key' in setup_data:
+                    self.config['sonarr']['api_key'] = setup_data['sonarr_api_key']
             
-            if 'sonarr_api_key' in setup_data:
-                self.config['sonarr']['api_key'] = setup_data['sonarr_api_key']
-            
-            if 'radarr_url' in setup_data:
-                self.config['radarr']['url'] = setup_data['radarr_url']
-                self.config['radarr']['enabled'] = bool(setup_data['radarr_url'])
-            
-            if 'radarr_api_key' in setup_data:
-                self.config['radarr']['api_key'] = setup_data['radarr_api_key']
+            # Configuration Radarr (optionnelle)
+            if 'radarr_url' in setup_data or 'radarr_api_key' in setup_data:
+                if 'radarr' not in self.config:
+                    self.config['radarr'] = {}
+                
+                if 'radarr_url' in setup_data:
+                    self.config['radarr']['url'] = setup_data['radarr_url']
+                    self.config['radarr']['enabled'] = bool(setup_data['radarr_url'])
+                
+                if 'radarr_api_key' in setup_data:
+                    self.config['radarr']['api_key'] = setup_data['radarr_api_key']
             
             # Marquer le setup comme terminé
             self.config['setup_completed'] = True
@@ -200,6 +212,8 @@ class ConfigManager:
             
         except Exception as e:
             logger.error(f"❌ Erreur sauvegarde setup : {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def get_token(self) -> Optional[str]:

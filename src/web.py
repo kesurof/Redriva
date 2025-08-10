@@ -200,6 +200,11 @@ def setup_save():
     try:
         config = get_config()
         
+        # Debug - afficher les données reçues
+        print(f"🔧 Données du formulaire reçues :")
+        for key, value in request.form.items():
+            print(f"   {key}: {'[HIDDEN]' if 'token' in key or 'key' in key else value}")
+        
         # Récupérer les données du formulaire
         setup_data = {
             'rd_token': request.form.get('rd_token', '').strip(),
@@ -214,16 +219,22 @@ def setup_save():
             flash('❌ Le token Real-Debrid est obligatoire', 'error')
             return render_template('setup.html')
         
+        print(f"🔧 Tentative de sauvegarde de la configuration...")
+        
         # Sauvegarder la configuration
         if config.save_setup_config(setup_data):
+            print(f"✅ Configuration sauvegardée avec succès")
             flash('✅ Configuration sauvegardée avec succès !', 'success')
             return redirect('/')
         else:
+            print(f"❌ Échec de la sauvegarde")
             flash('❌ Erreur lors de la sauvegarde', 'error')
             return render_template('setup.html')
             
     except Exception as e:
         logger.error(f"❌ Erreur setup : {e}")
+        print(f"❌ Exception dans setup_save : {e}")
+        traceback.print_exc()
         flash(f'❌ Erreur : {e}', 'error')
         return render_template('setup.html')
 

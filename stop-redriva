@@ -1,0 +1,137 @@
+#!/bin/bash
+
+# Script d'arrêt d'urgence pour Redriva
+# Utilisation: ./stop-redriva
+# Ce script arrête tous les services et processus Redriva en cours
+
+echo "🛑 Arrêt d'urgence de Redriva..."
+
+# Fonction pour afficher les messages avec couleurs
+print_status() {
+    case $1 in
+        "info")    echo -e "\033[1;34m[INFO]\033[0m $2" ;;
+        "success") echo -e "\033[1;32m[OK]\033[0m $2" ;;
+        "warning") echo -e "\033[1;33m[WARN]\033[0m $2" ;;
+        "error")   echo -e "\033[1;31m[ERROR]\033[0m $2" ;;
+        *)         echo "$2" ;;
+    esac
+}
+
+# Arrêter les processus Python Redriva
+print_status "info" "Recherche des processus Redriva..."
+
+# Arrêter le serveur web principal
+WEB_PIDS=$(pgrep -f "python.*src/web.py")
+if [ ! -z "$WEB_PIDS" ]; then
+    print_status "info" "Arrêt du serveur web Redriva (PIDs: $WEB_PIDS)..."
+    echo "$WEB_PIDS" | xargs kill -TERM 2>/dev/null
+    sleep 2
+    
+    # Vérifier si les processus sont toujours actifs
+    REMAINING_WEB=$(pgrep -f "python.*src/web.py")
+    if [ ! -z "$REMAINING_WEB" ]; then
+        print_status "warning" "Arrêt forcé du serveur web..."
+        echo "$REMAINING_WEB" | xargs kill -KILL 2>/dev/null
+    fi
+    print_status "success" "Serveur web arrêté"
+else
+    print_status "info" "Aucun serveur web Redriva en cours"
+fi
+
+# Arrêter les processus main.py
+MAIN_PIDS=$(pgrep -f "python.*src/main.py")
+if [ ! -z "$MAIN_PIDS" ]; then
+    print_status "info" "Arrêt des processus main.py (PIDs: $MAIN_PIDS)..."
+    echo "$MAIN_PIDS" | xargs kill -TERM 2>/dev/null
+    sleep 2
+    
+    REMAINING_MAIN=$(pgrep -f "python.*src/main.py")
+    if [ ! -z "$REMAINING_MAIN" ]; then
+        print_status "warning" "Arrêt forcé des processus main.py..."
+        echo "$REMAINING_MAIN" | xargs kill -KILL 2>/dev/null
+    fi
+    print_status "success" "Processus main.py arrêtés"
+else
+    print_status "info" "Aucun processus main.py en cours"
+fi
+
+# Arrêter tous les autres processus Python liés à Redriva
+OTHER_PIDS=$(pgrep -f "python.*redriva" | grep -v $$)
+if [ ! -z "$OTHER_PIDS" ]; then
+    print_status "info" "Arrêt d'autres processus Redriva (PIDs: $OTHER_PIDS)..."
+    echo "$OTHER_PIDS" | xargs kill -TERM 2>/dev/null
+    sleep 2
+    
+    REMAINING_OTHER=$(pgrep -f "python.*redriva" | grep -v $$)
+    if [ ! -z "$REMAINING_OTHER" ]; then
+        print_status "warning" "Arrêt forcé d'autres processus..."
+        echo "$REMAINING_OTHER" | xargs kill -KILL 2>/dev/null
+    fi
+    print_status "success" "Autres processus Redriva arrêtés"
+fi
+
+# Arrêter les processus Docker si ils existent
+print_status "info" "Vérification des conteneurs Docker..."
+if command -v docker &> /dev/null; then
+    REDRIVA_CONTAINERS=$(docker ps -q --filter "name=redriva" 2>/dev/null)
+    if [ ! -z "$REDRIVA_CONTAINERS" ]; then
+        print_status "info" "Arrêt des conteneurs Docker Redriva..."
+        echo "$REDRIVA_CONTAINERS" | xargs docker stop 2>/dev/null
+        print_status "success" "Conteneurs Docker arrêtés"
+    else
+        print_status "info" "Aucun conteneur Docker Redriva en cours"
+    fi
+    
+    # Vérifier docker-compose dans le répertoire ssdv2
+    if [ -f "ssdv2/docker-compose.yml" ]; then
+        print_status "info" "Vérification docker-compose dans ssdv2/..."
+        cd ssdv2 && docker-compose down 2>/dev/null && cd .. || true
+        print_status "success" "Docker-compose ssdv2 arrêté"
+    fi
+else
+    print_status "info" "Docker non disponible"
+fi
+
+# Nettoyer les fichiers de verrouillage potentiels
+print_status "info" "Nettoyage des fichiers temporaires..."
+find . -name "*.lock" -type f -delete 2>/dev/null || true
+find . -name "*.pid" -type f -delete 2>/dev/null || true
+
+# Libérer le port 5000 si occupé par d'autres processus
+PORT_5000=$(lsof -ti:5000 2>/dev/null)
+if [ ! -z "$PORT_5000" ]; then
+    print_status "warning" "Port 5000 occupé par le processus $PORT_5000, libération..."
+    kill -TERM $PORT_5000 2>/dev/null || true
+    sleep 1
+    PORT_5000_REMAINING=$(lsof -ti:5000 2>/dev/null)
+    if [ ! -z "$PORT_5000_REMAINING" ]; then
+        kill -KILL $PORT_5000_REMAINING 2>/dev/null || true
+    fi
+    print_status "success" "Port 5000 libéré"
+fi
+
+# Vérification finale
+print_status "info" "Vérification finale..."
+REMAINING_PROCESSES=$(pgrep -f "python.*src/(web|main).py" 2>/dev/null)
+if [ -z "$REMAINING_PROCESSES" ]; then
+    print_status "success" "✅ Tous les services Redriva ont été arrêtés avec succès"
+else
+    print_status "error" "⚠️ Certains processus sont encore actifs: $REMAINING_PROCESSES"
+    print_status "info" "Vous pouvez les arrêter manuellement avec: kill -9 $REMAINING_PROCESSES"
+fi
+
+# Afficher un résumé
+echo ""
+echo "📊 Résumé de l'arrêt:"
+echo "   • Serveur web Redriva: arrêté"
+echo "   • Processus main.py: arrêté"
+echo "   • Conteneurs Docker: vérifiés"
+echo "   • Port 5000: libéré"
+echo "   • Fichiers temporaires: nettoyés"
+echo ""
+print_status "info" "Pour redémarrer Redriva:"
+print_status "info" "  • Interface web: python src/web.py"
+print_status "info" "  • CLI: python src/main.py --help"
+print_status "info" "  • Docker: cd ssdv2 && docker-compose up -d"
+echo ""
+print_status "success" "🏁 Arrêt terminé"
