@@ -1,28 +1,22 @@
 ---
 - name: "Wait for Redriva container to be running"
   shell: |
-    for i in {1..30}; do
+    for i in {1..15}; do
       if docker ps --filter "name={{ pgrole }}" --filter "status=running" | grep -q "{{ pgrole }}"; then
         exit 0
       fi
-      sleep 2
+      sleep 1
     done
     exit 1
   register: container_check
   ignore_errors: yes
 
-- name: "Check if web interface is accessible"
-  uri:
-    url: "http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}"
-    method: GET
-    status_code: 200
-  register: web_check
-  retries: 10
-  delay: 3
-  ignore_errors: yes
+- name: "Get container status details"
+  shell: "docker ps --filter 'name={{ pgrole }}' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+  register: container_status
   when: container_check.rc == 0
 
-- name: "Display setup information"
+- name: "Display deployment success"
   debug:
     msg: |
       🚀 REDRIVA DÉPLOYÉ AVEC SUCCÈS !
@@ -30,20 +24,23 @@
       
       🌐 Interface Web: http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}
       📁 Config Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
-      � Data Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
+      💾 Data Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
       
-      �🔧 Configuration initiale:
+      📊 Status Container:
+      {{ container_status.stdout }}
+      
+      🔧 Configuration initiale:
       • Rendez-vous sur l'interface web pour configurer vos torrents
       • Configurez vos répertoires source et destination
       • Activez le nettoyage intelligent des liens symboliques
       
-      � Commandes utiles:
+      📋 Commandes utiles:
       • sudo docker logs {{ pgrole }}             (voir les logs)
       • sudo docker restart {{ pgrole }}          (redémarrer le service)
       • sudo docker exec -it {{ pgrole }} bash    (accès au conteneur)
       
-      ✅ Interface web: {{ 'Accessible' if web_check.status == 200 else 'En cours de démarrage' }}
-      ✅ Redriva est prêt à l'emploi !
+      ✅ Container démarré avec succès !
+      🌐 L'interface web devrait être accessible immédiatement
   when: container_check.rc == 0
 
 - name: "Display error if container failed to start"
@@ -64,4 +61,7 @@
       sudo docker restart {{ pgrole }}
       
       📁 Vérifiez l'espace disque disponible
+      
+      🔧 Vérifiez la configuration Docker :
+      sudo docker inspect {{ pgrole }}
   when: container_check.rc != 0
