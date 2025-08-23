@@ -21,7 +21,6 @@ services:
     volumes:
       # Configuration et données
       - ./config:/app/config:rw
-  # - ./config/.env:/app/.env:ro (supprimé, non utilisé)
       - ./data:/app/data:rw
       
       # Intégrations SSDV2
