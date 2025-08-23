@@ -983,9 +983,26 @@ def settings():
         # Vérifier la disponibilité du module symlink
         symlink_available = SYMLINK_AVAILABLE
         
+        # Récupérer la configuration pour pré-remplir les champs
+        config_manager = get_config()
+        
+        settings_data = {
+            'RD_TOKEN': load_token(),
+            'sonarr': {
+                'enabled': config_manager.get('sonarr.enabled', False),
+                'url': config_manager.get('sonarr.url', ''),
+                'api_key': config_manager.get('sonarr.api_key', '')
+            },
+            'radarr': {
+                'enabled': config_manager.get('radarr.enabled', False),
+                'url': config_manager.get('radarr.url', ''),
+                'api_key': config_manager.get('radarr.api_key', '')
+            }
+        }
+        
         return render_template('settings.html', 
                              symlink_available=symlink_available,
-                             config={'RD_TOKEN': load_token()})
+                             config=settings_data)
     except Exception as e:
         print(f"❌ Erreur page settings: {e}")
         flash("Erreur lors du chargement des paramètres", 'error')
@@ -3111,6 +3128,125 @@ def api_import_error_types():
             'success': False,
             'error': str(e)
         }), 500
+
+@app.route('/api/arr/test-connections', methods=['POST'])
+def test_arr_connections():
+    """API pour tester les connexions aux services *Arr"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Données manquantes'})
+        
+        results = {}
+        
+        # Test Sonarr
+        if data.get('sonarr', {}).get('enabled', False):
+            sonarr_url = data['sonarr'].get('url', '').strip()
+            sonarr_api = data['sonarr'].get('apiKey', '').strip()
+            
+            if sonarr_url and sonarr_api:
+                try:
+                    import requests
+                    # Test de connexion à Sonarr
+                    test_url = f"{sonarr_url.rstrip('/')}/api/v3/system/status"
+                    headers = {'X-Api-Key': sonarr_api}
+                    response = requests.get(test_url, headers=headers, timeout=10)
+                    
+                    if response.status_code == 200:
+                        system_info = response.json()
+                        results['sonarr'] = {
+                            'success': True,
+                            'message': f"✅ Connecté - Version: {system_info.get('version', 'Inconnue')}",
+                            'version': system_info.get('version'),
+                            'startTime': system_info.get('startTime')
+                        }
+                    else:
+                        results['sonarr'] = {
+                            'success': False,
+                            'message': f"❌ Erreur HTTP {response.status_code}"
+                        }
+                except requests.exceptions.Timeout:
+                    results['sonarr'] = {
+                        'success': False,
+                        'message': "❌ Timeout - Vérifiez l'URL"
+                    }
+                except requests.exceptions.ConnectionError:
+                    results['sonarr'] = {
+                        'success': False,
+                        'message': "❌ Connexion impossible - Vérifiez l'URL et le service"
+                    }
+                except Exception as e:
+                    results['sonarr'] = {
+                        'success': False,
+                        'message': f"❌ Erreur: {str(e)}"
+                    }
+            else:
+                results['sonarr'] = {
+                    'success': False,
+                    'message': "❌ URL ou clé API manquante"
+                }
+        
+        # Test Radarr
+        if data.get('radarr', {}).get('enabled', False):
+            radarr_url = data['radarr'].get('url', '').strip()
+            radarr_api = data['radarr'].get('apiKey', '').strip()
+            
+            if radarr_url and radarr_api:
+                try:
+                    import requests
+                    # Test de connexion à Radarr
+                    test_url = f"{radarr_url.rstrip('/')}/api/v3/system/status"
+                    headers = {'X-Api-Key': radarr_api}
+                    response = requests.get(test_url, headers=headers, timeout=10)
+                    
+                    if response.status_code == 200:
+                        system_info = response.json()
+                        results['radarr'] = {
+                            'success': True,
+                            'message': f"✅ Connecté - Version: {system_info.get('version', 'Inconnue')}",
+                            'version': system_info.get('version'),
+                            'startTime': system_info.get('startTime')
+                        }
+                    else:
+                        results['radarr'] = {
+                            'success': False,
+                            'message': f"❌ Erreur HTTP {response.status_code}"
+                        }
+                except requests.exceptions.Timeout:
+                    results['radarr'] = {
+                        'success': False,
+                        'message': "❌ Timeout - Vérifiez l'URL"
+                    }
+                except requests.exceptions.ConnectionError:
+                    results['radarr'] = {
+                        'success': False,
+                        'message': "❌ Connexion impossible - Vérifiez l'URL et le service"
+                    }
+                except Exception as e:
+                    results['radarr'] = {
+                        'success': False,
+                        'message': f"❌ Erreur: {str(e)}"
+                    }
+            else:
+                results['radarr'] = {
+                    'success': False,
+                    'message': "❌ URL ou clé API manquante"
+                }
+        
+        if not results:
+            return jsonify({
+                'success': False,
+                'message': 'Aucun service activé pour le test'
+            })
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur test connexions *Arr: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     import signal

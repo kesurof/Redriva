@@ -171,20 +171,20 @@
                 
                 <div class="setting-group">
                     <label>
-                        <input type="checkbox" id="sonarr-enabled"> Activer Sonarr
+                        <input type="checkbox" id="sonarr-enabled" {% if config.sonarr.enabled %}checked{% endif %}> Activer Sonarr
                     </label>
                 </div>
 
                 <div class="setting-group">
                     <label for="sonarr-url">URL Sonarr</label>
-                    <input type="url" id="sonarr-url" placeholder="http://localhost:8989">
+                    <input type="url" id="sonarr-url" placeholder="http://localhost:8989" value="{{ config.sonarr.url or '' }}">
                     <small>URL de votre instance Sonarr</small>
                 </div>
 
                 <div class="setting-group">
                     <label for="sonarr-api">API Key Sonarr</label>
                     <div class="input-group">
-                        <input type="password" id="sonarr-api" placeholder="Votre clé API Sonarr">
+                        <input type="password" id="sonarr-api" placeholder="Votre clé API Sonarr" value="{{ config.sonarr.api_key or '' }}">
                         <button class="btn btn-secondary" onclick="toggleApiVisibility('sonarr-api')">👁️</button>
                     </div>
                     <small>Clé API pour communiquer avec Sonarr</small>
@@ -199,20 +199,20 @@
                 
                 <div class="setting-group">
                     <label>
-                        <input type="checkbox" id="radarr-enabled"> Activer Radarr
+                        <input type="checkbox" id="radarr-enabled" {% if config.radarr.enabled %}checked{% endif %}> Activer Radarr
                     </label>
                 </div>
 
                 <div class="setting-group">
                     <label for="radarr-url">URL Radarr</label>
-                    <input type="url" id="radarr-url" placeholder="http://localhost:7878">
+                    <input type="url" id="radarr-url" placeholder="http://localhost:7878" value="{{ config.radarr.url or '' }}">
                     <small>URL de votre instance Radarr</small>
                 </div>
 
                 <div class="setting-group">
                     <label for="radarr-api">API Key Radarr</label>
                     <div class="input-group">
-                        <input type="password" id="radarr-api" placeholder="Votre clé API Radarr">
+                        <input type="password" id="radarr-api" placeholder="Votre clé API Radarr" value="{{ config.radarr.api_key or '' }}">
                         <button class="btn btn-secondary" onclick="toggleApiVisibility('radarr-api')">👁️</button>
                     </div>
                     <small>Clé API pour communiquer avec Radarr</small>
@@ -2085,16 +2085,68 @@ function testArrsConnections() {
         return;
     }
     
+    // Récupérer les données actuelles des champs
+    const testData = {};
+    
+    if (sonarrEnabled) {
+        testData.sonarr = {
+            enabled: true,
+            url: document.getElementById('sonarr-url').value.trim(),
+            apiKey: document.getElementById('sonarr-api').value.trim()
+        };
+    }
+    
+    if (radarrEnabled) {
+        testData.radarr = {
+            enabled: true,
+            url: document.getElementById('radarr-url').value.trim(),
+            apiKey: document.getElementById('radarr-api').value.trim()
+        };
+    }
+    
     showNotification('🧪 Test des connexions en cours...', 'info');
     
-    // Pour l'instant, on simule un test réussi car l'endpoint n'existe peut-être pas encore
-    setTimeout(() => {
-        let results = [];
-        if (sonarrEnabled) results.push('Sonarr: ✅ Connecté');
-        if (radarrEnabled) results.push('Radarr: ✅ Connecté');
-        
-        showNotification(`✅ Tests simulés:\n${results.join('\n')}`, 'success');
-    }, 1000);
+    fetch('/api/arr/test-connections', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success && data.results) {
+            let messages = [];
+            
+            // Analyser les résultats pour chaque service
+            if (data.results.sonarr) {
+                const result = data.results.sonarr;
+                messages.push(`📺 Sonarr: ${result.message}`);
+            }
+            
+            if (data.results.radarr) {
+                const result = data.results.radarr;
+                messages.push(`🎬 Radarr: ${result.message}`);
+            }
+            
+            // Déterminer le type de notification basé sur les résultats
+            const hasFailures = Object.values(data.results).some(result => !result.success);
+            const notificationType = hasFailures ? 'warning' : 'success';
+            
+            showNotification(messages.join('\n'), notificationType);
+        } else {
+            showNotification('❌ Erreur lors du test: ' + (data.message || data.error || 'Erreur inconnue'), 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur test connexions *Arrs:', error);
+        showNotification('❌ Erreur de connexion: ' + error.message, 'error');
+    });
 }
 
 // === FONCTIONS AUTOMATISATION ===
@@ -2167,16 +2219,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     testApiConnection();
                 }
                 
-                // Paramètres *Arrs
+                // Paramètres *Arrs - ne pas écraser si déjà pré-remplis
                 if (settings.sonarr) {
-                    document.getElementById('sonarr-enabled').checked = settings.sonarr.enabled || false;
-                    document.getElementById('sonarr-url').value = settings.sonarr.url || '';
-                    document.getElementById('sonarr-api').value = settings.sonarr.apiKey || '';
+                    // Ne remplir que si les champs sont vides
+                    if (!document.getElementById('sonarr-enabled').checked && settings.sonarr.enabled) {
+                        document.getElementById('sonarr-enabled').checked = settings.sonarr.enabled;
+                    }
+                    if (!document.getElementById('sonarr-url').value && settings.sonarr.url) {
+                        document.getElementById('sonarr-url').value = settings.sonarr.url;
+                    }
+                    if (!document.getElementById('sonarr-api').value && settings.sonarr.apiKey) {
+                        document.getElementById('sonarr-api').value = settings.sonarr.apiKey;
+                    }
                 }
                 if (settings.radarr) {
-                    document.getElementById('radarr-enabled').checked = settings.radarr.enabled || false;
-                    document.getElementById('radarr-url').value = settings.radarr.url || '';
-                    document.getElementById('radarr-api').value = settings.radarr.apiKey || '';
+                    // Ne remplir que si les champs sont vides
+                    if (!document.getElementById('radarr-enabled').checked && settings.radarr.enabled) {
+                        document.getElementById('radarr-enabled').checked = settings.radarr.enabled;
+                    }
+                    if (!document.getElementById('radarr-url').value && settings.radarr.url) {
+                        document.getElementById('radarr-url').value = settings.radarr.url;
+                    }
+                    if (!document.getElementById('radarr-api').value && settings.radarr.apiKey) {
+                        document.getElementById('radarr-api').value = settings.radarr.apiKey;
+                    }
                 }
                 
                 // Paramètres Automatisation
