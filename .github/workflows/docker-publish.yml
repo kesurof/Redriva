@@ -19,20 +19,22 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-
+    
+    strategy:
+      matrix:
+        platform: 
+          - linux/amd64
+          - linux/arm64
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-        with:
-          platforms: linux/amd64,linux/arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          platforms: linux/amd64,linux/arm64
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
@@ -57,18 +59,29 @@ jobs:
             org.opencontainers.image.title=Redriva
             org.opencontainers.image.description=Interface web pour Real-Debrid
             org.opencontainers.image.vendor=Kesurof
+      
+      # Normaliser platform pour les tags
+      - name: Prepare platform tag
+        id: platform
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "suffix=${platform//\//-}" >> $GITHUB_OUTPUT
 
       - name: Build and push
         id: build
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-${{ steps.platform.outputs.suffix }}
+            type=gha,scope=buildkit-${{ steps.platform.outputs.suffix }}
+          cache-to: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-${{ steps.platform.outputs.suffix }},mode=max
+            type=gha,scope=buildkit-${{ steps.platform.outputs.suffix }},mode=max
           provenance: false
           build-args: |
             BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
@@ -82,8 +95,48 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-  test-multiarch:
+  # Job pour créer le manifest multi-arch
+  create-manifest:
     needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=alpha,enable=${{ github.ref == 'refs/heads/alpha' }}
+            type=raw,value=ssdv2,enable=${{ github.ref == 'refs/heads/ssdv2' }}
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+
+      - name: Create and push multi-arch manifest
+        run: |
+          # Créer manifests multi-arch pour chaque tag
+          for tag in ${{ steps.meta.outputs.tags }}; do
+            echo "🔗 Création du manifest multi-arch pour: $tag"
+            docker buildx imagetools create \
+              --tag $tag \
+              $tag-linux-amd64 \
+              $tag-linux-arm64
+          done
+
+  test-multiarch:
+    needs: create-manifest
     if: github.event_name != 'pull_request'
     strategy:
       matrix:

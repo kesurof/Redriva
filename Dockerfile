@@ -17,42 +17,46 @@ LABEL ssdv2.category="media"
 LABEL ssdv2.subcategory="downloader"
 LABEL ssdv2.tags="real-debrid,torrent,media"
 
-# Variables d'environnement
+# Variables d'environnement stables (cache layer)
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src
-
-# Variables de configuration (vides par défaut, définies au runtime)
-# Utilisez -e RD_TOKEN="votre_token" lors du docker run
-ENV RD_TOKEN="" \
+    PYTHONPATH=/app/src \
+    RD_TOKEN="" \
     SONARR_URL="" \
     SONARR_API_KEY="" \
     RADARR_URL="" \
     RADARR_API_KEY=""
 
-# Installation dépendances système
+# Installation dépendances système (layer stable)
 RUN apt-get update && apt-get install -y \
     curl \
     sqlite3 \
     sudo \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
 
-# Création utilisateur non-root
+# Création utilisateur non-root (layer stable)
 RUN useradd -u 1000 -d /app -s /bin/bash redriva && \
     echo "redriva ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Configuration de l'application
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie du code et configuration
-COPY src/ ./src/
+# Installation des dépendances Python (layer semi-stable)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --no-compile --disable-pip-version-check -r requirements.txt \
+    && pip cache purge \
+    && rm -rf ~/.cache/pip
+
+# Création des répertoires (layer stable)
+RUN mkdir -p data medias config
+# Copie des fichiers de configuration (layer semi-stable)
 COPY config/config.example.json ./config/config.example.json
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
-# Création des répertoires et configuration initiale
-RUN mkdir -p data medias config && \
-    cat > ./config/config.example.json << 'EOF'
+# Configuration initiale (layer stable)
+RUN cat > ./config/config.example.json << 'EOF'
 {
   "token": "",
   "setup_completed": false,
@@ -83,11 +87,14 @@ RUN mkdir -p data medias config && \
 }
 EOF
 
-# Copier l'exemple vers le fichier de config et configurer les permissions
+# Finalisation de la configuration (layer stable)
 RUN cp ./config/config.example.json ./config/config.json && \
     chmod +x ./docker-entrypoint.sh && \
     chmod 755 /app/data /app/config /app/medias && \
     chown -R redriva:redriva /app
+
+# Copie du code source (layer qui change souvent - en dernier)
+COPY src/ ./src/
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \

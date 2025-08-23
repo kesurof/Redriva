@@ -19,12 +19,80 @@ venv/
 .venv/
 
 # Local data and config (mounted as volumes)
-data/
+# Git et historique
+.git
+.gitignore
+.gitattributes
+.github
 
-config/conf.*.json
-*.db
-*.db-journal
+# Documentation
+README.md
+*.md
+docs/
+
+# Fichiers de développement
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache et builds
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Données locales et caches
+data/
+logs/
 *.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker et builds
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Tests et dev
+tests/
+test/
+.tox/
+.nox/
+
+# Configurations sensibles
+config/config.json
+.env
+.env.local
+
+# Media et contenu utilisateur
+medias/
+downloads/
+torrents/
+
+# Backups et temporaires
+*.bak
+*.tmp
+*.temp
+temp/
+tmp/
+
+# SSDV2 specific
+ssdv2/
+build-docker.sh
+stop-redriva
+arr-monitor-old.py
+
+# OS specific
+.DS_Store
+Thumbs.db
 
 # Development files
 *.bak
