@@ -21,6 +21,7 @@
             <button class="tab-btn" onclick="showTab('debrid')">🔑 Debrid</button>
             <button class="tab-btn" onclick="showTab('symlinks')">🔗 Symlinks</button>
             <button class="tab-btn" onclick="showTab('arrs')">📺 *Arrs</button>
+            <button class="tab-btn" onclick="showTab('error-types')">🎛️ Types d'Erreurs</button>
             <button class="tab-btn" onclick="showTab('automatisation')">⚙️ Automatisation</button>
         </nav>
     </div>
@@ -225,6 +226,101 @@
                 <button class="btn btn-secondary" onclick="detectSymlinkServices()">🔍 Auto-détecter les services</button>
                 <button class="btn btn-success" onclick="testArrsConnections()">🧪 Tester les connexions</button>
                 <button class="btn btn-primary" onclick="saveArrsSettings()">💾 Sauvegarder</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onglet Types d'Erreurs -->
+    <div id="error-types" class="tab-content">
+        <!-- Statistiques -->
+        <div class="card">
+            <h2 style="margin-bottom: 1.5rem; color: var(--text-color); font-weight: 600; display: flex; align-items: center; gap: 12px;">
+                📊 Statistiques des Types d'Erreurs
+            </h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-value" id="error-total-types">0</span>
+                    <span class="stat-label">Types Total</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="error-enabled-types">0</span>
+                    <span class="stat-label">Activés</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="error-detections-today">0</span>
+                    <span class="stat-label">Détections Aujourd'hui</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="error-auto-correct-types">0</span>
+                    <span class="stat-label">Auto-Corrections</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gestion et Test - Côte à côte -->
+        <div class="management-test-grid">
+            <!-- Filtres et actions -->
+            <div class="card">
+                <h2 style="margin-bottom: 1.5rem; color: var(--text-color); font-weight: 600; display: flex; align-items: center; gap: 12px;">
+                    🔍 Gestion des Types
+                </h2>
+                <div class="filters-actions-grid">
+                    <div class="filter-section">
+                        <div class="setting-group">
+                            <label for="error-filter-status">Statut:</label>
+                            <select id="error-filter-status" onchange="filterErrorTypes()">
+                                <option value="">Tous</option>
+                                <option value="enabled">Activés</option>
+                                <option value="disabled">Désactivés</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label for="error-filter-severity">Sévérité:</label>
+                            <select id="error-filter-severity" onchange="filterErrorTypes()">
+                                <option value="">Toutes</option>
+                                <option value="low">Faible</option>
+                                <option value="medium">Moyenne</option>
+                                <option value="high">Haute</option>
+                                <option value="critical">Critique</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="actions-section">
+                        <button class="btn btn-primary" onclick="createNewErrorType()">
+                            ➕ Nouveau Type
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportErrorConfig()">
+                            📤 Exporter
+                        </button>
+                        <button class="btn btn-secondary" onclick="importErrorConfig()">
+                            📥 Importer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test de détection -->
+            <div class="card">
+                <h2 style="margin-bottom: 1.5rem; color: var(--text-color); font-weight: 600; display: flex; align-items: center; gap: 12px;">
+                    🧪 Test de Détection
+                </h2>
+                <div class="setting-group">
+                    <label for="error-test-message">Message d'erreur à tester:</label>
+                    <textarea id="error-test-message" placeholder="Entrez un message d'erreur pour tester la détection..." rows="3"></textarea>
+                    <button class="btn btn-primary" onclick="testErrorDetection()" style="margin-top: 8px;">
+                        🔍 Tester la Détection
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Liste des types d'erreurs -->
+        <div class="card">
+            <h2 style="margin-bottom: 1.5rem; color: var(--text-color); font-weight: 600; display: flex; align-items: center; gap: 12px;">
+                🎛️ Configuration des Types
+            </h2>
+            <div id="error-types-list" class="error-types-grid">
+                <!-- Les types d'erreurs seront chargés ici -->
             </div>
         </div>
     </div>
@@ -794,6 +890,220 @@
   border-color: var(--primary-color);
 }
 
+/* === ERROR TYPES SPECIFIC STYLES === */
+.stats-grid .stat-item {
+  text-align: center;
+  padding: 16px;
+  border-radius: var(--border-radius);
+  background: white;
+  box-shadow: var(--shadow-light);
+  border-left: 4px solid var(--primary-color);
+  transition: var(--transition);
+}
+
+.stats-grid .stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-medium);
+}
+
+.stat-item .stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.stat-item .stat-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filters-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: center;
+}
+
+.management-test-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.filter-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.actions-section {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.error-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 16px;
+}
+
+.error-type-item {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 20px;
+  transition: var(--transition);
+  border-left: 4px solid var(--success-color);
+}
+
+.error-type-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-medium);
+}
+
+.error-type-item.severity-low {
+  border-left-color: var(--primary-color);
+}
+
+.error-type-item.severity-medium {
+  border-left-color: var(--warning-color);
+}
+
+.error-type-item.severity-high {
+  border-left-color: var(--error-color);
+}
+
+.error-type-item.severity-critical {
+  border-left-color: #721c24;
+}
+
+.error-type-item.disabled {
+  opacity: 0.6;
+  border-left-color: #6c757d;
+}
+
+.error-type-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.error-type-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-color);
+}
+
+.error-type-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.error-type-badges .badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.error-type-description {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.error-type-patterns {
+  margin-bottom: 16px;
+}
+
+.pattern-list {
+  max-height: 80px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.pattern-item {
+  background: var(--bg-light);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  border-left: 2px solid var(--primary-color);
+}
+
+.error-type-actions-list {
+  margin-bottom: 16px;
+}
+
+.action-list {
+  max-height: 80px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.action-item {
+  background: var(--bg-light);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  border-left: 3px solid var(--primary-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.action-item.disabled {
+  opacity: 0.5;
+  border-left-color: #6c757d;
+}
+
+.action-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.action-priority {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.error-type-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.error-type-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.error-type-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.error-type-buttons .btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -876,6 +1186,12 @@
   
   /* Forcer une colonne sur mobile pour les éléments Debrid */
   .debrid-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  /* Forcer une colonne sur mobile pour Gestion/Test */
+  .management-test-grid {
     grid-template-columns: 1fr;
     gap: 16px;
   }
@@ -1723,5 +2039,345 @@ document.addEventListener('DOMContentLoaded', function() {
     // Test automatique de la connexion API au changement du token
     document.getElementById('api-token').addEventListener('blur', testApiConnection);
 });
+
+// === GESTION DES TYPES D'ERREURS ===
+
+// Variables globales pour les types d'erreurs
+let currentErrorTypes = {};
+let filteredErrorTypes = {};
+let editingErrorType = null;
+
+// Fonctions utilitaires
+function showToast(message, type) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+function apiCall(url, options = {}) {
+    return fetch(url, {
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+        },
+        ...options
+    }).then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    });
+}
+
+// Chargement des données pour les types d'erreurs
+function loadErrorTypes() {
+    apiCall('/api/arr/error-types')
+        .then(response => {
+            if (response.success) {
+                currentErrorTypes = response.error_types;
+                filteredErrorTypes = {...currentErrorTypes};
+                renderErrorTypes();
+            } else {
+                showToast('Erreur chargement types d\'erreurs: ' + response.error, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Erreur API: ' + error.message, 'error');
+        });
+}
+
+function loadErrorStatistics() {
+    apiCall('/api/arr/error-statistics')
+        .then(response => {
+            if (response.success) {
+                const stats = response.statistics;
+                document.getElementById('error-total-types').textContent = stats.total_types;
+                document.getElementById('error-enabled-types').textContent = stats.enabled_types;
+                document.getElementById('error-detections-today').textContent = stats.detections_today;
+                
+                const autoCorrectCount = Object.values(stats.by_type)
+                    .filter(type => type.auto_correct && type.enabled).length;
+                document.getElementById('error-auto-correct-types').textContent = autoCorrectCount;
+            }
+        })
+        .catch(error => {
+            console.error('Erreur chargement statistiques:', error);
+        });
+}
+
+// Rendu de l'interface des types d'erreurs
+function renderErrorTypes() {
+    const container = document.getElementById('error-types-list');
+    container.innerHTML = '';
+    
+    for (const [typeName, config] of Object.entries(filteredErrorTypes)) {
+        const item = createErrorTypeItem(typeName, config);
+        container.appendChild(item);
+    }
+}
+
+function createErrorTypeItem(typeName, config) {
+    const itemDiv = document.createElement('div');
+    const severityClass = `severity-${config.severity}`;
+    const disabledClass = config.enabled ? '' : 'disabled';
+    
+    itemDiv.className = `error-type-item ${severityClass} ${disabledClass}`;
+    
+    itemDiv.innerHTML = `
+        <div class="error-type-header">
+            <h3 class="error-type-title">${config.name}</h3>
+            <div class="error-type-badges">
+                <span class="badge badge-${getSeverityBadgeClass(config.severity)}">${config.severity.toUpperCase()}</span>
+                <span class="badge badge-${config.enabled ? 'success' : 'secondary'}">${config.enabled ? 'Activé' : 'Désactivé'}</span>
+            </div>
+        </div>
+        
+        <p class="error-type-description">${config.description}</p>
+        
+        <div class="error-type-patterns">
+            <strong>Patterns (${config.detection_patterns.length}):</strong>
+            <div class="pattern-list">
+                ${config.detection_patterns.slice(0, 3).map(pattern => 
+                    `<div class="pattern-item">${pattern}</div>`
+                ).join('')}
+                ${config.detection_patterns.length > 3 ? 
+                    `<small style="color: var(--text-muted);">... et ${config.detection_patterns.length - 3} autres</small>` : ''
+                }
+            </div>
+        </div>
+        
+        <div class="error-type-actions-list">
+            <strong>Actions (${config.actions.length}):</strong>
+            <div class="action-list">
+                ${config.actions.slice(0, 2).map(action => 
+                    `<div class="action-item ${action.enabled ? '' : 'disabled'}">
+                        <span class="action-name">${action.name}</span>
+                        <span class="action-priority">priorité: ${action.priority}</span>
+                    </div>`
+                ).join('')}
+                ${config.actions.length > 2 ? 
+                    `<small style="color: var(--text-muted);">... et ${config.actions.length - 2} autres</small>` : ''
+                }
+            </div>
+        </div>
+        
+        <div class="error-type-controls">
+            <div class="error-type-meta">
+                Max âge: ${config.max_age_hours}h | Intervalle: ${config.min_interval_minutes}min
+            </div>
+            <div class="error-type-buttons">
+                <button class="btn btn-outline-primary" onclick="editErrorType('${typeName}')">
+                    ✏️ Modifier
+                </button>
+                <button class="btn btn-${config.enabled ? 'warning' : 'success'}" onclick="toggleErrorType('${typeName}')">
+                    ${config.enabled ? '⏸️ Désactiver' : '▶️ Activer'}
+                </button>
+            </div>
+        </div>
+    `;
+    
+    return itemDiv;
+}
+
+function getSeverityBadgeClass(severity) {
+    switch(severity) {
+        case 'low': return 'info';
+        case 'medium': return 'warning';
+        case 'high': return 'danger';
+        case 'critical': return 'danger';
+        default: return 'secondary';
+    }
+}
+
+// Filtrage des types d'erreurs
+function filterErrorTypes() {
+    const statusFilter = document.getElementById('error-filter-status').value;
+    const severityFilter = document.getElementById('error-filter-severity').value;
+    
+    filteredErrorTypes = {};
+    
+    for (const [typeName, config] of Object.entries(currentErrorTypes)) {
+        let includeType = true;
+        
+        if (statusFilter) {
+            if (statusFilter === 'enabled' && !config.enabled) includeType = false;
+            if (statusFilter === 'disabled' && config.enabled) includeType = false;
+        }
+        
+        if (severityFilter && config.severity !== severityFilter) {
+            includeType = false;
+        }
+        
+        if (includeType) {
+            filteredErrorTypes[typeName] = config;
+        }
+    }
+    
+    renderErrorTypes();
+}
+
+// Actions sur les types d'erreurs
+function toggleErrorType(typeName) {
+    const config = currentErrorTypes[typeName];
+    const newStatus = !config.enabled;
+    
+    apiCall(`/api/arr/error-types/${typeName}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            ...config,
+            enabled: newStatus
+        })
+    })
+    .then(response => {
+        if (response.success) {
+            showToast(`Type d'erreur ${newStatus ? 'activé' : 'désactivé'}: ${typeName}`, 'success');
+            loadErrorTypes();
+            loadErrorStatistics();
+        } else {
+            showToast('Erreur: ' + response.error, 'error');
+        }
+    })
+    .catch(error => {
+        showToast('Erreur API: ' + error.message, 'error');
+    });
+}
+
+function editErrorType(typeName) {
+    // Pour l'instant, juste un message
+    showToast(`Édition de ${typeName} - Fonctionnalité à implémenter`, 'info');
+}
+
+function createNewErrorType() {
+    // Pour l'instant, juste un message
+    showToast('Création nouveau type - Fonctionnalité à implémenter', 'info');
+}
+
+// Test de détection
+function testErrorDetection() {
+    const errorMessage = document.getElementById('error-test-message').value.trim();
+    
+    if (!errorMessage) {
+        showToast('Entrez un message d\'erreur à tester', 'warning');
+        return;
+    }
+    
+    const testItem = {
+        errorMessage: errorMessage,
+        status: 'failed',
+        id: 'test-123',
+        title: 'Test Item'
+    };
+    
+    apiCall('/api/arr/test-error-detection', {
+        method: 'POST',
+        body: JSON.stringify({test_item: testItem})
+    })
+    .then(response => {
+        if (response.success) {
+            const result = response.result;
+            
+            if (result.detected_error_type) {
+                showToast(`Type détecté: ${result.detected_error_type} (${result.would_process ? 'sera traité' : 'ne sera pas traité'})`, 'success');
+            } else {
+                showToast('Aucun type d\'erreur détecté pour ce message', 'info');
+            }
+        } else {
+            showToast('Erreur test: ' + response.error, 'error');
+        }
+    })
+    .catch(error => {
+        showToast('Erreur API: ' + error.message, 'error');
+    });
+}
+
+// Export/Import des configurations
+function exportErrorConfig() {
+    const config = JSON.stringify(currentErrorTypes, null, 2);
+    const blob = new Blob([config], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `redriva-error-types-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('Configuration exportée', 'success');
+}
+
+function importErrorConfig() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedConfig = JSON.parse(e.target.result);
+                
+                if (confirm('Importer cette configuration remplacera les types d\'erreurs existants. Continuer ?')) {
+                    apiCall('/api/arr/error-types/import', {
+                        method: 'POST',
+                        body: JSON.stringify({config: importedConfig})
+                    })
+                    .then(response => {
+                        if (response.success) {
+                            showToast('Configuration importée avec succès', 'success');
+                            loadErrorTypes();
+                            loadErrorStatistics();
+                        } else {
+                            showToast('Erreur import: ' + response.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        showToast('Erreur API: ' + error.message, 'error');
+                    });
+                }
+            } catch (error) {
+                showToast('Fichier JSON invalide', 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+    
+    input.click();
+}
+
+// Charger les données des types d'erreurs quand l'onglet est activé
+function showTab(tabName) {
+    // Code existant pour changer d'onglet
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    document.getElementById(tabName).classList.add('active');
+    event.target.classList.add('active');
+    
+    // Charger les données spécifiques à l'onglet types d'erreurs
+    if (tabName === 'error-types') {
+        loadErrorTypes();
+        loadErrorStatistics();
+    }
+}
 </script>
 {% endblock %}

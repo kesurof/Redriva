@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 
 # Import du gestionnaire de configuration Redriva
 from config_manager import ConfigManager
+from error_types_manager import ErrorTypesManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +34,17 @@ class ArrMonitor:
         """
         self.config_manager = config_manager
         self.session = requests.Session()
-        self.version = "2.0.0"  # Version intégrée Redriva
+        self.version = "2.1.0"  # Version avec gestion multi-erreurs
         self._setup_session()
+        
+        # Gestionnaire de types d'erreurs
+        self.error_types_manager = ErrorTypesManager(config_manager)
         
         # État du moniteur
         self.is_running = False
         self.monitor_thread = None
         
-        logger.info("🔧 Arr Monitor initialisé pour Redriva")
+        logger.info("🔧 Arr Monitor initialisé pour Redriva avec gestion multi-erreurs")
     
     def _setup_session(self):
         """Configure la session HTTP avec optimisations"""
@@ -259,58 +263,76 @@ class ArrMonitor:
         
         return is_qbittorrent_error
     
-    def process_application(self, app_name: str, app_config: Dict[str, Any]) -> int:
+    def process_application(self, app_name: str, config: Dict[str, str]) -> int:
         """
-        Traite une application (Sonarr ou Radarr)
+        Traite une application (Sonarr/Radarr) avec le gestionnaire multi-erreurs
         
+        Args:
+            app_name: Nom de l'application (Sonarr/Radarr)
+            config: Configuration avec url et api_key
+            
         Returns:
             int: Nombre d'éléments traités
         """
-        url = app_config.get('url')
-        api_key = app_config.get('api_key')
+        url = config['url']
+        api_key = config['api_key']
         
-        logger.info(f"🔍 Analyse de {app_name}...")
-        
-        # Test de connexion
+        # Vérifier la connectivité
         if not self.test_connection(app_name, url, api_key):
+            logger.error(f"❌ {app_name} non accessible, passage au suivant")
             return 0
         
-        # Récupération de la queue
+        # Récupérer la queue
         queue = self.get_queue(app_name, url, api_key)
         if not queue:
-            logger.info(f"📋 {app_name} queue vide")
+            logger.info(f"✅ {app_name} queue vide")
             return 0
         
-        logger.info(f"📋 {app_name} {len(queue)} éléments en queue")
-        
-        # Statistiques des statuts pour diagnostic
-        status_count = {}
-        for item in queue:
-            status = item.get('status', 'unknown')
-            status_count[status] = status_count.get(status, 0) + 1
-        
-        logger.debug(f"📊 {app_name} Statuts: {dict(sorted(status_count.items()))}")
-        
         processed_items = 0
+        error_summary = {}
         
+        logger.info(f"� {app_name} analyse de {len(queue)} éléments")
+        
+        # Analyser chaque élément de la queue
         for item in queue:
-            if self.is_download_failed(item):
-                download_id = item.get('id')
-                title = item.get('title', 'Inconnu')
-                
-                logger.warning(f"🚨 {app_name} erreur détectée: {title}")
-                
-                # Bloquer et relancer la recherche
-                if self.blocklist_and_search(app_name, url, api_key, download_id):
-                    processed_items += 1
-                    logger.info(f"✅ {app_name} correction appliquée: {title}")
+            # Détecter le type d'erreur
+            error_type = self.error_types_manager.detect_error_type(item)
+            
+            if error_type:
+                # Vérifier si l'erreur doit être traitée
+                if self.error_types_manager.should_process_error(error_type, item):
+                    title = item.get('title', 'Inconnu')
+                    download_id = item.get('id')
+                    
+                    logger.warning(f"� {app_name} erreur détectée [{error_type}]: {title}")
+                    
+                    # Traiter l'erreur selon sa configuration
+                    result = self.error_types_manager.process_error(error_type, item, self)
+                    
+                    if result.get("success", False):
+                        processed_items += 1
+                        actions_count = result.get("actions_executed", 0)
+                        logger.info(f"✅ {app_name} correction appliquée [{error_type}]: {title} ({actions_count} actions)")
+                        
+                        # Comptabiliser par type d'erreur
+                        if error_type not in error_summary:
+                            error_summary[error_type] = 0
+                        error_summary[error_type] += 1
+                    else:
+                        logger.error(f"❌ {app_name} échec correction [{error_type}]: {title}")
+                else:
+                    logger.debug(f"🚫 {app_name} erreur ignorée [{error_type}]: conditions non remplies")
         
+        # Afficher le résumé
         if processed_items > 0:
-            logger.info(f"🔧 {app_name} {processed_items} éléments corrigés")
+            logger.info(f"🔧 {app_name} {processed_items} éléments corrigés:")
+            for error_type, count in error_summary.items():
+                logger.info(f"  • {error_type}: {count} corrections")
+            
             # Lancer une recherche pour les manqués après corrections
             self.trigger_missing_search(app_name, url, api_key)
         else:
-            logger.info(f"✅ {app_name} aucune erreur détectée")
+            logger.info(f"✅ {app_name} aucune erreur nécessitant correction")
         
         return processed_items
     
@@ -459,33 +481,96 @@ class ArrMonitor:
                 'total_items': 0,
                 'status_breakdown': {},
                 'error_items': [],
-                'errors_detected': 0
+                'errors_detected': 0,
+                'error_types_detected': {}
             }
         
-        # Analyse des statuts
+        # Analyse des statuts et types d'erreurs
         status_count = {}
         error_items = []
+        error_types_count = {}
         
         for item in queue:
             status = item.get('status', 'unknown')
             status_count[status] = status_count.get(status, 0) + 1
             
-            if self.is_download_failed(item):
+            # Détecter le type d'erreur avec le nouveau gestionnaire
+            error_type = self.error_types_manager.detect_error_type(item)
+            
+            if error_type:
+                # Comptabiliser les types d'erreurs
+                if error_type not in error_types_count:
+                    error_types_count[error_type] = 0
+                error_types_count[error_type] += 1
+                
                 error_items.append({
                     'id': item.get('id'),
                     'title': item.get('title', 'Inconnu'),
                     'status': status,
-                    'errorMessage': item.get('errorMessage', '')
+                    'errorMessage': item.get('errorMessage', ''),
+                    'errorType': error_type,
+                    'canAutoCorrect': self.error_types_manager.should_process_error(error_type, item)
                 })
         
         result = {
             'total_items': len(queue),
             'status_breakdown': status_count,
             'error_items': error_items,
-            'errors_detected': len(error_items)
+            'errors_detected': len(error_items),
+            'error_types_detected': error_types_count
         }
         
         logger.info(f"📊 {display_name} DIAGNOSTIC: {len(queue)} éléments, {len(error_items)} erreurs")
+        if error_types_count:
+            logger.info(f"   Types d'erreurs: {', '.join([f'{t}({c})' for t, c in error_types_count.items()])}")
+        
+        return result
+    
+    # API pour la gestion des types d'erreurs
+    
+    def get_error_types_config(self) -> Dict[str, Any]:
+        """Retourne la configuration des types d'erreurs"""
+        return self.error_types_manager.get_error_types_config()
+    
+    def update_error_type_config(self, error_type_name: str, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour la configuration d'un type d'erreur"""
+        return self.error_types_manager.update_error_type_config(error_type_name, config_data)
+    
+    def create_error_type(self, error_type_name: str, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Crée un nouveau type d'erreur"""
+        return self.error_types_manager.create_error_type(error_type_name, config_data)
+    
+    def delete_error_type(self, error_type_name: str) -> Dict[str, Any]:
+        """Supprime un type d'erreur"""
+        return self.error_types_manager.delete_error_type(error_type_name)
+    
+    def get_available_actions(self) -> List[str]:
+        """Retourne la liste des actions disponibles"""
+        return self.error_types_manager.get_available_actions()
+    
+    def get_detection_statistics(self) -> Dict[str, Any]:
+        """Retourne les statistiques de détection"""
+        return self.error_types_manager.get_detection_statistics()
+    
+    def test_error_detection(self, test_item: Dict[str, Any]) -> Dict[str, Any]:
+        """Teste la détection d'erreur sur un élément donné"""
+        error_type = self.error_types_manager.detect_error_type(test_item)
+        
+        result = {
+            "item": test_item,
+            "detected_error_type": error_type,
+            "would_process": False,
+            "actions_that_would_run": []
+        }
+        
+        if error_type:
+            result["would_process"] = self.error_types_manager.should_process_error(error_type, test_item)
+            
+            if result["would_process"] and error_type in self.error_types_manager.error_types:
+                error_config = self.error_types_manager.error_types[error_type]
+                result["actions_that_would_run"] = [
+                    action.name for action in error_config.actions if action.enabled
+                ]
         
         return result
 

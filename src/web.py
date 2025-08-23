@@ -2860,6 +2860,258 @@ def arr_monitor_page():
         flash(f'Erreur: {e}', 'error')
         return redirect(url_for('settings'))
 
+# === API GESTION TYPES D'ERREURS ===
+
+@app.route('/api/arr/error-types')
+def api_get_error_types():
+    """Récupère la configuration des types d'erreurs"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        error_types = monitor.get_error_types_config()
+        
+        return jsonify({
+            'success': True,
+            'error_types': error_types
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur récupération types erreurs: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/error-types/<error_type_name>', methods=['PUT'])
+def api_update_error_type(error_type_name):
+    """Met à jour la configuration d'un type d'erreur"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        config_data = request.get_json()
+        if not config_data:
+            return jsonify({
+                'success': False,
+                'error': 'Données de configuration manquantes'
+            }), 400
+        
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        result = monitor.update_error_type_config(error_type_name, config_data)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.error(f"Erreur mise à jour type erreur {error_type_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/error-types', methods=['POST'])
+def api_create_error_type():
+    """Crée un nouveau type d'erreur"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        config_data = request.get_json()
+        if not config_data or not config_data.get('name'):
+            return jsonify({
+                'success': False,
+                'error': 'Nom du type d\'erreur manquant'
+            }), 400
+        
+        error_type_name = config_data.pop('name')
+        
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        result = monitor.create_error_type(error_type_name, config_data)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.error(f"Erreur création type erreur: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/error-types/<error_type_name>', methods=['DELETE'])
+def api_delete_error_type(error_type_name):
+    """Supprime un type d'erreur"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        result = monitor.delete_error_type(error_type_name)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.error(f"Erreur suppression type erreur {error_type_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/error-statistics')
+def api_get_error_statistics():
+    """Récupère les statistiques de détection des erreurs"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        statistics = monitor.get_detection_statistics()
+        
+        return jsonify({
+            'success': True,
+            'statistics': statistics
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur récupération statistiques: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/available-actions')
+def api_get_available_actions():
+    """Récupère la liste des actions disponibles"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        actions = monitor.get_available_actions()
+        
+        return jsonify({
+            'success': True,
+            'actions': actions
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur récupération actions: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/test-error-detection', methods=['POST'])
+def api_test_error_detection():
+    """Teste la détection d'erreur sur un élément donné"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        data = request.get_json()
+        if not data or not data.get('test_item'):
+            return jsonify({
+                'success': False,
+                'error': 'Élément de test manquant'
+            }), 400
+        
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        result = monitor.test_error_detection(data['test_item'])
+        
+        return jsonify({
+            'success': True,
+            'result': result
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur test détection: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/error-types/import', methods=['POST'])
+def api_import_error_types():
+    """Importe une configuration de types d'erreurs"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 500
+    
+    try:
+        data = request.get_json()
+        if not data or not data.get('config'):
+            return jsonify({
+                'success': False,
+                'error': 'Configuration d\'import manquante'
+            }), 400
+        
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        
+        # Importer chaque type d'erreur
+        imported_count = 0
+        errors = []
+        
+        for error_type_name, config_data in data['config'].items():
+            try:
+                result = monitor.update_error_type_config(error_type_name, config_data)
+                if result.get('success'):
+                    imported_count += 1
+                else:
+                    errors.append(f"{error_type_name}: {result.get('error', 'Erreur inconnue')}")
+            except Exception as e:
+                errors.append(f"{error_type_name}: {str(e)}")
+        
+        if errors:
+            return jsonify({
+                'success': False,
+                'error': f"Erreurs d'import: {'; '.join(errors)}",
+                'imported_count': imported_count
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'message': f'{imported_count} types d\'erreurs importés avec succès',
+            'imported_count': imported_count
+        })
+        
+    except Exception as e:
+        logging.error(f"Erreur import types erreurs: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     import signal
     import sys
