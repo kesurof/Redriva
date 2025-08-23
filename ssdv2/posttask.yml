@@ -12,7 +12,7 @@
   ignore_errors: yes
 
 - name: "Get container status details"
-  shell: "docker ps --filter 'name={{ pgrole }}' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+  shell: "docker ps --filter 'name={{ pgrole }}' --format 'table {% raw %}{{.Names}}\t{{.Status}}\t{{.Ports}}{% endraw %}'"
   register: container_status
   when: container_check.rc == 0
 
@@ -22,12 +22,12 @@
       🚀 REDRIVA DÉPLOYÉ AVEC SUCCÈS !
       =================================
       
-      🌐 Interface Web: http://{{ domain | default(ansible_default_ipv4.address) }}:{{ port | default('8000') }}
+      🌐 Interface Web: http://{{ domain | default(ansible_default_ipv4.address) }}:5000
       📁 Config Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/config
       💾 Data Path: {{ settings.storage }}/docker/{{ lookup('env','USER') }}/{{ pgrole }}/data
       
       📊 Status Container:
-      {{ container_status.stdout }}
+      {{ container_status.stdout | default('Container en cours de démarrage...') }}
       
       🔧 Configuration initiale:
       • Rendez-vous sur l'interface web pour configurer vos torrents

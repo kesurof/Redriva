@@ -1,5 +1,3 @@
-# Docker Compose pour SSDV2
-# Utilisé par le système Ansible de SSDV2
 version: '3.8'
 
 services:
@@ -13,33 +11,14 @@ services:
       - PGID=${PGID:-1000}
       - TZ=${TZ:-Europe/Paris}
     
-  # env_file supprimé, configuration via interface web
-    
     ports:
       - "5000:5000"
     
     volumes:
-      # Configuration et données
       - ./config:/app/config:rw
       - ./data:/app/data:rw
-      
-      # Intégrations SSDV2
       - ${HOME}/scripts/zurg/data/info:/zurg/data/info:ro
       - ${HOME}/Medias:/app/medias:rw
       - ${HOME}:${HOME}
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /etc/localtime:/etc/localtime:ro
-    
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.redriva.rule=Host(`redriva.${DOMAIN}`)"
-      - "traefik.http.routers.redriva.entrypoints=websecure"
-      - "traefik.http.routers.redriva.tls.certresolver=letsencrypt"
-      - "traefik.http.services.redriva.loadbalancer.server.port=5000"
