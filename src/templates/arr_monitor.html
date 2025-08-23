@@ -333,6 +333,25 @@
                 </div>
             </div>
 
+            <!-- Types d'erreurs configurés -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="d-flex justify-content-between align-items-center" style="margin-bottom: 16px;">
+                            <h5 style="margin: 0;">
+                                🎛️ Types d'erreurs configurés
+                            </h5>
+                            <button class="btn btn-secondary" onclick="loadErrorTypes()" style="padding: 4px 8px; font-size: 12px;">
+                                🔄 Actualiser
+                            </button>
+                        </div>
+                        <div id="error-types-list">
+                            <div style="color: var(--text-muted);">Chargement des types d'erreurs...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Logs temps réel -->
             <div class="row">
                 <div class="col-12">
@@ -398,6 +417,7 @@ function apiCall(url, options = {}) {
 // Initialisation au chargement de la page
 document.addEventListener('DOMContentLoaded', function() {
     updateMonitorStatus();
+    loadErrorTypes();
     startStatusUpdates();
 });
 
@@ -631,6 +651,58 @@ function addLogMessage(type, message) {
 // Actualiser les logs
 function refreshLogs() {
     addLogMessage('info', 'Logs actualisés');
+}
+
+function loadErrorTypes() {
+    apiCall('/api/arr/error-types')
+        .then(response => {
+            if (response.success) {
+                displayErrorTypes(response.error_types);
+            } else {
+                document.getElementById('error-types-list').innerHTML = 
+                    '<div style="color: var(--error-color);">Erreur lors du chargement: ' + (response.error || 'Erreur inconnue') + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Erreur chargement types d\'erreurs:', error);
+            document.getElementById('error-types-list').innerHTML = 
+                '<div style="color: var(--error-color);">Erreur de connexion: ' + error.message + '</div>';
+        });
+}
+
+function displayErrorTypes(errorTypes) {
+    const container = document.getElementById('error-types-list');
+    
+    if (!errorTypes || Object.keys(errorTypes).length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted);">Aucun type d\'erreur configuré</div>';
+        return;
+    }
+
+    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">';
+    
+    for (const [errorTypeName, config] of Object.entries(errorTypes)) {
+        const isEnabled = config.enabled !== false;
+        const badgeClass = isEnabled ? 'badge-success' : 'badge-secondary';
+        const statusText = isEnabled ? 'Activé' : 'Désactivé';
+        
+        html += `
+            <div class="card" style="padding: 12px; border-left: 4px solid ${isEnabled ? 'var(--success-color)' : 'var(--text-muted)'};">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="font-size: 14px;">${errorTypeName}</strong>
+                    <span class="badge ${badgeClass}" style="font-size: 10px;">${statusText}</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                    ${config.description || 'Aucune description'}
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted);">
+                    Actions: ${config.actions ? config.actions.length : 0} configurées
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // Démarrer les mises à jour automatiques du statut
