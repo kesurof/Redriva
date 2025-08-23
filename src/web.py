@@ -133,8 +133,40 @@ except ImportError as e:
     def init_symlink_database():
         pass
 
+# Import du module de surveillance Arr avec gestion d'erreur
+try:
+    from arr_monitor import get_arr_monitor
+    ARR_MONITOR_AVAILABLE = True
+    print("✅ Module arr_monitor importé avec succès")
+except ImportError as e:
+    print(f"⚠️ Module arr_monitor non disponible: {e}")
+    ARR_MONITOR_AVAILABLE = False
+
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+# Initialisation du moniteur Arr en arrière-plan
+if ARR_MONITOR_AVAILABLE:
+    try:
+        config_manager = get_config()
+        arr_monitor = get_arr_monitor(config_manager)
+        
+        # Démarrer automatiquement si des applications Arr sont configurées
+        if config_manager.get('sonarr.enabled', False) or config_manager.get('radarr.enabled', False):
+            # Démarrer avec un intervalle par défaut de 5 minutes
+            auto_start_interval = config_manager.get('arr_monitor.interval', 300)
+            if arr_monitor.start_monitoring(auto_start_interval):
+                print(f"🔧 Surveillance Arr démarrée automatiquement (intervalle: {auto_start_interval}s)")
+            else:
+                print("⚠️ Échec du démarrage automatique de la surveillance Arr")
+        else:
+            print("ℹ️ Surveillance Arr disponible mais aucune application configurée")
+    except Exception as e:
+        print(f"❌ Erreur initialisation surveillance Arr: {e}")
+        import traceback
+        traceback.print_exc()
+else:
+    print("⚠️ Module de surveillance Arr désactivé - module non disponible")
 
 # Variables globales pour le statut des tâches (définies avant les gestionnaires d'erreur)
 task_status = {
@@ -2655,6 +2687,178 @@ def diagnostic_paths():
             'success': False,
             'error': str(e)
         }), 500
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ROUTES API ARR MONITOR
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/arr/monitor/status')
+def arr_monitor_status():
+    """API pour récupérer le statut du moniteur Arr"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 503
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        status = monitor.get_status()
+        
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+    except Exception as e:
+        logging.error(f"Erreur récupération statut arr monitor: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/monitor/start', methods=['POST'])
+def arr_monitor_start():
+    """API pour démarrer la surveillance Arr"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 503
+    
+    try:
+        data = request.get_json() or {}
+        interval = data.get('interval', 300)  # 5 minutes par défaut
+        
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        
+        if monitor.start_monitoring(interval):
+            return jsonify({
+                'success': True,
+                'message': f'Surveillance Arr démarrée (intervalle: {interval}s)'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Surveillance déjà en cours'
+            })
+    except Exception as e:
+        logging.error(f"Erreur démarrage arr monitor: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/monitor/stop', methods=['POST'])
+def arr_monitor_stop():
+    """API pour arrêter la surveillance Arr"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 503
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        
+        if monitor.stop_monitoring():
+            return jsonify({
+                'success': True,
+                'message': 'Surveillance Arr arrêtée'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Surveillance déjà arrêtée'
+            })
+    except Exception as e:
+        logging.error(f"Erreur arrêt arr monitor: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/monitor/cycle', methods=['POST'])
+def arr_monitor_cycle():
+    """API pour lancer un cycle de surveillance manuel"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 503
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        
+        results = monitor.run_cycle()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cycle de surveillance terminé',
+            'results': results,
+            'total_corrections': sum(results.values())
+        })
+    except Exception as e:
+        logging.error(f"Erreur cycle arr monitor: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/arr/monitor/diagnose/<app_name>')
+def arr_monitor_diagnose(app_name):
+    """API pour diagnostiquer une application Arr"""
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Module arr_monitor non disponible'
+        }), 503
+    
+    if app_name.lower() not in ['sonarr', 'radarr']:
+        return jsonify({
+            'success': False,
+            'error': 'Application non supportée (sonarr/radarr uniquement)'
+        }), 400
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        
+        diagnostic = monitor.diagnose_queue(app_name.lower())
+        
+        return jsonify({
+            'success': True,
+            'diagnostic': diagnostic
+        })
+    except Exception as e:
+        logging.error(f"Erreur diagnostic arr monitor {app_name}: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/arr-monitor')
+def arr_monitor_page():
+    """Page de gestion du moniteur Arr"""
+    if not ARR_MONITOR_AVAILABLE:
+        flash('Module arr_monitor non disponible', 'error')
+        return redirect(url_for('settings'))
+    
+    try:
+        config_manager = get_config()
+        monitor = get_arr_monitor(config_manager)
+        status = monitor.get_status()
+        
+        return render_template('arr_monitor.html', 
+                             monitor_status=status,
+                             arr_available=ARR_MONITOR_AVAILABLE)
+    except Exception as e:
+        logging.error(f"Erreur page arr monitor: {e}")
+        flash(f'Erreur: {e}', 'error')
+        return redirect(url_for('settings'))
 
 if __name__ == '__main__':
     import signal

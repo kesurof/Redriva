@@ -1,0 +1,653 @@
+{% extends "base.html" %}
+
+{% block title %}Surveillance Arr - Redriva{% endblock %}
+
+{% block content %}
+
+<!-- Conteneur de notifications -->
+<div id="toast-container" class="toast-container"></div>
+
+<style>
+/* === VARIABLES CSS === */
+:root {
+  --primary-color: #2196F3;
+  --primary-600: #1976D2;
+  --primary-700: #1565C0;
+  --primary-gradient: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+
+  --success-color: #4CAF50;
+  --success-700: #388E3C;
+  --success-gradient: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+
+  --warning-color: #FF9800;
+  --warning-700: #e0a800;
+  --warning-gradient: linear-gradient(135deg, #FF9800 0%, #e0a800 100%);
+
+  --error-color: #f44336;
+  --error-700: #c82333;
+  --error-gradient: linear-gradient(135deg, #f44336 0%, #c82333 100%);
+
+  --text-color: #333333;
+  --text-muted: #6c757d;
+  --bg-light: #f8f9fa;
+  --border-color: #e0e0e0;
+  --muted-200: #f0f2f5;
+
+  --shadow-light: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-medium: 0 8px 24px rgba(0,0,0,0.12);
+
+  --border-radius: 8px;
+  --border-radius-lg: 12px;
+
+  --transition: all 0.24s cubic-bezier(0.4,0,0.2,1);
+  --focus-ring: 0 0 0 4px rgba(33,150,243,0.12);
+}
+
+/* === ANIMATIONS === */
+@keyframes spin { 
+  from { transform: rotate(0deg); } 
+  to { transform: rotate(360deg); } 
+}
+@keyframes slideIn { 
+  from { transform: translateX(100%); opacity: 0; } 
+  to { transform: translateX(0); opacity: 1; } 
+}
+@keyframes slideDown { 
+  from { opacity: 0; transform: translateY(-10px); } 
+  to { opacity: 1; transform: translateY(0); } 
+}
+@keyframes fadeIn { 
+  from { opacity: 0; } 
+  to { opacity: 1; } 
+}
+
+/* === COMPOSANTS === */
+.card {
+  background: #ffffff; 
+  border: none; 
+  border-radius: var(--border-radius-lg); 
+  padding: 24px; 
+  box-shadow: var(--shadow-light); 
+  border-left: 4px solid var(--primary-color); 
+  transition: var(--transition);
+  margin-bottom: 20px;
+}
+.card:hover { 
+  transform: translateY(-2px); 
+  box-shadow: var(--shadow-medium); 
+}
+
+.btn {
+  display: inline-flex; 
+  align-items: center; 
+  gap: 8px; 
+  padding: 8px 16px; 
+  border: none; 
+  border-radius: var(--border-radius); 
+  font-size: 13px; 
+  font-weight: 600; 
+  cursor: pointer; 
+  transition: var(--transition); 
+  box-shadow: var(--shadow-light);
+}
+.btn:hover { 
+  transform: translateY(-1px); 
+  box-shadow: var(--shadow-medium); 
+}
+.btn-primary { 
+  background: var(--primary-gradient); 
+  color: #fff; 
+}
+.btn-success { 
+  background: var(--success-gradient); 
+  color: #fff; 
+}
+.btn-warning { 
+  background: var(--warning-gradient); 
+  color: #212529; 
+}
+.btn-danger { 
+  background: var(--error-gradient); 
+  color: #fff; 
+}
+.btn-secondary { 
+  background: #6c757d; 
+  color: #fff; 
+}
+.btn-outline-primary { 
+  background: transparent; 
+  color: var(--primary-color); 
+  border: 1px solid var(--primary-color); 
+}
+.btn-outline-primary:hover { 
+  background: var(--primary-color); 
+  color: #fff; 
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-success { background: var(--success-color); color: #fff; }
+.badge-secondary { background: #6c757d; color: #fff; }
+.badge-danger { background: var(--error-color); color: #fff; }
+.badge-warning { background: var(--warning-color); color: #212529; }
+
+.form-control {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+}
+.form-control:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--primary-color);
+}
+
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1002;
+}
+
+.toast {
+  min-width: 300px;
+  padding: 16px 20px;
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  border-left: 4px solid;
+  margin-bottom: 10px;
+  transform: translateX(100%);
+  opacity: 0;
+  transition: var(--transition);
+}
+.toast.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+.toast.success {
+  background: linear-gradient(135deg,#f1f8e9 0%,#e8f5e8 100%);
+  border-left-color: var(--success-color);
+  color: var(--success-700);
+}
+.toast.error {
+  background: linear-gradient(135deg,#ffebee 0%,#fde7e7 100%);
+  border-left-color: var(--error-color);
+  color: var(--error-700);
+}
+.toast.warning {
+  background: linear-gradient(135deg,#fff8e1 0%,#ffecb3 100%);
+  border-left-color: var(--warning-color);
+  color: var(--warning-700);
+}
+.toast.info {
+  background: linear-gradient(135deg,#e3f2fd 0%,#bbdefb 100%);
+  border-left-color: var(--primary-color);
+  color: var(--primary-700);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  .card { padding: 16px; }
+  .btn { padding: 6px 12px; }
+}
+
+@media (max-width: 480px) {
+  .btn { padding: 4px 8px; }
+  .card { padding: 12px; }
+}
+
+/* === LAYOUT === */
+.container-fluid { padding: 20px; }
+.row { display: flex; flex-wrap: wrap; margin: -10px; }
+.col-12 { width: 100%; padding: 10px; }
+.col-md-6 { width: 50%; padding: 10px; }
+.col-md-4 { width: 33.333%; padding: 10px; }
+
+.d-flex { display: flex; }
+.justify-content-between { justify-content: space-between; }
+.align-items-center { align-items: center; }
+.text-center { text-align: center; }
+.mb-4 { margin-bottom: 24px; }
+.mt-4 { margin-top: 24px; }
+.w-100 { width: 100%; }
+
+.bg-dark { background: #343a40; }
+.text-light { color: #f8f9fa; }
+.p-3 { padding: 16px; }
+.rounded { border-radius: var(--border-radius); }
+
+@media (max-width: 768px) {
+  .col-md-6, .col-md-4 { width: 100%; }
+}
+</style>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>
+                    🔧 Surveillance Sonarr/Radarr
+                </h2>
+                <div>
+                    <span id="monitor-status-badge" class="badge badge-secondary">Chargement...</span>
+                </div>
+            </div>
+
+            <!-- Statut du moniteur -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <h5 style="margin-bottom: 16px;">
+                            ℹ️ Statut du moniteur
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>État :</strong>
+                                <span id="monitor-running-status">{{ monitor_status.running | default('false') }}</span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Version :</strong>
+                                <span id="monitor-version">{{ monitor_status.version | default('N/A') }}</span>
+                            </div>
+                        </div>
+                        <div class="row" style="margin-top: 12px;">
+                            <div class="col-md-6">
+                                <strong>Sonarr :</strong>
+                                <span id="sonarr-enabled" class="badge {{ 'badge-success' if monitor_status.sonarr_enabled else 'badge-secondary' }}">
+                                    {{ 'Activé' if monitor_status.sonarr_enabled else 'Désactivé' }}
+                                </span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Radarr :</strong>
+                                <span id="radarr-enabled" class="badge {{ 'badge-success' if monitor_status.radarr_enabled else 'badge-secondary' }}">
+                                    {{ 'Activé' if monitor_status.radarr_enabled else 'Désactivé' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contrôles -->
+                <div class="col-md-6">
+                    <div class="card">
+                        <h5 style="margin-bottom: 16px;">
+                            ⚙️ Contrôles
+                        </h5>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <button id="btn-start-monitor" class="btn btn-success" onclick="startMonitoring()">
+                                ▶️ Démarrer la surveillance
+                            </button>
+                            <button id="btn-stop-monitor" class="btn btn-danger" onclick="stopMonitoring()">
+                                ⏹️ Arrêter la surveillance
+                            </button>
+                            <button id="btn-run-cycle" class="btn btn-primary" onclick="runManualCycle()">
+                                🔄 Cycle manuel
+                            </button>
+                        </div>
+                        
+                        <!-- Configuration intervalle -->
+                        <div style="margin-top: 16px;">
+                            <label for="monitoring-interval" style="display: block; margin-bottom: 4px;">Intervalle (secondes) :</label>
+                            <input type="number" id="monitoring-interval" class="form-control" value="300" min="60" max="3600">
+                            <small style="color: var(--text-muted);">Entre 60 secondes et 1 heure</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Diagnostics -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <h5 style="margin-bottom: 16px;">
+                            🩺 Diagnostic des applications
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-primary w-100" onclick="diagnoseApp('sonarr')" style="margin-bottom: 8px;">
+                                    📺 Diagnostiquer Sonarr
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-primary w-100" onclick="diagnoseApp('radarr')" style="margin-bottom: 8px;">
+                                    🎬 Diagnostiquer Radarr
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Zone de résultats -->
+            <div id="results-container" style="display: none;">
+                <div class="card">
+                    <h5 style="margin-bottom: 16px;">
+                        📊 Résultats
+                    </h5>
+                    <div id="results-content"></div>
+                </div>
+            </div>
+
+            <!-- Logs temps réel -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="d-flex justify-content-between align-items-center" style="margin-bottom: 16px;">
+                            <h5 style="margin: 0;">
+                                💬 Activité récente
+                            </h5>
+                            <button class="btn btn-secondary" onclick="refreshLogs()" style="padding: 4px 8px; font-size: 12px;">
+                                🔄 Actualiser
+                            </button>
+                        </div>
+                        <div id="activity-logs" class="bg-dark text-light p-3 rounded" style="height: 200px; overflow-y: auto; font-family: monospace;">
+                            <div style="color: var(--text-muted);">Aucune activité récente...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+// Variables globales
+let monitoringActive = false;
+let statusUpdateInterval;
+
+// Fonctions utilitaires
+function showToast(message, type) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    // Afficher le toast
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Supprimer après 3 secondes
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+function apiCall(url, options = {}) {
+    return fetch(url, {
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+        },
+        ...options
+    }).then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    });
+}
+
+// Initialisation au chargement de la page
+document.addEventListener('DOMContentLoaded', function() {
+    updateMonitorStatus();
+    startStatusUpdates();
+});
+
+// Mise à jour du statut du moniteur
+function updateMonitorStatus() {
+    apiCall('/api/arr/monitor/status')
+        .then(response => {
+            if (response.success) {
+                const status = response.status;
+                monitoringActive = status.running;
+                
+                // Mettre à jour les éléments de l'interface
+                document.getElementById('monitor-running-status').textContent = status.running ? 'En cours' : 'Arrêté';
+                document.getElementById('monitor-version').textContent = status.version || 'N/A';
+                
+                // Badge de statut
+                const badge = document.getElementById('monitor-status-badge');
+                badge.className = `badge ${status.running ? 'badge-success' : 'badge-danger'}`;
+                badge.textContent = status.running ? 'Actif' : 'Inactif';
+                
+                // Sonarr/Radarr status
+                const sonarrBadge = document.getElementById('sonarr-enabled');
+                sonarrBadge.className = `badge ${status.sonarr_enabled ? 'badge-success' : 'badge-secondary'}`;
+                sonarrBadge.textContent = status.sonarr_enabled ? 'Activé' : 'Désactivé';
+                
+                const radarrBadge = document.getElementById('radarr-enabled');
+                radarrBadge.className = `badge ${status.radarr_enabled ? 'badge-success' : 'badge-secondary'}`;
+                radarrBadge.textContent = status.radarr_enabled ? 'Activé' : 'Désactivé';
+                
+                // Boutons
+                updateButtonStates();
+            }
+        })
+        .catch(error => {
+            console.error('Erreur récupération statut:', error);
+            const badge = document.getElementById('monitor-status-badge');
+            badge.className = 'badge badge-warning';
+            badge.textContent = 'Erreur';
+        });
+}
+
+// Mise à jour de l'état des boutons
+function updateButtonStates() {
+    const startBtn = document.getElementById('btn-start-monitor');
+    const stopBtn = document.getElementById('btn-stop-monitor');
+    const cycleBtn = document.getElementById('btn-run-cycle');
+    
+    if (monitoringActive) {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        cycleBtn.disabled = true;
+    } else {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        cycleBtn.disabled = false;
+    }
+}
+
+// Démarrer la surveillance
+function startMonitoring() {
+    const interval = parseInt(document.getElementById('monitoring-interval').value) || 300;
+    
+    apiCall('/api/arr/monitor/start', {
+        method: 'POST',
+        body: JSON.stringify({ interval: interval })
+    })
+    .then(response => {
+        if (response.success) {
+            addLogMessage('success', response.message);
+            updateMonitorStatus();
+        } else {
+            addLogMessage('error', response.error);
+        }
+    })
+    .catch(error => {
+        addLogMessage('error', 'Erreur lors du démarrage: ' + error.message);
+    });
+}
+
+// Arrêter la surveillance
+function stopMonitoring() {
+    apiCall('/api/arr/monitor/stop', { method: 'POST' })
+    .then(response => {
+        if (response.success) {
+            addLogMessage('success', response.message);
+            updateMonitorStatus();
+        } else {
+            addLogMessage('error', response.error);
+        }
+    })
+    .catch(error => {
+        addLogMessage('error', 'Erreur lors de l\'arrêt: ' + error.message);
+    });
+}
+
+// Lancer un cycle manuel
+function runManualCycle() {
+    addLogMessage('info', 'Démarrage du cycle manuel...');
+    
+    apiCall('/api/arr/monitor/cycle', { method: 'POST' })
+    .then(response => {
+        if (response.success) {
+            addLogMessage('success', `${response.message} - ${response.total_corrections} corrections appliquées`);
+            displayResults(response.results);
+        } else {
+            addLogMessage('error', response.error);
+        }
+    })
+    .catch(error => {
+        addLogMessage('error', 'Erreur lors du cycle: ' + error.message);
+    });
+}
+
+// Diagnostiquer une application
+function diagnoseApp(appName) {
+    addLogMessage('info', `Diagnostic ${appName} en cours...`);
+    
+    apiCall(`/api/arr/monitor/diagnose/${appName}`)
+    .then(response => {
+        if (response.success) {
+            const diag = response.diagnostic;
+            
+            if (diag.error) {
+                addLogMessage('error', `${appName}: ${diag.error}`);
+            } else {
+                addLogMessage('success', `${appName}: ${diag.total_items} éléments, ${diag.errors_detected} erreurs détectées`);
+                displayDiagnostic(appName, diag);
+            }
+        } else {
+            addLogMessage('error', `Erreur diagnostic ${appName}: ${response.error}`);
+        }
+    })
+    .catch(error => {
+        addLogMessage('error', `Erreur diagnostic ${appName}: ` + error.message);
+    });
+}
+
+// Afficher les résultats dans la zone dédiée
+function displayResults(results) {
+    const container = document.getElementById('results-container');
+    const content = document.getElementById('results-content');
+    
+    let html = '<h6>Résultats du cycle :</h6><div class="row">';
+    
+    for (const [app, corrections] of Object.entries(results)) {
+        const badgeClass = corrections > 0 ? 'badge-warning' : 'badge-success';
+        html += `
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="d-flex justify-content-between">
+                        <span style="text-transform: capitalize;">${app}</span>
+                        <span class="badge ${badgeClass}">${corrections} corrections</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    content.innerHTML = html;
+    container.style.display = 'block';
+}
+
+// Afficher le diagnostic détaillé
+function displayDiagnostic(appName, diagnostic) {
+    const container = document.getElementById('results-container');
+    const content = document.getElementById('results-content');
+    
+    let html = `<h6>Diagnostic ${appName} :</h6>`;
+    html += `<p><strong>Total :</strong> ${diagnostic.total_items} éléments</p>`;
+    html += `<p><strong>Erreurs :</strong> ${diagnostic.errors_detected}</p>`;
+    
+    if (diagnostic.status_breakdown) {
+        html += '<h6>Répartition par statut :</h6><ul>';
+        for (const [status, count] of Object.entries(diagnostic.status_breakdown)) {
+            html += `<li>${status}: ${count}</li>`;
+        }
+        html += '</ul>';
+    }
+    
+    if (diagnostic.error_items && diagnostic.error_items.length > 0) {
+        html += '<h6>Éléments en erreur :</h6>';
+        html += '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">';
+        html += '<thead><tr><th style="padding: 8px; border-bottom: 1px solid #ddd;">Titre</th><th style="padding: 8px; border-bottom: 1px solid #ddd;">Statut</th><th style="padding: 8px; border-bottom: 1px solid #ddd;">Erreur</th></tr></thead><tbody>';
+        
+        diagnostic.error_items.forEach(item => {
+            html += `<tr>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.title}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.status}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #eee; color: var(--error-color);">${item.errorMessage}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+    }
+    
+    content.innerHTML = html;
+    container.style.display = 'block';
+}
+
+// Ajouter un message dans les logs
+function addLogMessage(type, message) {
+    const logs = document.getElementById('activity-logs');
+    const timestamp = new Date().toLocaleTimeString();
+    const icons = {
+        'success': '✅',
+        'error': '❌',
+        'warning': '⚠️',
+        'info': 'ℹ️'
+    };
+    
+    const logEntry = document.createElement('div');
+    logEntry.className = 'log-entry';
+    logEntry.style.color = type === 'error' ? 'var(--error-color)' : 
+                          type === 'success' ? 'var(--success-color)' : 
+                          type === 'warning' ? 'var(--warning-color)' : 
+                          'var(--primary-color)';
+    logEntry.innerHTML = `[${timestamp}] ${icons[type] || 'ℹ️'} ${message}`;
+    
+    logs.insertBefore(logEntry, logs.firstChild);
+    
+    // Garder seulement les 50 dernières entrées
+    const entries = logs.querySelectorAll('.log-entry');
+    if (entries.length > 50) {
+        for (let i = 50; i < entries.length; i++) {
+            entries[i].remove();
+        }
+    }
+}
+
+// Actualiser les logs
+function refreshLogs() {
+    addLogMessage('info', 'Logs actualisés');
+}
+
+// Démarrer les mises à jour automatiques du statut
+function startStatusUpdates() {
+    statusUpdateInterval = setInterval(updateMonitorStatus, 10000); // Toutes les 10 secondes
+}
+
+// Arrêter les mises à jour automatiques
+function stopStatusUpdates() {
+    if (statusUpdateInterval) {
+        clearInterval(statusUpdateInterval);
+    }
+}
+
+// Nettoyage à la fermeture de la page
+window.addEventListener('beforeunload', function() {
+    stopStatusUpdates();
+});
+</script>
+{% endblock %}
