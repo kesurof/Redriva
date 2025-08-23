@@ -323,6 +323,19 @@
                 <!-- Les types d'erreurs seront chargés ici -->
             </div>
         </div>
+
+        <!-- Modal de configuration des types d'erreurs -->
+        <div id="error-config-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="error-modal-title">Configuration Type d'Erreur</h3>
+                    <button class="btn-close" onclick="closeErrorConfigModal()">&times;</button>
+                </div>
+                <div id="error-modal-body">
+                    <!-- Le contenu du modal sera généré dynamiquement -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Onglet Automatisation -->
@@ -640,6 +653,58 @@
 .toast.error { border-left-color: var(--error-color); background: linear-gradient(135deg, #ffebee, #fde7e7); color: #c62828; }
 .toast.warning { border-left-color: var(--warning-color); background: linear-gradient(135deg, #fff8e1, #ffecb3); color: #ef6c00; }
 .toast.info { border-left-color: var(--primary-color); background: linear-gradient(135deg, #e3f2fd, #bbdefb); color: #1565c0; }
+
+/* === MODAL === */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: var(--border-radius-lg);
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  padding: 20px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
 
 /* === ONGLETS === */
 .tabs-container {
@@ -1132,6 +1197,100 @@
 .checkbox-label span {
   user-select: none;
   font-size: 15px;
+}
+
+/* === STYLES SPÉCIFIQUES TYPES D'ERREURS === */
+.error-type-card {
+  border-left-color: var(--success-color);
+}
+.error-type-card.severity-medium {
+  border-left-color: var(--warning-color);
+}
+.error-type-card.severity-high {
+  border-left-color: var(--error-color);
+}
+.error-type-card.severity-critical {
+  border-left-color: #721c24;
+}
+.error-type-card.disabled {
+  opacity: 0.6;
+  border-left-color: #6c757d;
+}
+
+.error-type-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.error-type-card .card-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pattern-item-modal {
+  background: var(--muted-200);
+  padding: 8px 12px;
+  border-radius: var(--border-radius);
+  margin-bottom: 4px;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.form-control, .form-select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  transition: var(--transition);
+  width: 100%;
+}
+.form-control:focus, .form-select:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--primary-color);
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* === LAYOUT CLASSES FOR MODAL === */
+.row { 
+  display: flex; 
+  flex-wrap: wrap; 
+  margin: -8px; 
+}
+.col-md-6 { 
+  width: 50%; 
+  padding: 8px; 
+}
+.col-md-4 { 
+  width: 33.333%; 
+  padding: 8px; 
+}
+.col-md-3 { 
+  width: 25%; 
+  padding: 8px; 
+}
+.mb-3 { 
+  margin-bottom: 16px; 
+}
+.d-flex { 
+  display: flex; 
+}
+.justify-content-between { 
+  justify-content: space-between; 
+}
+
+@media (max-width: 768px) {
+  .col-md-6, .col-md-4, .col-md-3 { 
+    width: 100%; 
+  }
 }
 
 .service-fields {
@@ -2253,13 +2412,30 @@ function toggleErrorType(typeName) {
 }
 
 function editErrorType(typeName) {
-    // Pour l'instant, juste un message
-    showToast(`Édition de ${typeName} - Fonctionnalité à implémenter`, 'info');
+    editingErrorType = typeName;
+    const config = currentErrorTypes[typeName];
+    
+    showErrorConfigModal(config, typeName);
 }
 
 function createNewErrorType() {
-    // Pour l'instant, juste un message
-    showToast('Création nouveau type - Fonctionnalité à implémenter', 'info');
+    editingErrorType = null;
+    
+    const defaultConfig = {
+        name: "",
+        description: "",
+        enabled: true,
+        detection_patterns: [],
+        status_filters: [],
+        severity: "medium",
+        auto_correct: true,
+        max_age_hours: 24,
+        min_interval_minutes: 5,
+        actions: [],
+        conditions: {}
+    };
+    
+    showErrorConfigModal(defaultConfig, null);
 }
 
 // Test de détection
@@ -2293,6 +2469,168 @@ function testErrorDetection() {
             }
         } else {
             showToast('Erreur test: ' + response.error, 'error');
+        }
+    })
+    .catch(error => {
+        showToast('Erreur API: ' + error.message, 'error');
+    });
+}
+
+// === GESTION DU MODAL DE CONFIGURATION ===
+function showErrorConfigModal(config, typeName) {
+    const modal = document.getElementById('error-config-modal');
+    const modalBody = document.getElementById('error-modal-body');
+    const modalTitle = document.getElementById('error-modal-title');
+    
+    modalTitle.textContent = typeName ? `Modifier: ${config.name}` : 'Nouveau Type d\'Erreur';
+    modalBody.innerHTML = generateErrorConfigForm(config, typeName);
+    modal.classList.add('show');
+}
+
+function closeErrorConfigModal() {
+    const modal = document.getElementById('error-config-modal');
+    modal.classList.remove('show');
+    editingErrorType = null;
+}
+
+function generateErrorConfigForm(config, typeName) {
+    return `
+        <form id="error-type-form">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Nom du type:</label>
+                    <input type="text" class="form-control" id="config-name" value="${config.name}" ${typeName ? 'readonly' : ''}>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Sévérité:</label>
+                    <select class="form-select" id="config-severity">
+                        <option value="low" ${config.severity === 'low' ? 'selected' : ''}>Faible</option>
+                        <option value="medium" ${config.severity === 'medium' ? 'selected' : ''}>Moyenne</option>
+                        <option value="high" ${config.severity === 'high' ? 'selected' : ''}>Haute</option>
+                        <option value="critical" ${config.severity === 'critical' ? 'selected' : ''}>Critique</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Description:</label>
+                <textarea class="form-control" id="config-description" rows="2">${config.description}</textarea>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">
+                        <input type="checkbox" id="config-enabled" ${config.enabled ? 'checked' : ''}> Activé
+                    </label>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">
+                        <input type="checkbox" id="config-auto-correct" ${config.auto_correct ? 'checked' : ''}> Auto-correction
+                    </label>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Âge maximum (heures):</label>
+                    <input type="number" class="form-control" id="config-max-age" value="${config.max_age_hours}" min="1" max="168">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Intervalle minimum (minutes):</label>
+                    <input type="number" class="form-control" id="config-min-interval" value="${config.min_interval_minutes}" min="1" max="1440">
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Patterns de détection (un par ligne):</label>
+                <textarea class="form-control" id="config-patterns" rows="4" placeholder="Exemple: qBittorrent.*stalled">${config.detection_patterns.join('\\n')}</textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Filtres de statut (séparés par des virgules):</label>
+                <input type="text" class="form-control" id="config-status-filters" value="${config.status_filters.join(', ')}" placeholder="downloading, queued, failed">
+            </div>
+            
+            <div class="d-flex justify-content-between">
+                <button type="button" class="btn btn-secondary" onclick="closeErrorConfigModal()">Annuler</button>
+                <div>
+                    ${typeName ? `<button type="button" class="btn btn-danger" onclick="deleteErrorType('${typeName}')">🗑️ Supprimer</button>` : ''}
+                    <button type="button" class="btn btn-success" onclick="saveErrorType()">💾 Sauvegarder</button>
+                </div>
+            </div>
+        </form>
+    `;
+}
+
+function saveErrorType() {
+    const form = document.getElementById('error-type-form');
+    
+    const config = {
+        name: document.getElementById('config-name').value,
+        description: document.getElementById('config-description').value,
+        enabled: document.getElementById('config-enabled').checked,
+        severity: document.getElementById('config-severity').value,
+        auto_correct: document.getElementById('config-auto-correct').checked,
+        max_age_hours: parseInt(document.getElementById('config-max-age').value),
+        min_interval_minutes: parseInt(document.getElementById('config-min-interval').value),
+        detection_patterns: document.getElementById('config-patterns').value
+            .split('\\n')
+            .map(p => p.trim())
+            .filter(p => p.length > 0),
+        status_filters: document.getElementById('config-status-filters').value
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0),
+        conditions: {},
+        actions: editingErrorType ? currentErrorTypes[editingErrorType].actions : []
+    };
+    
+    if (!config.name) {
+        showToast('Le nom du type est requis', 'error');
+        return;
+    }
+    
+    const url = editingErrorType ? 
+        `/api/arr/error-types/${editingErrorType}` : 
+        '/api/arr/error-types';
+    
+    const method = editingErrorType ? 'PUT' : 'POST';
+    
+    apiCall(url, {
+        method: method,
+        body: JSON.stringify(config)
+    })
+    .then(response => {
+        if (response.success) {
+            showToast(response.message, 'success');
+            closeErrorConfigModal();
+            loadErrorTypes();
+            loadErrorStatistics();
+        } else {
+            showToast('Erreur: ' + response.error, 'error');
+        }
+    })
+    .catch(error => {
+        showToast('Erreur API: ' + error.message, 'error');
+    });
+}
+
+function deleteErrorType(typeName) {
+    if (!confirm(`Êtes-vous sûr de vouloir supprimer le type d'erreur "${typeName}" ?`)) {
+        return;
+    }
+    
+    apiCall(`/api/arr/error-types/${typeName}`, {
+        method: 'DELETE'
+    })
+    .then(response => {
+        if (response.success) {
+            showToast(response.message, 'success');
+            closeErrorConfigModal();
+            loadErrorTypes();
+            loadErrorStatistics();
+        } else {
+            showToast('Erreur: ' + response.error, 'error');
         }
     })
     .catch(error => {
@@ -2379,5 +2717,28 @@ function showTab(tabName) {
         loadErrorStatistics();
     }
 }
+
+// === ÉVÉNEMENTS GLOBAUX ===
+// Fermeture modal sur clic extérieur
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('error-config-modal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeErrorConfigModal();
+            }
+        });
+    }
+});
+
+// Fermeture modal sur Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('error-config-modal');
+        if (modal && modal.classList.contains('show')) {
+            closeErrorConfigModal();
+        }
+    }
+});
 </script>
 {% endblock %}
