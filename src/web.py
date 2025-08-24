@@ -774,7 +774,7 @@ def torrents_list():
     search = request.args.get('search', '')
     sort_by = request.args.get('sort', 'added_on')
     sort_dir = request.args.get('dir', 'desc')
-    per_page = 25
+    per_page = min(10000, max(1, int(request.args.get('per_page', 25))))  # Limite max de sécurité
     offset = (page - 1) * per_page
     
     # Validation des paramètres de tri
@@ -1116,17 +1116,68 @@ def api_health():
         "version": "2.0"
     })
 
+@app.route('/api/torrents/error_ids', methods=['GET'])
+def get_error_torrent_ids():
+    """API pour récupérer tous les IDs des torrents en erreur"""
+    try:
+        search = request.args.get('search', '')
+        
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            
+            # Requête pour récupérer tous les IDs des torrents en erreur
+            base_query = """
+                SELECT t.id
+                FROM torrents t
+                LEFT JOIN torrent_details td ON t.id = td.id
+                WHERE t.status != 'deleted'
+                AND (t.status = 'error' OR td.status = 'error')
+            """
+            
+            params = []
+            
+            # Ajouter la recherche si présente
+            if search:
+                search_stripped = search.strip()
+                is_probable_id = (
+                    (len(search_stripped) == 13 and search_stripped.isalnum() and search_stripped.isupper()) or
+                    search_stripped.isdigit() or
+                    (len(search_stripped) >= 8 and search_stripped.isalnum() and not ' ' in search_stripped)
+                )
+                
+                if is_probable_id:
+                    base_query += " AND (UPPER(t.id) = UPPER(?))"
+                    params.append(search_stripped)
+                else:
+                    base_query += " AND (COALESCE(td.name, t.filename) LIKE ?)"
+                    params.append(f'%{search}%')
+            
+            c.execute(base_query, params)
+            torrent_ids = [row[0] for row in c.fetchall()]
+            
+            return jsonify({
+                'success': True,
+                'torrent_ids': torrent_ids,
+                'count': len(torrent_ids)
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/torrents/delete_batch', methods=['POST'])
 def delete_torrents_batch():
-    """Suppression en masse avec gestion des limites API et erreurs"""
+    """Suppression en masse avec traitement automatique par lots"""
     data = request.get_json()
     torrent_ids = data.get('torrent_ids', [])
     
     if not torrent_ids or len(torrent_ids) == 0:
         return jsonify({'success': False, 'error': 'Aucun torrent sélectionné'}), 400
     
-    if len(torrent_ids) > 100:  # Limite de sécurité
-        return jsonify({'success': False, 'error': 'Maximum 100 torrents par lot'}), 400
+    # Plus de limite fixe - traitement automatique par lots
+    total_torrents = len(torrent_ids)
     
     try:
         token = load_token()
@@ -1136,11 +1187,17 @@ def delete_torrents_batch():
         # Démarrer le traitement en arrière-plan
         result = process_batch_deletion(token, torrent_ids)
         
+        # Message adapté selon le nombre
+        if total_torrents <= 50:
+            message = f'Suppression de {total_torrents} torrents démarrée'
+        else:
+            message = f'Suppression de {total_torrents} torrents démarrée (traitement par lots automatique)'
+        
         return jsonify({
             'success': True,
-            'message': f'Suppression de {len(torrent_ids)} torrents démarrée',
+            'message': message,
             'batch_id': result['batch_id'],
-            'total': len(torrent_ids)
+            'total': total_torrents
         })
         
     except Exception as e:
@@ -1171,15 +1228,31 @@ def process_batch_deletion(token, torrent_ids):
     
     # Traitement asynchrone
     def deletion_worker():
-        batch_size = 5  # 5 suppressions simultanées max
-        api_delay = 2   # 2 secondes entre les batches
+        # Paramètres adaptatifs selon le volume
+        total = len(torrent_ids)
+        if total <= 50:
+            batch_size = 10  # Batches plus gros pour petits volumes
+            api_delay = 1    # Délai plus court
+        elif total <= 200:
+            batch_size = 8   # Taille intermédiaire
+            api_delay = 1.5
+        else:
+            batch_size = 5   # Plus conservateur pour gros volumes
+            api_delay = 2
+            
         max_retries = 3
+        
+        logging.info(f"📊 Traitement par lots: {total} torrents, taille de lot: {batch_size}, délai: {api_delay}s")
         
         for i in range(0, len(torrent_ids), batch_size):
             if batch_results['status'] == 'cancelled':
                 break
                 
             batch_torrent_ids = torrent_ids[i:i + batch_size]
+            current_batch = (i // batch_size) + 1
+            total_batches = (len(torrent_ids) + batch_size - 1) // batch_size
+            
+            logging.info(f"🔄 Traitement lot {current_batch}/{total_batches}: {len(batch_torrent_ids)} torrents")
             
             # Traitement du batch actuel
             for torrent_id in batch_torrent_ids:

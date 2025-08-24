@@ -274,6 +274,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div><strong id="selectionCount">0</strong> torrents sélectionnés</div>
     <div style="display: flex; gap: 10px;">
+      <button onclick="selectAllErrorTorrents()" class="btn btn-warning" title="Sélectionne tous les torrents en erreur (toutes pages confondues)">📋 Tous les erreurs</button>
       <button onclick="clearSelection()" class="btn btn-secondary">Désélectionner</button>
       <button onclick="confirmBatchDeletion()" class="btn btn-danger">🗑️ Supprimer</button>
     </div>
@@ -646,8 +647,18 @@ function toggleSelectAll(checkbox) {
 }
 
 function updateSelectionActions() {
-  selectedTorrents.clear();
-  document.querySelectorAll('.torrent-checkbox:checked').forEach(cb => selectedTorrents.add(cb.value));
+  // Ne pas vider selectedTorrents automatiquement pour préserver les sélections multi-pages
+  // Synchroniser avec les checkboxes visibles de la page actuelle
+  const visibleCheckboxes = document.querySelectorAll('.torrent-checkbox');
+  
+  // Ajouter ou retirer selon l'état des checkboxes visibles
+  visibleCheckboxes.forEach(cb => {
+    if (cb.checked && !selectedTorrents.has(cb.value)) {
+      selectedTorrents.add(cb.value);
+    } else if (!cb.checked && selectedTorrents.has(cb.value)) {
+      selectedTorrents.delete(cb.value);
+    }
+  });
   
   const actions = document.getElementById('selectionActions');
   const count = document.getElementById('selectionCount');
@@ -659,12 +670,12 @@ function updateSelectionActions() {
     actions.style.display = 'none';
   }
   
-  // Mise à jour checkbox "tout sélectionner"
+  // Mise à jour checkbox "tout sélectionner" basée uniquement sur les checkboxes visibles
   const selectAll = document.getElementById('selectAll');
   const checked = document.querySelectorAll('.torrent-checkbox:checked').length;
   const total = document.querySelectorAll('.torrent-checkbox').length;
   
-  selectAll.checked = checked === total;
+  selectAll.checked = checked === total && total > 0;
   selectAll.indeterminate = checked > 0 && checked < total;
 }
 
@@ -708,6 +719,83 @@ function confirmBatchDeletion() {
     showLoading(false);
     showToast('❌ Erreur réseau', 'error');
   });
+}
+
+// Fonction pour sélectionner tous les torrents en erreur (toutes pages confondues)
+async function selectAllErrorTorrents() {
+  try {
+    showLoading(true, 'Récupération des torrents en erreur...');
+    
+    // Construire l'URL pour l'API dédiée
+    const currentUrl = new URL(window.location);
+    const searchParams = new URLSearchParams();
+    
+    // Préserver la recherche actuelle si elle existe
+    if (currentUrl.searchParams.get('search')) {
+      searchParams.set('search', currentUrl.searchParams.get('search'));
+    }
+    
+    const response = await fetch(`/api/torrents/error_ids?${searchParams.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    showLoading(false);
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Erreur lors de la récupération');
+    }
+    
+    if (data.count === 0) {
+      showToast('ℹ️ Aucun torrent en erreur trouvé', 'info');
+      return;
+    }
+    
+    // Avertir l'utilisateur s'il y a beaucoup de torrents
+    if (data.count > 50) {
+      const confirm = window.confirm(
+        `Vous êtes sur le point de sélectionner ${data.count} torrents en erreur.\n\n` +
+        `Êtes-vous sûr de vouloir continuer ?`
+      );
+      if (!confirm) {
+        showToast('❌ Opération annulée', 'info');
+        return;
+      }
+    }
+    
+    // Désélectionner tout d'abord
+    clearSelection();
+    
+    // Sélectionner tous les torrents en erreur trouvés
+    data.torrent_ids.forEach(torrentId => {
+      selectedTorrents.add(torrentId);
+      
+      // Si la checkbox existe sur la page actuelle, la cocher visuellement
+      const currentCheckbox = document.querySelector(`.torrent-checkbox[value="${torrentId}"]`);
+      if (currentCheckbox) {
+        currentCheckbox.checked = true;
+      }
+    });
+    
+    // Mise à jour manuelle de l'interface pour préserver la sélection
+    const actions = document.getElementById('selectionActions');
+    const count = document.getElementById('selectionCount');
+    actions.style.display = 'block';
+    count.textContent = selectedTorrents.size;
+    
+    const message = data.count > 25 ? 
+      `✅ ${data.count} torrents en erreur sélectionnés (dépassement de la pagination)` :
+      `✅ ${data.count} torrents en erreur sélectionnés`;
+      
+    showToast(message, 'success');
+    
+  } catch (error) {
+    showLoading(false);
+    console.error('Erreur lors de la sélection des torrents en erreur:', error);
+    showToast('❌ Erreur lors de la récupération des torrents en erreur', 'error');
+  }
 }
 
 // === UTILITAIRES ===
