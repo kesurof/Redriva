@@ -250,18 +250,49 @@ class ArrMonitor:
             return False
     
     def is_download_failed(self, item: Dict[str, Any]) -> bool:
-        """Vérifie si un téléchargement a une erreur spécifique qBittorrent"""
+        """
+        Détection complète des erreurs dans la queue Sonarr/Radarr
+        Basé sur les tests API réels pour détecter tous les types d'erreurs
+        """
+        title = item.get('title', 'Inconnu')
+        
+        # 1. Vérifier trackedDownloadStatus = "warning" (état d'erreur principal)
+        tracked_status = item.get('trackedDownloadStatus', '')
+        if tracked_status == 'warning':
+            logger.debug(f"🚨 Erreur détectée via trackedDownloadStatus=warning: {title}")
+            return True
+        
+        # 2. Vérifier trackedDownloadState = "importBlocked" (import bloqué)
+        tracked_state = item.get('trackedDownloadState', '')
+        if tracked_state == 'importBlocked':
+            logger.debug(f"🚨 Erreur détectée via trackedDownloadState=importBlocked: {title}")
+            return True
+        
+        # 3. Vérifier présence d'errorMessage (message d'erreur explicite)
         error_message = item.get('errorMessage', '')
+        if error_message and error_message.strip():
+            logger.debug(f"🚨 Erreur détectée via errorMessage: {title} - {error_message}")
+            return True
         
-        # Détection stricte : seulement l'erreur qBittorrent spécifique
-        is_qbittorrent_error = (
-            error_message and "qBittorrent is reporting an error" in error_message
-        )
+        # 4. Vérifier status = "failed" (échec explicite)
+        status = item.get('status', '')
+        if status == 'failed':
+            logger.debug(f"🚨 Erreur détectée via status=failed: {title}")
+            return True
         
-        if is_qbittorrent_error:
-            logger.debug(f"🚨 Erreur qBittorrent détectée: {item.get('title', 'Inconnu')}")
+        # 5. Détections supplémentaires pour robustesse
+        # Vérifier si statusMessages contient des erreurs
+        status_messages = item.get('statusMessages', [])
+        if status_messages:
+            for msg in status_messages:
+                if isinstance(msg, dict):
+                    msg_title = msg.get('title', '').lower()
+                    if any(keyword in msg_title for keyword in ['error', 'failed', 'blocked', 'unable']):
+                        logger.debug(f"🚨 Erreur détectée via statusMessages: {title} - {msg_title}")
+                        return True
         
-        return is_qbittorrent_error
+        # Aucune erreur détectée
+        return False
     
     def process_application(self, app_name: str, config: Dict[str, str]) -> int:
         """

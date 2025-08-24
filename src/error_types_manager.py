@@ -324,7 +324,7 @@ class ErrorTypesManager:
     
     def detect_error_type(self, item: Dict[str, Any]) -> Optional[str]:
         """
-        Détecte le type d'erreur d'un élément de queue
+        Détecte le type d'erreur d'un élément de queue avec détection étendue
         
         Args:
             item: Élément de queue Sonarr/Radarr
@@ -332,21 +332,42 @@ class ErrorTypesManager:
         Returns:
             Nom du type d'erreur détecté ou None
         """
+        # Champs à analyser pour la détection d'erreur
         error_message = item.get('errorMessage', '').lower()
         status = item.get('status', '').lower()
+        tracked_status = item.get('trackedDownloadStatus', '').lower()
+        tracked_state = item.get('trackedDownloadState', '').lower()
+        
+        # Construire un texte combiné pour l'analyse des patterns
+        combined_text = f"{error_message} {status} {tracked_status} {tracked_state}".lower()
         
         for error_type_name, config in self.error_types.items():
             if not config.enabled:
                 continue
             
-            # Vérifier les filtres de statut
-            if config.status_filters and status not in config.status_filters:
-                continue
+            # Vérifier les filtres de statut étendus
+            if config.status_filters:
+                status_match = any(s.lower() in [status, tracked_status, tracked_state] for s in config.status_filters)
+                if not status_match:
+                    continue
             
-            # Vérifier les patterns de détection
+            # Vérifier les patterns de détection sur le texte combiné
             for pattern in config.detection_patterns:
-                if re.search(pattern, error_message, re.IGNORECASE):
-                    logger.debug(f"🔍 Erreur détectée: {error_type_name} - {pattern}")
+                if re.search(pattern, combined_text, re.IGNORECASE):
+                    logger.debug(f"🔍 Erreur détectée: {error_type_name} - pattern: {pattern}")
+                    return error_type_name
+                    
+            # Détection par champs spécifiques (nouvelle logique)
+            # Si aucun pattern spécifique n'a matché, utiliser la détection générique
+            if not config.detection_patterns:
+                # Types d'erreur sans patterns spécifiques = erreur générique
+                if any([
+                    tracked_status == 'warning',
+                    tracked_state == 'importblocked',
+                    status == 'failed',
+                    error_message.strip()
+                ]):
+                    logger.debug(f"🔍 Erreur générique détectée: {error_type_name}")
                     return error_type_name
         
         return None
