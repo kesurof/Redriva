@@ -1,3 +1,13 @@
+def show_total_size_to():
+    """
+    Affiche le poids total de tous les torrents (colonne 'bytes') en Téraoctets (To)
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT SUM(bytes) FROM torrents WHERE bytes > 0")
+        total_bytes = c.fetchone()[0] or 0
+        total_to = total_bytes / 1024 / 1024 / 1024 / 1024
+        print(f"\n💾 Poids total de tous les torrents : {total_to:.3f} To")
 #!/usr/bin/env python3
 """
 Redriva - Synchroniseur Real-Debrid
@@ -1879,38 +1889,39 @@ def show_interactive_menu():
     while True:
         # Effacer l'écran (compatible Linux/Mac/Windows)
         os.system('clear' if os.name == 'posix' else 'cls')
-        
+
         print("╔" + "═" * 58 + "╗")
         print("║" + " " * 20 + "🚀 MENU REDRIVA" + " " * 20 + "║")
         print("╠" + "═" * 58 + "╣")
         print("║ Outil de synchronisation Real-Debrid                  ║")
         print("╚" + "═" * 58 + "╝")
-        
+
         print("\n📊 INFORMATIONS & DIAGNOSTIC")
         print("  1. 📈 Statistiques complètes")
         print("  2. 📋 Statistiques compactes")
         print("  3. 🔍 Diagnostiquer les erreurs")
-        
+        print(" 13. 💾 Poids total (To) de tous les torrents")
+
         print("\n🔄 SYNCHRONISATION")
         print("  4. 🧠 Sync intelligent (recommandé)")
         print("  5. 🚀 Sync complet")
         print("  6. 📋 Vue d'ensemble (ultra-rapide)")
         print("  7. ⏮️  Reprendre sync interrompu")
-        
+
         print("\n🔧 MAINTENANCE")
         print("  8. 🔄 Détails uniquement")
         print("  9. 🗑️  Vider la base de données")
         print(" 10. 🔍 Diagnostic du token")
-        
+
         print("\n❓ AIDE & SORTIE")
         print(" 11. 💡 Guide de choix rapide")
         print(" 12. 🏃 Mode commande (passer aux arguments)")
         print("  0. 🚪 Quitter")
-        
+
         print("\n" + "─" * 60)
         
         try:
-            choice = input("👉 Votre choix (0-12) : ").strip()
+            choice = input("👉 Votre choix (0-13) : ").strip()
             
             if choice == "0":
                 print("\n👋 Au revoir ! Merci d'utiliser Redriva.")
@@ -1999,6 +2010,9 @@ def show_interactive_menu():
                 print("📋 Exemple: python src/main.py --sync-smart")
                 return False  # Retourne False pour continuer avec les arguments CLI
                 
+            elif choice == "13":
+                show_total_size_to()
+                input("\n💾 Appuyez sur Entrée pour continuer...")
             else:
                 input("\n❌ Choix invalide. Appuyez sur Entrée pour continuer...")
                 
