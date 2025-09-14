@@ -273,10 +273,12 @@
 <div id="selectionActions" style="display: none; margin-bottom: 15px; padding: 15px; background: #fff3cd; border-radius: var(--border-radius); border: 1px solid #ffeaa7; animation: slideDown 0.4s ease;">
   <div style="display: flex; justify-content: space-between; align-items: center;">
     <div><strong id="selectionCount">0</strong> torrents sélectionnés</div>
-    <div style="display: flex; gap: 10px;">
+      <div style="display: flex; gap: 10px;">
       <button onclick="selectAllErrorTorrents()" class="btn btn-warning" title="Sélectionne tous les torrents en erreur (toutes pages confondues)">📋 Tous les erreurs</button>
+      <button onclick="selectAllHealthErrorTorrents()" class="btn btn-warning" title="Sélectionne tous les torrents avec Erreur 503 (health_error)">🚨 Tous les health_error</button>
       <button onclick="clearSelection()" class="btn btn-secondary">Désélectionner</button>
-      <button onclick="confirmBatchDeletion()" class="btn btn-danger">🗑️ Supprimer</button>
+      <button onclick="confirmBatchDeletion()" class="btn btn-danger">🗑️ Supprimer sélectionnés</button>
+      <button onclick="confirmBatchDeletionHealthErrors()" class="btn btn-danger">🗑️ Supprimer health_errors</button>
     </div>
   </div>
 </div>
@@ -831,6 +833,105 @@ async function selectAllErrorTorrents() {
     console.error('Erreur lors de la sélection des torrents en erreur:', error);
     showToast('❌ Erreur lors de la récupération des torrents en erreur', 'error');
   }
+}
+
+// Fonction pour sélectionner tous les torrents ayant health_error (Erreur 503)
+async function selectAllHealthErrorTorrents() {
+  try {
+    showLoading(true, 'Récupération des torrents avec Erreur 503...');
+
+    const currentUrl = new URL(window.location);
+    const searchParams = new URLSearchParams();
+    if (currentUrl.searchParams.get('search')) {
+      searchParams.set('search', currentUrl.searchParams.get('search'));
+    }
+
+    const response = await fetch(`/api/torrents/health_error_ids?${searchParams.toString()}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    showLoading(false);
+
+    if (!data.success) throw new Error(data.error || 'Erreur lors de la récupération');
+
+    if (data.count === 0) {
+      showToast('ℹ️ Aucun torrent avec Erreur 503 trouvé', 'info');
+      return;
+    }
+
+    if (data.count > 50) {
+      const confirmed = window.confirm(`Vous êtes sur le point de sélectionner ${data.count} torrents avec Erreur 503. Continuer ?`);
+      if (!confirmed) { showToast('❌ Opération annulée', 'info'); return; }
+    }
+
+    clearSelection();
+    data.torrent_ids.forEach(id => {
+      selectedTorrents.add(id);
+      const cb = document.querySelector(`.torrent-checkbox[value="${id}"]`);
+      if (cb) cb.checked = true;
+    });
+
+    const actions = document.getElementById('selectionActions');
+    const count = document.getElementById('selectionCount');
+    actions.style.display = 'block';
+    count.textContent = selectedTorrents.size;
+
+    const message = data.count > 25 ? `✅ ${data.count} torrents avec Erreur 503 sélectionnés (dépassement de la pagination)` : `✅ ${data.count} torrents avec Erreur 503 sélectionnés`;
+    showToast(message, 'success');
+
+  } catch (err) {
+    showLoading(false);
+    console.error('Erreur sélection health_error:', err);
+    showToast('❌ Erreur lors de la récupération des torrents avec Erreur 503', 'error');
+  }
+}
+
+// Fonction de confirmation et suppression adaptée aux health_error
+function confirmBatchDeletionHealthErrors() {
+  // Si l'utilisateur a manuellement sélectionné des torrents, supprimer ces IDs
+  if (selectedTorrents.size > 0) {
+    if (!confirm(`Supprimer ${selectedTorrents.size} torrent(s) sélectionné(s) ? Cette action est irréversible.`)) return;
+
+    showLoading(true, `Suppression de ${selectedTorrents.size} torrents...`);
+    fetch('/api/torrents/delete_batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ torrent_ids: Array.from(selectedTorrents) })
+    })
+    .then(r => r.json())
+    .then(data => {
+      showLoading(false);
+      if (data.success) {
+        showToast(`🚀 Suppression de ${data.total} torrents démarrée`, 'info');
+        clearSelection();
+        setTimeout(() => location.reload(), 3000);
+      } else {
+        showToast(`❌ ${data.error}`, 'error');
+      }
+    })
+    .catch(() => { showLoading(false); showToast('❌ Erreur réseau', 'error'); });
+
+    return;
+  }
+
+  // Sinon, supprimer l'ensemble des torrents avec health_error via l'endpoint dédié
+  if (!confirm('Aucun torrent sélectionné manuellement. Souhaitez-vous supprimer TOUS les torrents détectés avec Erreur 503 ?')) return;
+
+  showLoading(true, 'Démarrage suppression des torrents avec Erreur 503...');
+  fetch('/api/torrents/delete_health_errors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    showLoading(false);
+    if (data.success) {
+      showToast(`🚀 Suppression de ${data.total} torrents démarrée`, 'info');
+      setTimeout(() => location.reload(), 3000);
+    } else {
+      showToast(`❌ ${data.error}`, 'error');
+    }
+  })
+  .catch(() => { showLoading(false); showToast('❌ Erreur réseau', 'error'); });
 }
 
 // === UTILITAIRES ===
