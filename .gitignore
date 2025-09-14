@@ -20,6 +20,12 @@ data/
 logs/
 *.log
 
+# Virtualenv local pour développement (ne pas pousser)
+redriva/
+
+# Runtime / PID
+.run/
+
 # Fichiers de test et validation (temporaires)
 test_*.py
 validate_*.py
@@ -87,3 +93,7 @@ secrets/
 *.tmp
 *.swp
 backup_*
+
+# Fichiers locaux sensibles
+data/token
+config/conf.json

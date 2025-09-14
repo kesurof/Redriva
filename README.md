@@ -352,6 +352,121 @@ Ce projet est sous licence MIT - voir le fichier [LICENSE](LICENSE) pour plus de
 
 ---
 
+## 🧑‍💻 Développement (local)
+
+Cette section détaille les commandes et bonnes pratiques pour développer et lancer Redriva en local. Le projet inclut un script d'aide `./dev.sh` qui crée et utilise un virtualenv local nommé `redriva/` et permet de démarrer l'application au premier plan ou en arrière-plan.
+
+1) Pré-requis
+
+  - Python 3.11+ installé
+  - `git` disponible
+  - (optionnel) Docker si vous testez via Docker
+
+2) Préparation rapide
+
+```bash
+# cloner le dépôt
+git clone https://github.com/kesurof/Redriva.git
+cd Redriva
+
+# rendre le script exécutable (si nécessaire)
+chmod +x ./dev.sh
+
+# créer et activer le venv + installer les dépendances (automatique via dev.sh)
+./dev.sh start-foreground
+```
+
+3) Utilisation de `./dev.sh`
+
+Le script `dev.sh` fournit des commandes pratiques pour le développement local. Le venv utilisé s'appelle `redriva/` et **n'est pas** commité grâce à `.gitignore`.
+
+- Lancer en premier plan (utile pour le debug) :
+
+```bash
+./dev.sh start-foreground
+```
+
+- Lancer en arrière-plan (détaché) :
+
+```bash
+./dev.sh start-bg
+```
+
+- Arrêter l'instance en arrière-plan :
+
+```bash
+./dev.sh stop
+```
+
+- Redémarrer :
+
+```bash
+./dev.sh restart
+```
+
+- Vérifier le statut (PID) :
+
+```bash
+./dev.sh status
+```
+
+4) Emplacements utiles
+
+- Virtualenv : `./redriva/` (ignoré par `.gitignore`)
+- Fichiers de log en développement : `./logs/dev.log`
+- PID file (processus background) : `./.run/redriva.pid`
+- Token Real‑Debrid (dev) : `./data/token` (ignoré par `.gitignore`)
+
+5) Commandes utiles supplémentaires
+
+- Lancer l'application sans le script (exécutable direct) :
+
+```bash
+python src/web.py
+```
+
+- Voir les logs en temps réel (si lancé via dev.sh en background) :
+
+```bash
+tail -f logs/dev.log
+```
+
+- Tester l'API health :
+
+```bash
+curl -s http://localhost:5000/api/health | jq .
+```
+
+6) Notes de sécurité / .gitignore
+
+Le dépôt contient une règle `.gitignore` qui exclut les éléments locaux suivants :
+
+- `redriva/` (virtualenv local)
+- `logs/` (logs locaux)
+- `.run/` (fichiers PID / runtime)
+- `data/token` (token Real‑Debrid)
+- `config/conf.json` (configuration locale)
+
+Conservez vos tokens et configurations sensibles hors du dépôt.
+
+7) Débogage rapide
+
+- Si vous rencontrez des erreurs d'import : assurez-vous d'avoir installé les dépendances :
+
+```bash
+./dev.sh start-foreground
+# (ou) python -m pip install -r requirements.txt
+```
+
+- Pour forcer la recréation du venv (supprimez d'abord `./redriva/`) :
+
+```bash
+rm -rf redriva/
+./dev.sh start-foreground
+```
+
+---
+
 ## 🚀 Déploiement SSDV2
 
 ### Installation automatique
