@@ -1167,6 +1167,85 @@ def get_error_torrent_ids():
             'error': str(e)
         }), 500
 
+
+@app.route('/api/rd/select_files', methods=['POST'])
+def api_rd_select_files():
+    """Sélection automatique des fichiers vidéos d'un torrent via Real-Debrid.
+
+    Reçoit JSON { "torrent_id": "..." } et appelle l'API Real-Debrid pour
+    lister les fichiers du torrent, appliquer une heuristique de sélection
+    (extensions vidéos, filtrage 'sample'/'trailer'...) puis appelle
+    l'endpoint de sélection de Real-Debrid.
+    """
+    try:
+        payload = request.get_json() or {}
+        torrent_id = payload.get('torrent_id')
+        if not torrent_id:
+            return jsonify({'success': False, 'error': 'torrent_id manquant'}), 400
+
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'}), 401
+
+        # Helper: récupérer les fichiers depuis RD
+        def _rd_get_torrent_files(token: str, torrent_id: str):
+            url = f'https://api.real-debrid.com/rest/1.0/torrents/files/{torrent_id}'
+            headers = {"Authorization": f"Bearer {token}"}
+            resp = requests.get(url, headers=headers, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+
+        # Helper: appeler l'endpoint selectFiles
+        def _rd_select_files(token: str, torrent_id: str, file_indexes: list):
+            url = 'https://api.real-debrid.com/rest/1.0/torrents/selectFiles'
+            headers = {"Authorization": f"Bearer {token}"}
+            data = {"id": torrent_id, "files": ",".join(map(str, file_indexes))}
+            resp = requests.post(url, headers=headers, data=data, timeout=15)
+            resp.raise_for_status()
+            return resp
+
+        files_obj = _rd_get_torrent_files(token, torrent_id)
+        files = files_obj.get('files') or {}
+
+        # Heuristique: extensions vidéos et blacklist simple
+        video_exts = ('.mkv', '.mp4', '.avi', '.mov', '.m4v', '.webm')
+        blacklist = ('sample', 'trailer', '.srt', 'subtitle', 'subs', 'preview')
+
+        selected_indexes = []
+        for idx, info in files.items():
+            path = info.get('path', '').lower()
+            # ignorer si match blacklist
+            if any(b in path for b in blacklist):
+                continue
+            if any(path.endswith(ext) for ext in video_exts):
+                try:
+                    selected_indexes.append(int(idx))
+                except Exception:
+                    # dans le doute, tenter de caster
+                    pass
+
+        if not selected_indexes:
+            return jsonify({'success': False, 'error': 'Aucun fichier vidéo détecté'}), 404
+
+        # Appel à Real-Debrid pour sélectionner
+        _rd_select_files(token, torrent_id, selected_indexes)
+
+        logging.info(f"Selected files for torrent {torrent_id}: {selected_indexes}")
+        # Optionnel: mettre à jour la base de données locale ou journaliser
+
+        return jsonify({'success': True, 'selected': selected_indexes})
+
+    except requests.HTTPError as e:
+        logging.exception('Erreur API Real-Debrid')
+        try:
+            detail = e.response.text
+        except Exception:
+            detail = str(e)
+        return jsonify({'success': False, 'error': 'Erreur Real-Debrid', 'detail': detail}), 502
+    except Exception as e:
+        logging.exception('Erreur interne sélection fichiers RD')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/torrents/delete_batch', methods=['POST'])
 def delete_torrents_batch():
     """Suppression en masse avec traitement automatique par lots"""

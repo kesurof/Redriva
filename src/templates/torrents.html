@@ -352,6 +352,9 @@
               {% if torrent.current_status in ['error', 'virus', 'dead'] %}
               <button onclick="reinsertTorrent('{{ torrent.id }}')" class="action-btn" title="Réinsérer">♻️</button>
               {% endif %}
+              {% if torrent.current_status == 'waiting_files_selection' %}
+              <button onclick="onSelectFilesButtonClick('{{ torrent.id }}', this)" class="action-btn" title="Sélectionner les vidéos">🎞️</button>
+              {% endif %}
             </div>
           </td>
         </tr>
@@ -575,6 +578,38 @@ function checkTorrentHealth(id) {
     .catch(() => {
       showLoading(false);
       showToast('❌ Erreur réseau', 'error');
+    });
+}
+
+// === SÉLECTION FICHIERS RD ===
+function onSelectFilesButtonClick(torrentId, btn) {
+  if (!confirm('Sélection automatique des fichiers vidéo pour ce torrent ?')) return;
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = 'Sélection en cours…';
+
+  showLoading(true, 'Sélection des fichiers...');
+
+  fetch('/api/rd/select_files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ torrent_id: torrentId })
+  }).then(r => r.json())
+    .then(res => {
+      showLoading(false);
+      if (res.success) {
+        showToast('✅ Fichiers sélectionnés: ' + (res.selected || []).join(', '), 'success');
+        setTimeout(() => location.reload(), 1200);
+      } else {
+        showToast('❌ ' + (res.error || JSON.stringify(res)), 'error');
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }).catch(err => {
+      showLoading(false);
+      showToast('❌ Erreur réseau: ' + err, 'error');
+      btn.disabled = false;
+      btn.textContent = oldText;
     });
 }
 
@@ -808,7 +843,7 @@ function formatFileSize(bytes) {
 }
 
 function initializeCoverage() {
-  const coverage = {{ coverage|default(0) }};
+  const coverage = {{ coverage|default(0)|tojson }};
   const text = document.getElementById('coverageText');
   const progress = document.getElementById('coverageProgress');
   
