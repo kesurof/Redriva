@@ -26,6 +26,10 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Configuration basique du logging et logger global
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
+
 # Import du gestionnaire de configuration
 from config_manager import get_config, load_token, get_database_path
 
@@ -1168,6 +1172,118 @@ def get_error_torrent_ids():
         }), 500
 
 
+@app.route('/api/torrents/health_error_ids', methods=['GET'])
+def get_health_error_torrent_ids():
+    """API pour récupérer tous les IDs des torrents ayant health_error renseigné (erreur 503 détectée)."""
+    try:
+        search = request.args.get('search', '')
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+
+            base_query = """
+                SELECT td.id
+                FROM torrent_details td
+                LEFT JOIN torrents t ON td.id = t.id
+                WHERE td.health_error IS NOT NULL
+                AND (t.status IS NULL OR t.status != 'deleted')
+            """
+
+            params = []
+
+            if search:
+                search_stripped = search.strip()
+                is_probable_id = (
+                    (len(search_stripped) == 13 and search_stripped.isalnum() and search_stripped.isupper()) or
+                    search_stripped.isdigit() or
+                    (len(search_stripped) >= 8 and search_stripped.isalnum() and not ' ' in search_stripped)
+                )
+
+                if is_probable_id:
+                    base_query += " AND (UPPER(td.id) = UPPER(?))"
+                    params.append(search_stripped)
+                else:
+                    base_query += " AND (COALESCE(td.name, t.filename) LIKE ?)"
+                    params.append(f'%{search}%')
+
+            c.execute(base_query, params)
+            torrent_ids = [row[0] for row in c.fetchall()]
+
+            return jsonify({
+                'success': True,
+                'torrent_ids': torrent_ids,
+                'count': len(torrent_ids)
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/torrents/delete_health_errors', methods=['POST'])
+def delete_health_error_torrents():
+    """Récupère les IDs des torrents avec health_error et lance leur suppression via Real-Debrid (batch).
+
+    Fonctionne comme `/api/torrents/delete_batch` mais cible uniquement les torrents dont
+    `torrent_details.health_error` est renseigné (erreurs 503 détectées). L'UI peut appeler
+    d'abord `/api/torrents/health_error_ids` pour afficher/sélectionner, puis poster ici pour supprimer.
+    """
+    try:
+        # Charger le token Real-Debrid (obligatoire pour suppression réelle)
+        token = load_token()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token Real-Debrid non configuré'}), 401
+
+        # Supporter un paramètre de recherche facultatif (dans le corps JSON ou querystring)
+        data = request.get_json(silent=True) or {}
+        search = data.get('search') if data.get('search') is not None else request.args.get('search', '')
+
+        # Récupérer les IDs concernés
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+            base_query = """
+                SELECT td.id
+                FROM torrent_details td
+                LEFT JOIN torrents t ON td.id = t.id
+                WHERE td.health_error IS NOT NULL
+                AND (t.status IS NULL OR t.status != 'deleted')
+            """
+            params = []
+
+            if search:
+                search_stripped = search.strip()
+                is_probable_id = (
+                    (len(search_stripped) == 13 and search_stripped.isalnum() and search_stripped.isupper()) or
+                    search_stripped.isdigit() or
+                    (len(search_stripped) >= 8 and search_stripped.isalnum() and not ' ' in search_stripped)
+                )
+
+                if is_probable_id:
+                    base_query += " AND (UPPER(td.id) = UPPER(?))"
+                    params.append(search_stripped)
+                else:
+                    base_query += " AND (COALESCE(td.name, t.filename) LIKE ?)"
+                    params.append(f'%{search}%')
+
+            c.execute(base_query, params)
+            torrent_ids = [row[0] for row in c.fetchall()]
+
+        if not torrent_ids:
+            return jsonify({'success': True, 'message': 'Aucun torrent avec health_error à supprimer', 'total': 0})
+
+        # Lancer la suppression par batch (process_batch_deletion gère l'appel RD et la MAJ locale)
+        result = process_batch_deletion(token, torrent_ids)
+
+        return jsonify({
+            'success': True,
+            'message': f'Suppression de {len(torrent_ids)} torrents avec health_error démarrée',
+            'batch_id': result.get('batch_id'),
+            'total': len(torrent_ids)
+        })
+
+    except Exception as e:
+        logging.exception('Erreur delete_health_error_torrents')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/rd/select_files', methods=['POST'])
 def api_rd_select_files():
     """Sélection automatique des fichiers vidéos d'un torrent via Real-Debrid.
@@ -2244,6 +2360,57 @@ def check_single_torrent_health(torrent_id):
         print(f"❌ Erreur lors de la vérification de santé du torrent {torrent_id}: {e}")
         log_event('HEALTH_SINGLE_END', torrent_id=torrent_id, status='error', error=str(e))
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/health/cleanup_503', methods=['GET', 'POST'])
+def cleanup_health_503():
+    """Nettoie (marque deleted) tous les torrents ayant un champ health_error non NULL (erreur 503 détectée)."""
+    try:
+        log_event('HEALTH_503_CLEAN_START')
+        token = None
+        try:
+            token = load_token()
+        except Exception:
+            # Token non obligatoire pour le nettoyage local
+            token = None
+
+        with sqlite3.connect(DB_PATH) as conn:
+            c = conn.cursor()
+
+            # Récupérer les torrents ayant health_error renseigné
+            c.execute("""
+                SELECT td.id, td.name
+                FROM torrent_details td
+                LEFT JOIN torrents t ON td.id = t.id
+                WHERE td.health_error IS NOT NULL
+                AND (t.status IS NULL OR t.status != 'deleted')
+            """)
+            bad_torrents = c.fetchall()
+
+            if not bad_torrents:
+                log_event('HEALTH_503_CLEAN_END', cleaned=0, status='nothing')
+                return jsonify({'success': True, 'message': 'Aucun torrent avec health_error trouvé', 'cleaned': 0})
+
+            cleaned_count = 0
+            for torrent_id, name in bad_torrents:
+                try:
+                    c.execute("UPDATE torrents SET status = 'deleted' WHERE id = ?", (torrent_id,))
+                    c.execute("UPDATE torrent_details SET status = 'deleted' WHERE id = ?", (torrent_id,))
+                    cleaned_count += 1
+                    logging.info(f"Nettoyé (503): {name} ({torrent_id})")
+                except Exception as e:
+                    logging.error(f"Erreur nettoyage 503 pour {torrent_id}: {e}")
+
+            conn.commit()
+
+            log_event('HEALTH_503_CLEAN_END', cleaned=cleaned_count, status='success')
+
+            return jsonify({'success': True, 'message': f'{cleaned_count} torrent(s) avec health_error nettoyés', 'cleaned': cleaned_count})
+
+    except Exception as e:
+        logging.exception('Erreur cleanup_health_503')
+        log_event('HEALTH_503_CLEAN_END', status='error', error=str(e))
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/health/check_all', methods=['GET', 'POST'])
 def check_all_files_health():
