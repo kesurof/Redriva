@@ -39,11 +39,15 @@ class ArrMonitor:
         
         # Gestionnaire de types d'erreurs
         self.error_types_manager = ErrorTypesManager(config_manager)
-        
+
         # État du moniteur
         self.is_running = False
         self.monitor_thread = None
-        
+        # Background monitoring internals
+        self._monitor_thread = None
+        self._monitor_interval = 300
+        self._stop_event = threading.Event()
+
         logger.info("🔧 Arr Monitor initialisé pour Redriva avec gestion multi-erreurs")
     
     def _setup_session(self):
@@ -177,35 +181,46 @@ class ArrMonitor:
             return []
     
     def blocklist_and_search(self, app_name: str, url: str, api_key: str, download_id: int) -> bool:
-        """Bloque la release défaillante et lance une nouvelle recherche"""
+        """Bloque la release défaillante, la supprime et lance une nouvelle recherche.
+
+        Retourne dict {'status': 'ok'|'error', 'message': str} pour affichage UI/logs.
+        """
         try:
-            # Bloquer la release
-            blocklist_response = self.session.put(
-                f"{url}/api/v3/queue/blocklist",
-                headers={'X-Api-Key': api_key},
-                json={'ids': [download_id]}
-            )
-            
-            if blocklist_response.status_code not in [200, 204]:
-                logger.error(f"❌ {app_name} erreur blocklist: {blocklist_response.status_code}")
-                return False
-            
-            # Supprimer de la queue
-            delete_response = self.session.delete(
+            headers = {'X-Api-Key': api_key}
+
+            # Supprimer en demandant la blocklist côté serveur (beaucoup d'API supportent ce paramètre)
+            delete_resp = self.session.delete(
                 f"{url}/api/v3/queue/{download_id}",
-                headers={'X-Api-Key': api_key},
-                params={'removeFromClient': 'true', 'blocklist': 'false'}
+                headers=headers,
+                params={'removeFromClient': 'true', 'blocklist': 'true'},
+                timeout=15
             )
-            
-            if delete_response.status_code not in [200, 204]:
-                logger.warning(f"⚠️ {app_name} erreur suppression queue: {delete_response.status_code}")
-            
-            logger.info(f"✅ {app_name} release bloquée et supprimée: ID {download_id}")
-            return True
-            
+
+            if delete_resp.status_code not in [200, 204]:
+                msg = f"{app_name} blocklist+delete failed ({delete_resp.status_code})"
+                logger.error(msg + f" body:{getattr(delete_resp,'text',None)}")
+                return {'status': 'error', 'message': msg}
+
+            logger.info(f"🚫 {app_name} release {download_id} blocklisted and removed")
+
+            # Lancer une recherche pour les manqués (hook ou fallback)
+            try:
+                success = self.trigger_missing_search(app_name, url, api_key)
+                if success:
+                    msg = f"Blocked {download_id} and triggered missing search"
+                    logger.info(f"🔍 {app_name} {msg}")
+                    return {'status': 'ok', 'message': msg}
+                else:
+                    msg = f"Blocked {download_id} but trigger_missing_search failed"
+                    logger.warning(f"🔍 {app_name} {msg}")
+                    return {'status': 'ok', 'message': msg}
+            except Exception as e:
+                logger.exception(f"{app_name} exception when triggering search: {e}")
+                return {'status': 'ok', 'message': f"Blocked {download_id} but search error: {e}"}
+
         except requests.exceptions.RequestException as e:
-            logger.error(f"❌ {app_name} exception blocklist: {e}")
-            return False
+            logger.exception(f"❌ {app_name} exception blocklist: {e}")
+            return {'status': 'error', 'message': f'exception:{e}'}
     
     def trigger_missing_search(self, app_name: str, url: str, api_key: str) -> bool:
         """Lance une recherche pour les éléments manqués"""
@@ -272,6 +287,10 @@ class ArrMonitor:
         error_message = item.get('errorMessage', '')
         if error_message and error_message.strip():
             logger.debug(f"🚨 Erreur détectée via errorMessage: {title} - {error_message}")
+            # Détection spécifique pour qBittorrent
+            if isinstance(error_message, str) and 'qBittorrent is reporting an error' in error_message:
+                logger.debug(f"🚨 Erreur qBittorrent détectée: {title} - {error_message}")
+                return True
             return True
         
         # 4. Vérifier status = "failed" (échec explicite)
@@ -287,7 +306,8 @@ class ArrMonitor:
             for msg in status_messages:
                 if isinstance(msg, dict):
                     msg_title = msg.get('title', '').lower()
-                    if any(keyword in msg_title for keyword in ['error', 'failed', 'blocked', 'unable']):
+                    # Détecter aussi le message qBittorrent explicite
+                    if 'qbittorrent' in msg_title or any(keyword in msg_title for keyword in ['error', 'failed', 'blocked', 'unable']):
                         logger.debug(f"🚨 Erreur détectée via statusMessages: {title} - {msg_title}")
                         return True
         

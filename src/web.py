@@ -172,6 +172,105 @@ if ARR_MONITOR_AVAILABLE:
 else:
     print("⚠️ Module de surveillance Arr désactivé - module non disponible")
 
+
+# API pour déclencher manuellement un cycle Arr (utilisé par l'UI)
+@app.route('/api/arr/run', methods=['POST'])
+def api_arr_run():
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
+
+    try:
+        # Obtenir une instance via get_arr_monitor (déjà initialisée plus haut)
+        # arr_monitor variable a été créée lors de l'initialisation globale
+        res = arr_monitor.run_cycle()
+        # Construire des messages sommaires pour le frontend
+        messages = []
+        for app_name, count in res.items():
+            messages.append({'app': app_name, 'actions': count, 'message': f'{count} actions exécutées sur {app_name}'})
+
+        return jsonify({'success': True, 'results': res, 'messages': messages})
+    except Exception as e:
+        logger.exception(f"API arr run failed: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/arr/start', methods=['POST'])
+def api_arr_start():
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
+    try:
+        data = request.get_json() or {}
+        interval = int(data.get('interval', 300))
+        started = arr_monitor.start_monitoring(interval)
+        return jsonify({'success': bool(started), 'started': bool(started), 'interval': interval})
+    except Exception as e:
+        logger.exception(f"API arr start failed: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/arr/stop', methods=['POST'])
+def api_arr_stop():
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
+    try:
+        stopped = arr_monitor.stop_monitoring()
+        return jsonify({'success': bool(stopped), 'stopped': bool(stopped)})
+    except Exception as e:
+        logger.exception(f"API arr stop failed: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/arr/diagnose/<app_name>', methods=['GET'])
+def api_arr_diagnose(app_name: str):
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
+    try:
+        # utiliser la méthode diagnose_queue pour obtenir les items détectés
+        res = arr_monitor.diagnose_queue(app_name)
+        return jsonify({'success': True, 'diagnose': res})
+    except Exception as e:
+        logger.exception(f"API arr diagnose failed: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/arr/item_action', methods=['POST'])
+def api_arr_item_action():
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
+    try:
+        data = request.get_json() or {}
+        app_name = data.get('app')
+        item = data.get('item')
+        if not app_name or not item:
+            return jsonify({'success': False, 'message': 'app and item required'}), 400
+
+        # determine config and download id
+        if app_name.lower().startswith('sonarr'):
+            cfg = arr_monitor.get_sonarr_config()
+        else:
+            cfg = arr_monitor.get_radarr_config()
+
+        if not cfg:
+            return jsonify({'success': False, 'message': 'configuration missing'}), 400
+
+        download_id = item.get('id') or item.get('downloadId') or item.get('releaseId')
+        if not download_id:
+            return jsonify({'success': False, 'message': 'download id not found in item'}), 400
+
+        result = arr_monitor.blocklist_and_search(app_name, cfg['url'], cfg['api_key'], download_id)
+        # Normalize response
+        if isinstance(result, dict):
+            success = result.get('status') == 'ok'
+            message = result.get('message')
+        else:
+            success = bool(result)
+            message = None
+
+        return jsonify({'success': success, 'message': message or ('action executed' if success else 'action failed'), 'raw': result})
+    except Exception as e:
+        logger.exception(f"API arr item_action failed: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 # Variables globales pour le statut des tâches (définies avant les gestionnaires d'erreur)
 task_status = {
     "running": False, 
@@ -279,25 +378,35 @@ def setup_save():
 @app.errorhandler(403)
 def forbidden_error(error):
     """Gestionnaire d'erreur 403 pour diagnostiquer le problème"""
-    print(f"❌ Erreur 403 interceptée: {error}")
-    print(f"   URL demandée: {request.url}")
-    print(f"   Méthode: {request.method}")
-    print(f"   Headers: {dict(request.headers)}")
-    
+    # Log détaillé pour faciliter le debug (remote_addr, endpoint, host, referer)
+    remote = request.remote_addr
+    endpoint = request.endpoint
+    host = request.headers.get('Host')
+    referer = request.headers.get('Referer')
+    logger.warning(f"❌ Erreur 403 interceptée: {error} - url={request.url} method={request.method} remote={remote} endpoint={endpoint} host={host} referer={referer}")
+    # Ne pas exposer tous les headers en production - garder un sous-ensemble utile
+    debug_info = {
+        'url': request.url,
+        'method': request.method,
+        'path': request.path,
+        'remote_addr': remote,
+        'endpoint': endpoint,
+        'host': host,
+        'referer': referer
+    }
+
     if request.path.startswith('/api/'):
+        # Réponse JSON pour les appels API - inclure debug_info pour faciliter le debug en dev
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': 'Accès refusé - Vérifiez votre configuration',
-            'debug_info': {
-                'url': request.url,
-                'method': request.method,
-                'path': request.path
-            }
+            'debug_info': debug_info
         }), 403
-    
+
+    # Pour les pages HTML, afficher un message utilisateur et rendre la page torrents vide
     flash('Erreur 403: Accès refusé - Vérifiez votre configuration', 'error')
-    return render_template('torrents.html', 
-                         torrents=[], 
+    return render_template('torrents.html',
+                         torrents=[],
                          pagination={'page': 1, 'total_pages': 1, 'total': 0},
                          available_statuses=[],
                          total_count=0,

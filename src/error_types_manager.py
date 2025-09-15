@@ -8,6 +8,7 @@ Sonarr/Radarr/Reel avec interface web de configuration
 import json
 import logging
 import re
+import time
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
@@ -84,7 +85,8 @@ class ErrorTypesManager:
         """Initialise les types d'erreurs par défaut pour Sonarr/Radarr/Reel"""
         
         # Erreurs qBittorrent/Transmission
-        self.error_types["qbittorrent_stalled"] = ErrorTypeConfig(
+        if "qbittorrent_stalled" not in self.error_types:
+            self.error_types["qbittorrent_stalled"] = ErrorTypeConfig(
             name="qBittorrent Stalled",
             description="Téléchargements bloqués dans qBittorrent",
             detection_patterns=[
@@ -98,9 +100,10 @@ class ErrorTypesManager:
                 ErrorAction("remove_and_blocklist", priority=1, delay_seconds=300),
                 ErrorAction("trigger_search", priority=2, delay_seconds=600)
             ]
-        )
+            )
         
-        self.error_types["qbittorrent_no_space"] = ErrorTypeConfig(
+        if "qbittorrent_no_space" not in self.error_types:
+            self.error_types["qbittorrent_no_space"] = ErrorTypeConfig(
             name="qBittorrent No Space",
             description="Espace disque insuffisant",
             detection_patterns=[
@@ -114,10 +117,11 @@ class ErrorTypesManager:
                 ErrorAction("pause_download", priority=1),
                 ErrorAction("send_notification", priority=2, parameters={"type": "critical"})
             ]
-        )
+            )
         
         # Erreurs Sonarr spécifiques
-        self.error_types["sonarr_no_files"] = ErrorTypeConfig(
+        if "sonarr_no_files" not in self.error_types:
+            self.error_types["sonarr_no_files"] = ErrorTypeConfig(
             name="Sonarr No Files",
             description="Aucun fichier trouvé dans l'archive",
             detection_patterns=[
@@ -131,9 +135,10 @@ class ErrorTypesManager:
                 ErrorAction("remove_and_blocklist", priority=1),
                 ErrorAction("search_alternative", priority=2, delay_seconds=1800)
             ]
-        )
+            )
         
-        self.error_types["sonarr_quality_mismatch"] = ErrorTypeConfig(
+        if "sonarr_quality_mismatch" not in self.error_types:
+            self.error_types["sonarr_quality_mismatch"] = ErrorTypeConfig(
             name="Sonarr Quality Mismatch",
             description="Qualité du fichier ne correspond pas aux attentes",
             detection_patterns=[
@@ -146,10 +151,11 @@ class ErrorTypesManager:
                 ErrorAction("remove_and_blocklist", priority=1),
                 ErrorAction("search_better_quality", priority=2, delay_seconds=3600)
             ]
-        )
+            )
         
         # Erreurs Radarr spécifiques
-        self.error_types["radarr_upgrade_rejected"] = ErrorTypeConfig(
+        if "radarr_upgrade_rejected" not in self.error_types:
+            self.error_types["radarr_upgrade_rejected"] = ErrorTypeConfig(
             name="Radarr Upgrade Rejected",
             description="Mise à niveau de qualité rejetée",
             detection_patterns=[
@@ -162,9 +168,10 @@ class ErrorTypesManager:
             actions=[
                 ErrorAction("log_only", priority=1)
             ]
-        )
+            )
         
-        self.error_types["radarr_import_failed"] = ErrorTypeConfig(
+        if "radarr_import_failed" not in self.error_types:
+            self.error_types["radarr_import_failed"] = ErrorTypeConfig(
             name="Radarr Import Failed",
             description="Échec d'import du fichier",
             detection_patterns=[
@@ -177,10 +184,11 @@ class ErrorTypesManager:
                 ErrorAction("retry_import", priority=1, delay_seconds=600),
                 ErrorAction("remove_and_search", priority=2, delay_seconds=1800)
             ]
-        )
+            )
         
         # Erreurs de réseau/connectivité
-        self.error_types["network_timeout"] = ErrorTypeConfig(
+        if "network_timeout" not in self.error_types:
+            self.error_types["network_timeout"] = ErrorTypeConfig(
             name="Network Timeout",
             description="Timeout de connexion réseau",
             detection_patterns=[
@@ -193,10 +201,11 @@ class ErrorTypesManager:
                 ErrorAction("retry_download", priority=1, delay_seconds=900),
                 ErrorAction("remove_and_search", priority=2, delay_seconds=3600)
             ]
-        )
+            )
         
         # Erreurs indexer
-        self.error_types["indexer_unavailable"] = ErrorTypeConfig(
+        if "indexer_unavailable" not in self.error_types:
+            self.error_types["indexer_unavailable"] = ErrorTypeConfig(
             name="Indexer Unavailable",
             description="Indexer temporairement indisponible",
             detection_patterns=[
@@ -210,10 +219,11 @@ class ErrorTypesManager:
                 ErrorAction("wait_and_retry", priority=1, delay_seconds=1800),
                 ErrorAction("try_other_indexers", priority=2, delay_seconds=3600)
             ]
-        )
+            )
         
         # Erreurs Reel spécifiques
-        self.error_types["reel_symlink_failed"] = ErrorTypeConfig(
+        if "reel_symlink_failed" not in self.error_types:
+            self.error_types["reel_symlink_failed"] = ErrorTypeConfig(
             name="Reel Symlink Failed",
             description="Échec de création de lien symbolique",
             detection_patterns=[
@@ -226,9 +236,26 @@ class ErrorTypesManager:
                 ErrorAction("recreate_symlink", priority=1, delay_seconds=60),
                 ErrorAction("check_permissions", priority=2)
             ]
-        )
+            )
+
+        # Erreur qBittorrent explicitement signalée par Sonarr/Radarr
+        if "qbittorrent_error_reported" not in self.error_types:
+            self.error_types["qbittorrent_error_reported"] = ErrorTypeConfig(
+            name="qBittorrent Error Reported",
+            description="qBittorrent is reporting an error - capture explicite du message",
+            detection_patterns=[
+                r"qBittorrent is reporting an error",
+                r"qBittorrent .* reporting an error",
+            ],
+            severity="high",
+            actions=[
+                ErrorAction("remove_and_blocklist", priority=1, delay_seconds=10),
+                ErrorAction("trigger_search", priority=2, delay_seconds=30)
+            ]
+            )
         
-        self.error_types["reel_path_not_found"] = ErrorTypeConfig(
+        if "reel_path_not_found" not in self.error_types:
+            self.error_types["reel_path_not_found"] = ErrorTypeConfig(
             name="Reel Path Not Found",
             description="Chemin source ou destination introuvable",
             detection_patterns=[
@@ -241,7 +268,7 @@ class ErrorTypesManager:
                 ErrorAction("verify_paths", priority=1),
                 ErrorAction("send_notification", priority=2, parameters={"type": "critical"})
             ]
-        )
+            )
     
     def _register_default_actions(self):
         """Enregistre les gestionnaires d'actions par défaut"""
@@ -267,16 +294,31 @@ class ErrorTypesManager:
         """Charge la configuration personnalisée depuis Redriva"""
         try:
             custom_config = self.config_manager.config.get("error_types", {})
-            
+
+            # Traiter les tombstones (marquage _deleted) pour conserver les suppressions côté UI
+            tombstones = {name for name, data in custom_config.items() if isinstance(data, dict) and data.get('_deleted')}
+
+            # Appliquer les configurations persistées (overrides ou créations)
+            count = 0
             for error_type_name, config_data in custom_config.items():
+                # Ignorer les tombstones côté chargement (on laisse la suppression effective)
+                if isinstance(config_data, dict) and config_data.get('_deleted'):
+                    # Si le type existe dans les defaults, on le supprime (respecter suppression utilisateur)
+                    if error_type_name in self.error_types:
+                        del self.error_types[error_type_name]
+                    continue
+
+                # Sinon, appliquer la configuration persistée
                 if error_type_name in self.error_types:
                     # Mettre à jour la configuration existante
                     self._update_error_type_config(error_type_name, config_data)
                 else:
                     # Créer un nouveau type d'erreur personnalisé
                     self._create_custom_error_type(error_type_name, config_data)
-                    
-            logger.info(f"✅ Configuration personnalisée chargée: {len(custom_config)} types")
+
+                count += 1
+
+            logger.info(f"✅ Configuration personnalisée chargée: {count} types (tombstones: {len(tombstones)})")
             
         except Exception as e:
             logger.warning(f"⚠️ Erreur chargement configuration personnalisée: {e}")
@@ -600,11 +642,18 @@ class ErrorTypesManager:
                 return {"success": False, "message": "Configuration Arr non disponible"}
             
             # Exécuter l'action
-            success = arr_monitor.blocklist_and_search(app_name, config['url'], config['api_key'], download_id)
-            
+            result = arr_monitor.blocklist_and_search(app_name, config['url'], config['api_key'], download_id)
+            # Supporter deux types de retours: bool ou dict {status: 'ok'|'error', message:...}
+            if isinstance(result, dict):
+                success = result.get('status') == 'ok'
+                message = result.get('message')
+            else:
+                success = bool(result)
+                message = None
+
             return {
                 "success": success,
-                "message": "Supprimé et ajouté à la blocklist" if success else "Échec suppression/blocklist"
+                "message": message or ("Supprimé et ajouté à la blocklist" if success else "Échec suppression/blocklist")
             }
             
         except Exception as e:
@@ -765,6 +814,29 @@ class ErrorTypesManager:
                 return {"success": False, "error": f"Type d'erreur déjà existant: {error_type_name}"}
             
             # Créer le nouveau type
+            # Assurer des valeurs par défaut minimales (éviter ErrorTypeConfig __init__ manquant)
+            if 'description' not in config_data:
+                config_data['description'] = ''
+
+            # Normaliser les actions si fournies en dicts simples
+            if 'actions' in config_data and isinstance(config_data['actions'], list):
+                normalized_actions = []
+                for a in config_data['actions']:
+                    if isinstance(a, dict):
+                        # convertir en ErrorAction-like dict minimal
+                        normalized_actions.append({
+                            'name': a.get('name') or a.get('action') or 'log_only',
+                            'enabled': a.get('enabled', True),
+                            'priority': a.get('priority', 1),
+                            'delay_seconds': a.get('delay_seconds', 0),
+                            'max_retries': a.get('max_retries', 3),
+                            'parameters': a.get('parameters', {})
+                        })
+                    else:
+                        normalized_actions.append(a)
+
+                config_data['actions'] = normalized_actions
+
             self._create_custom_error_type(error_type_name, config_data)
             
             # Sauvegarder dans la configuration Redriva
@@ -779,15 +851,22 @@ class ErrorTypesManager:
     def delete_error_type(self, error_type_name: str) -> Dict[str, Any]:
         """Supprime un type d'erreur"""
         try:
-            if error_type_name not in self.error_types:
-                return {"success": False, "error": f"Type d'erreur inconnu: {error_type_name}"}
-            
-            del self.error_types[error_type_name]
-            
-            # Sauvegarder dans la configuration Redriva
+            # Si le type n'est pas présent en mémoire, on veut quand même marquer la suppression
+            # pour éviter que les defaults le recréent au prochain démarrage.
+            existed = error_type_name in self.error_types
+
+            if existed:
+                del self.error_types[error_type_name]
+
+            # Marquer la suppression (tombstone) dans la config persistée
+            if "error_types" not in self.config_manager.config:
+                self.config_manager.config["error_types"] = {}
+
+            self.config_manager.config["error_types"][error_type_name] = {"_deleted": True}
+            # Sauvegarder en préservant les tombstones
             self._save_to_redriva_config()
-            
-            return {"success": True, "message": f"Type d'erreur supprimé: {error_type_name}"}
+
+            return {"success": True, "message": f"Type d'erreur supprimé: {error_type_name}", "was_present": existed}
             
         except Exception as e:
             logger.error(f"❌ Erreur suppression type web: {e}")
@@ -796,11 +875,19 @@ class ErrorTypesManager:
     def _save_to_redriva_config(self):
         """Sauvegarde la configuration dans Redriva"""
         try:
-            # Préparer la configuration pour la sauvegarde
-            config_to_save = {}
-            
+            # Récupérer la config persistée existante pour préserver tombstones et types personnalisés
+            persisted = self.config_manager.config.get("error_types", {}) if isinstance(self.config_manager.config.get("error_types", {}), dict) else {}
+
+            new_persisted = {}
+
+            # Préserver explicitement les tombstones existants
+            for name, data in persisted.items():
+                if isinstance(data, dict) and data.get('_deleted'):
+                    new_persisted[name] = data
+
+            # Écrire/mettre à jour avec les types actuellement en mémoire
             for name, error_type in self.error_types.items():
-                config_to_save[name] = {
+                new_persisted[name] = {
                     "name": error_type.name,
                     "description": error_type.description,
                     "enabled": error_type.enabled,
@@ -813,15 +900,47 @@ class ErrorTypesManager:
                     "actions": [asdict(action) for action in error_type.actions],
                     "conditions": error_type.conditions
                 }
-            
+
+            # Conserver aussi d'autres entrées personnalisées qui ne sont ni tombstone ni en mémoire
+            for name, data in persisted.items():
+                if name in new_persisted:
+                    continue
+                # garder les entrées personnalisées (par exemple créées manuellement dans config)
+                new_persisted[name] = data
+
             # Mettre à jour la configuration Redriva
-            if "error_types" not in self.config_manager.config:
-                self.config_manager.config["error_types"] = {}
-            
-            self.config_manager.config["error_types"] = config_to_save
-            self.config_manager.save_config()
-            
-            logger.info("✅ Configuration types d'erreurs sauvegardée")
+            self.config_manager.config["error_types"] = new_persisted
+            # Sauvegarder la configuration : préférer _save_config() interne (existe dans ConfigManager)
+            # pour éviter appels à des méthodes non-existantes selon l'instance.
+            try:
+                logger.debug("_save_to_redriva_config: tenter sauvegarde, vérification des méthodes disponibles sur ConfigManager")
+                logger.debug(f"has _save_config={hasattr(self.config_manager,'_save_config')}, has set_full_config={hasattr(self.config_manager,'set_full_config')}, config_path={getattr(self.config_manager,'config_path',None)}")
+                if hasattr(self.config_manager, '_save_config'):
+                    logger.debug("_save_to_redriva_config: appel _save_config()")
+                    self.config_manager._save_config(self.config_manager.config)
+                elif hasattr(self.config_manager, 'set_full_config'):
+                    logger.debug("_save_to_redriva_config: appel set_full_config()")
+                    # Utiliser l'API publique si disponible
+                    self.config_manager.set_full_config(self.config_manager.config)
+                else:
+                    # Dernier recours : écrire directement le fichier en respectant config_path
+                    logger.debug("_save_to_redriva_config: aucun helper de sauvegarde trouvé, écriture directe")
+                    try:
+                        path = getattr(self.config_manager, 'config_path', None)
+                        if path:
+                            with open(path, 'w', encoding='utf-8') as f:
+                                json.dump(self.config_manager.config, f, indent=2, ensure_ascii=False)
+                                logger.info(f"✅ Configuration écrite directement sur {path}")
+                    except Exception as e:
+                        logger.error(f"❌ Échec écriture directe config: {e}")
+                        raise
+            except Exception as e:
+                # Logger la trace complète pour faciliter le debug
+                import traceback
+                tb = traceback.format_exc()
+                logger.error(f"❌ Erreur sauvegarde configuration: {e}\n{tb}")
+
+            logger.info("✅ Configuration types d'erreurs sauvegardée (tombstones préservés)")
             
         except Exception as e:
             logger.error(f"❌ Erreur sauvegarde configuration: {e}")

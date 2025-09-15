@@ -379,6 +379,8 @@
 // Variables globales
 let monitoringActive = false;
 let statusUpdateInterval;
+// selected items for the diagnostic table (keyed by idx)
+let diagSelectedItems = {};
 
 // Fonctions utilitaires
 function showToast(message, type) {
@@ -397,6 +399,132 @@ function showToast(message, type) {
         toast.classList.remove('show');
         setTimeout(() => container.removeChild(toast), 300);
     }, 3000);
+}
+
+// Start/stop monitoring (call server endpoints if available)
+function startMonitoring() {
+    const interval = parseInt(document.getElementById('monitoring-interval').value || '300', 10);
+    fetch('/api/arr/start', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({interval})})
+        .then(r => r.json())
+        .then(j => {
+            if (j.success) {
+                showToast('Surveillance démarrée', 'success');
+                updateMonitorStatus(true, interval);
+            } else {
+                showToast('Échec démarrage: ' + (j.message||'erreur'), 'error');
+            }
+        }).catch(e => showToast('Erreur: '+e, 'error'));
+}
+
+function stopMonitoring() {
+    fetch('/api/arr/stop', {method: 'POST'})
+        .then(r => r.json())
+        .then(j => {
+            if (j.success) {
+                showToast('Surveillance arrêtée', 'success');
+                updateMonitorStatus(false);
+            } else {
+                showToast('Échec arrêt: ' + (j.message||'erreur'), 'error');
+            }
+        }).catch(e => showToast('Erreur: '+e, 'error'));
+}
+
+function runManualCycle() {
+    showToast('Lancement du cycle...', 'info');
+    fetch('/api/arr/run', {method: 'POST'})
+        .then(r => r.json())
+        .then(j => {
+            if (j.success) {
+                const msgs = j.messages || [];
+                if (msgs.length === 0) {
+                    showToast('Cycle exécuté: rien à faire', 'info');
+                } else {
+                    msgs.forEach(m => {
+                        const type = (m.actions && m.actions>0) ? 'success' : 'info';
+                        showToast(`${m.app}: ${m.message}`, type);
+                    });
+                }
+                // Afficher résultats détaillés
+                if (j.results) {
+                    const rc = document.getElementById('results-container');
+                    const content = document.getElementById('results-content');
+                    rc.style.display = 'block';
+                    content.innerHTML = '<pre>' + JSON.stringify(j.results, null, 2) + '</pre>';
+                }
+            } else {
+                showToast('Erreur exécution cycle: ' + (j.message||'unknown'), 'error');
+            }
+        }).catch(e => showToast('Erreur réseau: '+e, 'error'));
+}
+
+function updateMonitorStatus(running, interval) {
+    document.getElementById('monitor-running-status').textContent = running ? 'En cours' : 'Arrêté';
+    if (interval) document.getElementById('monitoring-interval').value = interval;
+    const badge = document.getElementById('monitor-status-badge');
+    badge.textContent = running ? 'Actif' : 'Inactif';
+    badge.className = 'badge ' + (running ? 'badge-success' : 'badge-secondary');
+}
+
+// Diagnostiquer une application et afficher les items détectés
+function diagnoseApp(app) {
+    const container = document.getElementById('results-container');
+    const content = document.getElementById('results-content');
+    content.innerHTML = '<em>Chargement...</em>';
+    container.style.display = 'block';
+
+    fetch(`/api/arr/diagnose/${app}`)
+        .then(r => r.json())
+        .then(j => {
+            if (!j.success) {
+                showToast('Erreur diagnostic: ' + (j.message||'unknown'), 'error');
+                content.innerHTML = '<div class="text-danger">Erreur lors du diagnostic</div>';
+                return;
+            }
+
+            const diag = j.diagnose || {};
+            const items = diag.items || [];
+            if (!items.length) {
+                content.innerHTML = '<div>Aucun élément détecté</div>';
+                return;
+            }
+
+            // Construire la table des items avec bouton d'action
+            let html = '<table style="width:100%; border-collapse:collapse;">';
+            html += '<tr><th style="text-align:left;padding:8px;border-bottom:1px solid var(--muted-200);">Titre</th><th style="text-align:left;padding:8px;border-bottom:1px solid var(--muted-200);">État</th><th style="padding:8px;border-bottom:1px solid var(--muted-200);">Action</th></tr>';
+            items.forEach((it, idx) => {
+                const title = it.title || it.name || ('item-'+idx);
+                const status = it.status || it.trackedDownloadStatus || it.trackedDownloadState || '';
+                html += `<tr id="diag-row-${idx}"><td style="padding:8px;border-bottom:1px solid var(--muted-200);">${escapeHtml(title)}</td><td style="padding:8px;border-bottom:1px solid var(--muted-200);">${escapeHtml(status)}</td><td style="padding:8px;border-bottom:1px solid var(--muted-200);"><button class="btn btn-outline-primary" onclick='itemAction("${app}", ${JSON.stringify(it)})'>Supprimer + Blocklist + Recherche</button></td></tr>`;
+            });
+            html += '</table>';
+            content.innerHTML = html;
+        }).catch(e => {
+            showToast('Erreur réseau: '+e, 'error');
+            content.innerHTML = '<div class="text-danger">Erreur réseau</div>';
+        });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function itemAction(app, item) {
+    showToast('Exécution action...', 'info');
+    fetch('/api/arr/item_action', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({app: app, item: item})
+    }).then(r => r.json())
+      .then(j => {
+          if (j.success) {
+              showToast('Action exécutée: '+(j.message || 'ok'), 'success');
+              // Optionnel: rafraîchir la liste
+              setTimeout(() => diagnoseApp(app), 800);
+          } else {
+              showToast('Échec action: '+(j.message||'error'), 'error');
+          }
+      }).catch(e => showToast('Erreur réseau: '+e, 'error'));
 }
 
 function apiCall(url, options = {}) {
@@ -598,24 +726,136 @@ function displayDiagnostic(appName, diagnostic) {
         html += '</ul>';
     }
     
-    if (diagnostic.error_items && diagnostic.error_items.length > 0) {
-        html += '<h6>Éléments en erreur :</h6>';
-        html += '<div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse;">';
-        html += '<thead><tr><th style="padding: 8px; border-bottom: 1px solid #ddd;">Titre</th><th style="padding: 8px; border-bottom: 1px solid #ddd;">Statut</th><th style="padding: 8px; border-bottom: 1px solid #ddd;">Erreur</th></tr></thead><tbody>';
-        
-        diagnostic.error_items.forEach(item => {
-            html += `<tr>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.title}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.status}</td>
-                <td style="padding: 8px; border-bottom: 1px solid #eee; color: var(--error-color);">${item.errorMessage}</td>
-            </tr>`;
-        });
-        
-        html += '</tbody></table></div>';
-    }
+        if (diagnostic.error_items && diagnostic.error_items.length > 0) {
+            html += '<h6>Éléments en erreur :</h6>';
+
+            // Exposer temporairement la liste des items pour les callbacks HTML sans injecter du JSON brut
+            window._diag_items = diagnostic.error_items;
+
+            // Barre d'actions pour la sélection multiple
+            html += '' +
+                '<div id="selection-actions" style="display:none; margin-bottom:8px; gap:8px; align-items:center; display:flex;">' +
+                    '<label style="display:inline-flex; align-items:center; gap:6px; font-size:13px;">' +
+                        '<input id="header-select-checkbox" type="checkbox" onchange="toggleSelectAll(this.checked)"> Tout sélectionner' +
+                    '</label>' +
+                    '<div id="selection-info" style="font-size:13px;color:var(--text-muted);"></div>' +
+                    '<button id="btn-batch-action" class="btn btn-danger" style="display:none;" onclick="performBatchAction(\'' + appName + '\')">Supprimer sélection + Blocklist + Recherche</button>' +
+                '</div>';
+
+            html += '<div style="overflow-x: auto;"><table id="diag-table" style="width: 100%; border-collapse: collapse;">';
+            html += '<thead><tr>' +
+                        '<th style="padding: 8px; border-bottom: 1px solid #ddd; width:40px;"><input id="header-select" type="checkbox" onchange="toggleSelectAll(this.checked)"></th>' +
+                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Titre</th>' +
+                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Statut</th>' +
+                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Erreur</th>' +
+                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Action</th>' +
+                    '</tr></thead><tbody>';
+
+            diagnostic.error_items.forEach((item, idx) => {
+                html += '<tr id="diag-row-' + idx + '">';
+                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200); text-align:center;">' +
+                            '<input type="checkbox" id="diag-select-' + idx + '" onchange="toggleRowSelect(' + idx + ', window._diag_items[' + idx + '], this.checked)">' +
+                        '</td>';
+                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200);">' + escapeHtml(item.title) + '</td>';
+                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200);">' + escapeHtml(item.status) + '</td>';
+                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200); color: var(--error-color);">' + escapeHtml(item.errorMessage) + '</td>';
+                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200);">' +
+                            '<button class="btn btn-outline-primary" onclick="itemAction(\'' + appName + '\', window._diag_items[' + idx + '])">Supprimer + Blocklist + Recherche</button>' +
+                        '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+        }
     
     content.innerHTML = html;
     container.style.display = 'block';
+}
+
+// === Sélection multiple & actions groupées ===
+window._selected_diag = {}; // map idx -> item
+
+function toggleRowSelect(idx, item, checked) {
+    if (checked) {
+        window._selected_diag[idx] = item;
+    } else {
+        delete window._selected_diag[idx];
+    }
+    updateSelectionUI();
+}
+
+function toggleSelectAll(checked) {
+    const table = document.getElementById('diag-table');
+    if (!table) return;
+    const checkboxes = table.querySelectorAll('tbody input[type="checkbox"]');
+    checkboxes.forEach((cb, i) => {
+        cb.checked = checked;
+        const idx = parseInt(cb.id.replace('diag-select-',''), 10);
+        if (checked) {
+            window._selected_diag[idx] = window._diag_items[idx];
+        } else {
+            delete window._selected_diag[idx];
+        }
+    });
+    updateSelectionUI();
+}
+
+function updateSelectionUI() {
+    const count = Object.keys(window._selected_diag || {}).length;
+    const selActions = document.getElementById('selection-actions');
+    const selInfo = document.getElementById('selection-info');
+    const btn = document.getElementById('btn-batch-action');
+    if (!selActions || !selInfo || !btn) return;
+    if (count > 0) {
+        selActions.style.display = 'flex';
+        selInfo.textContent = `${count} sélectionné(s)`;
+        btn.style.display = 'inline-flex';
+    } else {
+        // cacher si aucun
+        selActions.style.display = 'none';
+        selInfo.textContent = '';
+        btn.style.display = 'none';
+    }
+}
+
+function performBatchAction(appName) {
+    const items = Object.values(window._selected_diag || {});
+    if (!items.length) {
+        showToast('Aucun élément sélectionné', 'warning');
+        return;
+    }
+
+    if (!confirm(`Confirmer suppression de ${items.length} élément(s) ?`)) return;
+
+    // Exécuter séquentiellement pour éviter surcharge
+    const results = [];
+    const runNext = (i) => {
+        if (i >= items.length) {
+            // tous faits
+            showToast(`Actions terminées: ${results.filter(r=>r.success).length}/${results.length} réussies`, 'info');
+            // Rafraîchir le diagnostic
+            setTimeout(() => diagnoseApp(appName), 600);
+            window._selected_diag = {};
+            updateSelectionUI();
+            return;
+        }
+        const it = items[i];
+        fetch('/api/arr/item_action', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({app: appName, item: it})
+        }).then(r => r.json())
+          .then(j => {
+              results.push({item: it, success: !!j.success, message: j.message});
+              runNext(i+1);
+          }).catch(e => {
+              results.push({item: it, success: false, message: String(e)});
+              runNext(i+1);
+          });
+    };
+
+    // démarrer
+    runNext(0);
 }
 
 // Ajouter un message dans les logs
