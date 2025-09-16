@@ -154,6 +154,19 @@
   z-index: 1002;
 }
 
+/* Logs UI tweaks */
+.log-entry { display:grid; grid-template-columns: 12px 80px 190px 1fr 34px; gap:12px; align-items:center; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.03); white-space:nowrap; font-family: monospace; font-size:13px; }
+.log-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; flex:0 0 18px; }
+.log-ts { color:var(--text-muted); font-size:12px; width:190px; flex:0 0 190px; text-align:left; }
+/* small colored dot replacing badge */
+.log-dot { width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow: 0 0 0 2px rgba(0,0,0,0.04) inset; justify-self:center; }
+.log-body { overflow:hidden; min-width:0; }
+.log-body .logger-name { display:inline-block; font-size:11px; color:var(--text-muted); margin-right:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:80px; display:inline-block; }
+.log-copy-btn { background: transparent; border:1px solid rgba(255,255,255,0.06); color:var(--text-muted); width:30px; height:26px; border-radius:6px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.log-copy-btn:hover { background: rgba(255,255,255,0.02); color:var(--primary-color); }
+.log-message { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log-entry:last-child { border-bottom:none; }
+
 .toast {
   min-width: 300px;
   padding: 16px 20px;
@@ -190,6 +203,31 @@
   color: var(--primary-700);
 }
 
+/* visual feedback for saved interval */
+.input-saved {
+    box-shadow: 0 0 0 4px rgba(76,175,80,0.12);
+    border-color: #4CAF50 !important;
+    transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+/* Diagnostic banner */
+.diag-banner{display:flex;flex-direction:row;align-items:center;gap:18px;padding:12px;border-radius:8px;background:linear-gradient(90deg, rgba(33,150,243,0.06), rgba(33,150,243,0.02));border-left:6px solid var(--primary-color);margin-bottom:12px}
+.diag-banner .diag-title{font-weight:700;font-size:16px}
+.diag-banner .diag-stats{display:flex;gap:16px;align-items:center;color:var(--text-muted);font-size:14px}
+.diag-breakdown{margin-left:6px;color:var(--text-muted);font-size:13px}
+.diag-breakdown ul{margin:6px 0;padding-left:18px}
+
+.diag-table-wrap{overflow:auto;border-radius:8px;background:#fff;padding:8px;border:1px solid var(--border-color)}
+#diag-table{width:100%;border-collapse:collapse}
+#diag-table th,#diag-table td{padding:10px;text-align:left;border-bottom:1px solid var(--muted-200);vertical-align:middle}
+#diag-table thead th{background:rgba(0,0,0,0.02);font-weight:700}
+#diag-table td .tiny-action{display:inline-flex;gap:8px;align-items:center}
+
+/* action icon in diag table */
+.diag-action-icon{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer}
+.diag-action-icon:hover{background:rgba(0,0,0,0.02)}
+.diag-action-icon svg{width:16px;height:16px;fill:var(--error-color)}
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
   .card { padding: 16px; }
@@ -224,104 +262,85 @@
 @media (max-width: 768px) {
   .col-md-6, .col-md-4 { width: 100%; }
 }
+
+/* === HEADER / SUMMARY BADGES === */
+.header-toolbar{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:18px}
+.header-left{display:flex;gap:14px;align-items:center}
+.page-title{font-size:1.25rem;font-weight:700;display:flex;gap:10px;align-items:center}
+.summary-badges{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge-sm{display:inline-flex;gap:8px;align-items:center;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:600;background:linear-gradient(90deg, rgba(255,255,255,0.6), rgba(255,255,255,0.2));box-shadow:0 4px 14px rgba(22,28,36,0.04);color:#263238;border:1px solid rgba(0,0,0,0.04)}
+.badge-status{background:transparent;border-left:6px solid var(--primary-color);padding-left:10px}
+.header-actions{display:flex;align-items:center;gap:8px}
+/* === COLLAPSIBLE SECTIONS & LIGHTER UI === */
+.section-collapsible { border-radius:8px; overflow:hidden; margin-bottom:16px; border:1px solid rgba(0,0,0,0.03); background: #fff; }
+.section-collapsible .section-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:linear-gradient(180deg, rgba(0,0,0,0.02), transparent); cursor:pointer; }
+.section-collapsible .section-body { padding:14px 16px; display:none; }
+.section-collapsible.open .section-body { display:block; }
+.section-toggle { background:transparent; border:none; font-weight:600; cursor:pointer; color:var(--primary-700); }
+
+/* Hide logs by default to reduce noise */
+#activity-logs{display:block}
+
+
+/* Boutons d'action compacts */
+.action-btn{width:36px;height:36px;padding:0;border:1px solid var(--primary-color);background:transparent;color:var(--primary-color);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;transition:var(--transition)}
+.action-btn:hover{background:var(--primary-color);color:white}
+
+/* Diagnostic table amélioré */
+#diag-table{width:100%;border-collapse:collapse;font-size:14px}
+#diag-table th,#diag-table td{padding:10px;text-align:left;border-bottom:1px solid var(--muted-200)}
+#diag-table tbody tr:nth-child(odd){background:rgba(0,0,0,0.01)}
+
+/* Résultats et containers */
+#results-content pre{background:#fafafa;border:1px solid var(--border-color);padding:12px;border-radius:8px;overflow:auto}
 </style>
 
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>
-                    🔧 Surveillance Sonarr/Radarr
-                </h2>
-                <div>
-                    <span id="monitor-status-badge" class="badge badge-secondary">Chargement...</span>
-                </div>
-            </div>
-
-            <!-- Statut du moniteur -->
-            <div class="row mb-4">
-                <div class="col-md-6">
-                    <div class="card">
-                        <h5 style="margin-bottom: 16px;">
-                            ℹ️ Statut du moniteur
-                        </h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong>État :</strong>
-                                <span id="monitor-running-status">{{ monitor_status.running | default('false') }}</span>
-                            </div>
-                            <div class="col-md-6">
-                                <strong>Version :</strong>
-                                <span id="monitor-version">{{ monitor_status.version | default('N/A') }}</span>
-                            </div>
-                        </div>
-                        <div class="row" style="margin-top: 12px;">
-                            <div class="col-md-6">
-                                <strong>Sonarr :</strong>
-                                <span id="sonarr-enabled" class="badge {{ 'badge-success' if monitor_status.sonarr_enabled else 'badge-secondary' }}">
-                                    {{ 'Activé' if monitor_status.sonarr_enabled else 'Désactivé' }}
-                                </span>
-                            </div>
-                            <div class="col-md-6">
-                                <strong>Radarr :</strong>
-                                <span id="radarr-enabled" class="badge {{ 'badge-success' if monitor_status.radarr_enabled else 'badge-secondary' }}">
-                                    {{ 'Activé' if monitor_status.radarr_enabled else 'Désactivé' }}
-                                </span>
-                            </div>
-                        </div>
+            <div class="header-toolbar">
+                <div class="header-left">
+                    <div class="page-title">🔧 Surveillance Sonarr / Radarr</div>
+                    <div class="summary-badges" aria-hidden="false">
+                        <div id="badge-status" class="badge-sm badge-status">Statut: <strong id="monitor-badge-text" style="margin-left:8px">Chargement...</strong></div>
+                        <div class="badge-sm" id="badge-sonarr">Sonarr: <strong id="badge-sonarr-text">-</strong></div>
+                        <div class="badge-sm" id="badge-radarr">Radarr: <strong id="badge-radarr-text">-</strong></div>
+                        <div class="badge-sm" id="badge-lastcycle">Dernier cycle: <strong id="badge-lastcycle-text">—</strong></div>
                     </div>
                 </div>
 
-                <!-- Contrôles -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <h5 style="margin-bottom: 16px;">
-                            ⚙️ Contrôles
-                        </h5>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <button id="btn-start-monitor" class="btn btn-success" onclick="startMonitoring()">
-                                ▶️ Démarrer la surveillance
-                            </button>
-                            <button id="btn-stop-monitor" class="btn btn-danger" onclick="stopMonitoring()">
-                                ⏹️ Arrêter la surveillance
-                            </button>
-                            <button id="btn-run-cycle" class="btn btn-primary" onclick="runManualCycle()">
-                                🔄 Cycle manuel
-                            </button>
-                        </div>
-                        
-                        <!-- Configuration intervalle -->
-                        <div style="margin-top: 16px;">
-                            <label for="monitoring-interval" style="display: block; margin-bottom: 4px;">Intervalle (secondes) :</label>
-                            <input type="number" id="monitoring-interval" class="form-control" value="300" min="60" max="3600">
-                            <small style="color: var(--text-muted);">Entre 60 secondes et 1 heure</small>
-                        </div>
-                    </div>
-                </div>
+                <!-- ancienne zone d'actions supprimée (contrôles déplacés vers la carte compacte ci-dessous) -->
             </div>
 
-            <!-- Diagnostics -->
+            <!-- Controls (compacted) - status moved to header toolbar -->
             <div class="row mb-4">
                 <div class="col-12">
-                    <div class="card">
-                        <h5 style="margin-bottom: 16px;">
-                            🩺 Diagnostic des applications
-                        </h5>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <button class="btn btn-outline-primary w-100" onclick="diagnoseApp('sonarr')" style="margin-bottom: 8px;">
-                                    📺 Diagnostiquer Sonarr
-                                </button>
-                            </div>
-                            <div class="col-md-6">
-                                <button class="btn btn-outline-primary w-100" onclick="diagnoseApp('radarr')" style="margin-bottom: 8px;">
-                                    🎬 Diagnostiquer Radarr
-                                </button>
+                    <div class="card" style="padding:8px;">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <label for="monitoring-interval" style="font-weight:600;margin:0;">Intervalle (s)</label>
+                            <input type="number" id="monitoring-interval" class="form-control" value="30" min="30" max="3600" style="width:90px;padding:6px;font-size:13px">
+                            <small style="color:var(--text-muted);">30-3600</small>
+                            <!-- Small save button to persist interval changes without heavy UI -->
+                            <button id="btn-save-interval" class="btn" title="Enregistrer intervalle" style="padding:6px 8px;font-size:12px;margin-left:4px;border:1px solid rgba(0,0,0,0.06);background:transparent">💾</button>
+
+                            <button class="btn btn-outline-primary section-toggle" id="toggle-results-btn" style="padding:6px 8px;font-size:12px">Afficher résultats</button>
+                            <!-- selection controls removed (not requested) -->
+                            <button class="btn btn-outline-primary section-toggle" id="toggle-logs-btn" style="padding:6px 8px;font-size:12px">Masquer logs</button>
+
+                                <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+                                <button id="btn-start-monitor" class="btn action-btn" title="Démarrer" onclick="startMonitoring()">▶</button>
+                                <button id="btn-stop-monitor" class="btn action-btn" title="Arrêter" onclick="stopMonitoring()">⏹</button>
+                                <button id="btn-run-cycle" class="btn action-btn" title="Cycle manuel" onclick="runManualCycle()">🔄</button>
+                                <button class="btn action-btn" title="Diagnostiquer Sonarr" onclick="diagnoseApp('sonarr')">📺</button>
+                                <button class="btn action-btn" title="Diagnostiquer Radarr" onclick="diagnoseApp('radarr')">🎬</button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+
+            <!-- Ancienne section Diagnostic supprimée : diagnostics exposés via les boutons compacts dans la carte de contrôles -->
 
             <!-- Zone de résultats -->
             <div id="results-container" style="display: none;">
@@ -329,42 +348,64 @@
                     <h5 style="margin-bottom: 16px;">
                         📊 Résultats
                     </h5>
+                    <!-- Bandeau d'actions de sélection (visible quand sélectionnée) -->
+                    <div id="selectionActionsArr" style="display:none; margin-bottom: 12px; padding: 12px; background: #fff3cd; border-radius: var(--border-radius); border: 1px solid #ffeaa7;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div><strong id="selectionCountArr">0</strong> élément(s) sélectionné(s)</div>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <button id="btn-clear-selection-arr" class="btn btn-secondary">Désélectionner</button>
+                                <button id="btn-batch-delete-arr" class="btn btn-danger">🗑️ Supprimer sélection</button>
+                            </div>
+                        </div>
+                    </div>
                     <div id="results-content"></div>
                 </div>
             </div>
 
-            <!-- Types d'erreurs configurés -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="d-flex justify-content-between align-items-center" style="margin-bottom: 16px;">
-                            <h5 style="margin: 0;">
-                                🎛️ Types d'erreurs configurés
-                            </h5>
-                            <button class="btn btn-secondary" onclick="loadErrorTypes()" style="padding: 4px 8px; font-size: 12px;">
-                                🔄 Actualiser
-                            </button>
-                        </div>
-                        <div id="error-types-list">
-                            <div style="color: var(--text-muted);">Chargement des types d'erreurs...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
 
             <!-- Logs temps réel -->
             <div class="row">
                 <div class="col-12">
                     <div class="card">
-                        <div class="d-flex justify-content-between align-items-center" style="margin-bottom: 16px;">
+                        <div class="d-flex justify-content-between align-items-center" style="margin-bottom: 16px; gap:10px;">
                             <h5 style="margin: 0;">
                                 💬 Activité récente
                             </h5>
-                            <button class="btn btn-secondary" onclick="refreshLogs()" style="padding: 4px 8px; font-size: 12px;">
-                                🔄 Actualiser
-                            </button>
+                                    <div style="display:flex;align-items:center;gap:8px;">
+                                <label for="log-level-filter" style="color:var(--text-muted);font-weight:600;font-size:13px;">Niveau</label>
+                                <select id="log-level-filter" class="form-control" style="width:120px;padding:6px 8px;">
+                                    <option value="ALL">Tous</option>
+                                    <option value="INFO">Info</option>
+                                    <option value="WARNING">Warning</option>
+                                    <option value="ERROR">Error</option>
+                                    <option value="CRITICAL">Critical</option>
+                                </select>
+                                <label for="log-logger-filter" style="color:var(--text-muted);font-weight:600;font-size:13px;margin-left:6px;">Logger</label>
+                                <select id="log-logger-filter" class="form-control" style="width:150px;padding:6px 8px;">
+                                    <option value="arr_monitor">arr_monitor</option>
+                                    <option value="root">root</option>
+                                    <option value="werkzeug">werkzeug</option>
+                                    <option value="ALL">Tous</option>
+                                </select>
+                                <!-- Hauteur des logs: contrôle range + number -->
+                                <div style="display:flex;align-items:center;gap:8px;margin-left:6px;">
+                                    <label for="log-height-range" style="color:var(--text-muted);font-weight:600;font-size:13px;margin-right:6px;">Hauteur</label>
+                                    <input id="log-height-range" type="range" min="120" max="800" value="300" style="width:140px;">
+                                    <input id="log-height-number" type="number" min="120" max="800" value="300" style="width:68px;padding:6px;border-radius:6px;border:1px solid var(--border-color);">
+                                </div>
+                                <button class="btn btn-secondary" onclick="refreshLogs()" style="padding: 4px 8px; font-size: 12px; margin-left:6px;">
+                                    🔄 Actualiser
+                                </button>
+                                <button id="realtime-toggle" class="btn btn-outline-primary" style="padding: 6px 8px; font-size:12px; margin-left:6px;">▶ Temps réel</button>
+                                
+                                <!-- request_timeout control -->
+                                <label for="request-timeout" style="color:var(--text-muted);font-weight:600;font-size:13px;margin-left:8px;">Req timeout (s)</label>
+                                <input id="request-timeout" class="form-control" type="number" min="1" max="120" value="10" style="width:80px;padding:6px;font-size:13px;margin-left:6px">
+                                <button id="btn-save-timeout" class="btn" title="Enregistrer timeout" style="padding:6px 8px;font-size:12px;margin-left:4px;border:1px solid rgba(0,0,0,0.06);background:transparent">💾</button>
+                            </div>
                         </div>
-                        <div id="activity-logs" class="bg-dark text-light p-3 rounded" style="height: 200px; overflow-y: auto; font-family: monospace;">
+                        <div id="activity-logs" class="bg-dark text-light p-3 rounded" style="height: 300px; overflow-y: auto; font-family: monospace;">
                             <div style="color: var(--text-muted);">Aucune activité récente...</div>
                         </div>
                     </div>
@@ -375,591 +416,828 @@
     </div>
 </div>
 
-<script>
-// Variables globales
-let monitoringActive = false;
-let statusUpdateInterval;
-// selected items for the diagnostic table (keyed by idx)
-let diagSelectedItems = {};
+<!-- Toast template (injected via JS when job starts) -->
+<template id="job-toast-template">
+    <div class="toast info" role="status">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <div>
+                <div style="font-weight:700">Cycle manuel démarré</div>
+                <div id="job-id" style="font-size:12px;color:var(--text-muted)"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-outline-primary" id="view-logs-btn">Voir logs</button>
+                <button class="btn" id="toast-close">Fermer</button>
+            </div>
+        </div>
+    </div>
+</template>
 
-// Fonctions utilitaires
-function showToast(message, type) {
+<script>
+// Consolidated and improved JS for ARR monitor UI
+let monitoringActive = false;
+let statusUpdateInterval = null;
+let cycleRunning = false;
+let logsUpdateInterval = null;
+let lastLogs = [];
+let sseSource = null;
+let sseActive = false;
+
+function showToast(message, type='info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
-    
     container.appendChild(toast);
-    
-    // Afficher le toast
-    setTimeout(() => toast.classList.add('show'), 100);
-    
-    // Supprimer après 3 secondes
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => container.removeChild(toast), 300);
-    }, 3000);
+    setTimeout(() => toast.classList.add('show'), 50);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(()=>toast.remove(), 300); }, 3500);
 }
 
-// Start/stop monitoring (call server endpoints if available)
-function startMonitoring() {
-    const interval = parseInt(document.getElementById('monitoring-interval').value || '300', 10);
-    fetch('/api/arr/start', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({interval})})
-        .then(r => r.json())
-        .then(j => {
-            if (j.success) {
-                showToast('Surveillance démarrée', 'success');
-                updateMonitorStatus(true, interval);
-            } else {
-                showToast('Échec démarrage: ' + (j.message||'erreur'), 'error');
-            }
-        }).catch(e => showToast('Erreur: '+e, 'error'));
-}
+function addLogMessage(type, message) {
+    const logs = document.getElementById('activity-logs');
+    if (!logs) return;
+    const timestamp = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
 
-function stopMonitoring() {
-    fetch('/api/arr/stop', {method: 'POST'})
-        .then(r => r.json())
-        .then(j => {
-            if (j.success) {
-                showToast('Surveillance arrêtée', 'success');
-                updateMonitorStatus(false);
-            } else {
-                showToast('Échec arrêt: ' + (j.message||'erreur'), 'error');
-            }
-        }).catch(e => showToast('Erreur: '+e, 'error'));
-}
+    // format timestamp YYYY-MM-DD HH:MM:SS
+    const fmt = (d) => { const pad = (n) => String(n).padStart(2,'0'); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+    const now = new Date();
+    const ts = document.createElement('div'); ts.className = 'log-ts'; ts.textContent = fmt(now);
 
-function runManualCycle() {
-    showToast('Lancement du cycle...', 'info');
-    fetch('/api/arr/run', {method: 'POST'})
-        .then(r => r.json())
-        .then(j => {
-            if (j.success) {
-                const msgs = j.messages || [];
-                if (msgs.length === 0) {
-                    showToast('Cycle exécuté: rien à faire', 'info');
-                } else {
-                    msgs.forEach(m => {
-                        const type = (m.actions && m.actions>0) ? 'success' : 'info';
-                        showToast(`${m.app}: ${m.message}`, type);
-                    });
-                }
-                // Afficher résultats détaillés
-                if (j.results) {
-                    const rc = document.getElementById('results-container');
-                    const content = document.getElementById('results-content');
-                    rc.style.display = 'block';
-                    content.innerHTML = '<pre>' + JSON.stringify(j.results, null, 2) + '</pre>';
-                }
-            } else {
-                showToast('Erreur exécution cycle: ' + (j.message||'unknown'), 'error');
-            }
-        }).catch(e => showToast('Erreur réseau: '+e, 'error'));
-}
+    const dot = document.createElement('div'); dot.className = 'log-dot';
+    if (type === 'error' || type === 'critical') dot.style.background = 'var(--error-color)';
+    else if (type === 'warning') dot.style.background = 'var(--warning-color)';
+    else dot.style.background = 'var(--success-color)';
 
-function updateMonitorStatus(running, interval) {
-    document.getElementById('monitor-running-status').textContent = running ? 'En cours' : 'Arrêté';
-    if (interval) document.getElementById('monitoring-interval').value = interval;
-    const badge = document.getElementById('monitor-status-badge');
-    badge.textContent = running ? 'Actif' : 'Inactif';
-    badge.className = 'badge ' + (running ? 'badge-success' : 'badge-secondary');
-}
+    const levelText = document.createElement('div'); levelText.className = 'logger-name'; levelText.style.fontWeight='700'; levelText.textContent = (type||'INFO').toUpperCase();
 
-// Diagnostiquer une application et afficher les items détectés
-function diagnoseApp(app) {
-    const container = document.getElementById('results-container');
-    const content = document.getElementById('results-content');
-    content.innerHTML = '<em>Chargement...</em>';
-    container.style.display = 'block';
+    const body = document.createElement('div'); body.className = 'log-body';
+    const messageEl = document.createElement('div'); messageEl.className = 'log-message'; messageEl.title = message; messageEl.textContent = message;
+    body.appendChild(messageEl);
 
-    fetch(`/api/arr/diagnose/${app}`)
-        .then(r => r.json())
-        .then(j => {
-            if (!j.success) {
-                showToast('Erreur diagnostic: ' + (j.message||'unknown'), 'error');
-                content.innerHTML = '<div class="text-danger">Erreur lors du diagnostic</div>';
-                return;
-            }
+    const copyBtn = document.createElement('button'); copyBtn.className = 'log-copy-btn'; copyBtn.title = 'Copier le message'; copyBtn.innerHTML = '📋';
+    copyBtn.addEventListener('click', (ev) => { ev.stopPropagation(); try { navigator.clipboard.writeText(messageEl.title || messageEl.textContent); showToast('Message copié', 'success'); } catch(e) { showToast('Impossible de copier', 'error'); } });
 
-            const diag = j.diagnose || {};
-            const items = diag.items || [];
-            if (!items.length) {
-                content.innerHTML = '<div>Aucun élément détecté</div>';
-                return;
-            }
+    // order grid: dot, LEVEL, TIMESTAMP, MESSAGE, COPY
+    entry.appendChild(dot);
+    entry.appendChild(levelText);
+    entry.appendChild(ts);
+    entry.appendChild(body);
+    entry.appendChild(copyBtn);
+    logs.insertBefore(entry, logs.firstChild);
 
-            // Construire la table des items avec bouton d'action
-            let html = '<table style="width:100%; border-collapse:collapse;">';
-            html += '<tr><th style="text-align:left;padding:8px;border-bottom:1px solid var(--muted-200);">Titre</th><th style="text-align:left;padding:8px;border-bottom:1px solid var(--muted-200);">État</th><th style="padding:8px;border-bottom:1px solid var(--muted-200);">Action</th></tr>';
-            items.forEach((it, idx) => {
-                const title = it.title || it.name || ('item-'+idx);
-                const status = it.status || it.trackedDownloadStatus || it.trackedDownloadState || '';
-                html += `<tr id="diag-row-${idx}"><td style="padding:8px;border-bottom:1px solid var(--muted-200);">${escapeHtml(title)}</td><td style="padding:8px;border-bottom:1px solid var(--muted-200);">${escapeHtml(status)}</td><td style="padding:8px;border-bottom:1px solid var(--muted-200);"><button class="btn btn-outline-primary" onclick='itemAction("${app}", ${JSON.stringify(it)})'>Supprimer + Blocklist + Recherche</button></td></tr>`;
-            });
-            html += '</table>';
-            content.innerHTML = html;
-        }).catch(e => {
-            showToast('Erreur réseau: '+e, 'error');
-            content.innerHTML = '<div class="text-danger">Erreur réseau</div>';
-        });
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function itemAction(app, item) {
-    showToast('Exécution action...', 'info');
-    fetch('/api/arr/item_action', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({app: app, item: item})
-    }).then(r => r.json())
-      .then(j => {
-          if (j.success) {
-              showToast('Action exécutée: '+(j.message || 'ok'), 'success');
-              // Optionnel: rafraîchir la liste
-              setTimeout(() => diagnoseApp(app), 800);
-          } else {
-              showToast('Échec action: '+(j.message||'error'), 'error');
-          }
-      }).catch(e => showToast('Erreur réseau: '+e, 'error'));
+    const entries = logs.querySelectorAll('.log-entry');
+    if (entries.length > 200) for (let i = 200; i < entries.length; i++) entries[i].remove();
 }
 
 function apiCall(url, options = {}) {
-    return fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        },
-        ...options
-    }).then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response.json();
-    });
+    return fetch(url, { headers: { 'Content-Type': 'application/json', ...(options.headers||{}) }, ...options })
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
 }
 
-// Initialisation au chargement de la page
-document.addEventListener('DOMContentLoaded', function() {
-    updateMonitorStatus();
-    loadErrorTypes();
-    startStatusUpdates();
-});
+function formatMaybeDate(v) {
+    if (!v) return '—';
+    try {
+        // timestamp (seconds)
+        if (typeof v === 'number') return new Date(v*1000).toLocaleString();
+        // iso or string number
+        const n = Number(v);
+        if (!isNaN(n) && String(v).length > 9) return new Date(n*1000).toLocaleString();
+        const d = new Date(v);
+        if (!isNaN(d.getTime())) return d.toLocaleString();
+    } catch(e){}
+    return String(v);
+}
 
-// Mise à jour du statut du moniteur
+function updateUIFromStatus(status) {
+    if (!status) return;
+    monitoringActive = !!status.running;
+    const runTextEl = document.getElementById('monitor-running-status');
+    if (runTextEl) runTextEl.textContent = monitoringActive ? 'En cours' : 'Arrêté';
+
+    const verEl = document.getElementById('monitor-version');
+    if (verEl) verEl.textContent = status.version || 'N/A';
+
+    // Header status badge
+    const badgeContainer = document.getElementById('badge-status');
+    const badgeText = document.getElementById('monitor-badge-text');
+    if (badgeText) badgeText.textContent = monitoringActive ? 'Actif' : 'Inactif';
+    if (badgeContainer) badgeContainer.style.borderLeftColor = monitoringActive ? 'var(--success-color)' : 'var(--text-muted)';
+
+    // Sonarr / Radarr (card + header)
+    const sonarrCard = document.getElementById('sonarr-enabled');
+    const radarrCard = document.getElementById('radarr-enabled');
+    const sonarrHeader = document.getElementById('badge-sonarr');
+    const radarrHeader = document.getElementById('badge-radarr');
+    const sonarrText = document.getElementById('badge-sonarr-text');
+    const radarrText = document.getElementById('badge-radarr-text');
+
+    const sonarrEnabled = !!status.sonarr_enabled;
+    const radarrEnabled = !!status.radarr_enabled;
+
+    if (sonarrCard) { sonarrCard.className = `badge ${sonarrEnabled ? 'badge-success' : 'badge-secondary'}`; sonarrCard.textContent = sonarrEnabled ? 'Activé' : 'Désactivé'; }
+    if (radarrCard) { radarrCard.className = `badge ${radarrEnabled ? 'badge-success' : 'badge-secondary'}`; radarrCard.textContent = radarrEnabled ? 'Activé' : 'Désactivé'; }
+    if (sonarrText) sonarrText.textContent = sonarrEnabled ? 'Activé' : 'Désactivé';
+    if (radarrText) radarrText.textContent = radarrEnabled ? 'Activé' : 'Désactivé';
+    if (sonarrHeader) sonarrHeader.style.borderLeft = sonarrEnabled ? '4px solid var(--success-color)' : '4px solid transparent';
+    if (radarrHeader) radarrHeader.style.borderLeft = radarrEnabled ? '4px solid var(--success-color)' : '4px solid transparent';
+
+    // last cycle
+    const last = status.last_cycle || status.last_run || status.last_cycle_time || status.last_run_at || status.lastCycle;
+    const lastEl = document.getElementById('badge-lastcycle-text');
+    if (lastEl) lastEl.textContent = formatMaybeDate(last);
+
+    updateButtonStates();
+}
+
 function updateMonitorStatus() {
     apiCall('/api/arr/monitor/status')
-        .then(response => {
-            if (response.success) {
-                const status = response.status;
-                monitoringActive = status.running;
-                
-                // Mettre à jour les éléments de l'interface
-                document.getElementById('monitor-running-status').textContent = status.running ? 'En cours' : 'Arrêté';
-                document.getElementById('monitor-version').textContent = status.version || 'N/A';
-                
-                // Badge de statut
-                const badge = document.getElementById('monitor-status-badge');
-                badge.className = `badge ${status.running ? 'badge-success' : 'badge-danger'}`;
-                badge.textContent = status.running ? 'Actif' : 'Inactif';
-                
-                // Sonarr/Radarr status
-                const sonarrBadge = document.getElementById('sonarr-enabled');
-                sonarrBadge.className = `badge ${status.sonarr_enabled ? 'badge-success' : 'badge-secondary'}`;
-                sonarrBadge.textContent = status.sonarr_enabled ? 'Activé' : 'Désactivé';
-                
-                const radarrBadge = document.getElementById('radarr-enabled');
-                radarrBadge.className = `badge ${status.radarr_enabled ? 'badge-success' : 'badge-secondary'}`;
-                radarrBadge.textContent = status.radarr_enabled ? 'Activé' : 'Désactivé';
-                
-                // Boutons
-                updateButtonStates();
-            }
-        })
-        .catch(error => {
-            console.error('Erreur récupération statut:', error);
-            const badge = document.getElementById('monitor-status-badge');
-            badge.className = 'badge badge-warning';
-            badge.textContent = 'Erreur';
-        });
+        .then(resp => { if (resp && resp.success) updateUIFromStatus(resp.status || resp); })
+        .catch(err => { console.error('statut error', err); const badgeText = document.getElementById('monitor-badge-text'); if (badgeText) badgeText.textContent = 'Erreur'; addLogMessage('error', 'Impossible de récupérer le statut'); });
 }
 
-// Mise à jour de l'état des boutons
 function updateButtonStates() {
     const startBtn = document.getElementById('btn-start-monitor');
     const stopBtn = document.getElementById('btn-stop-monitor');
     const cycleBtn = document.getElementById('btn-run-cycle');
-    
+    if (!startBtn || !stopBtn || !cycleBtn) return;
+    if (cycleRunning) { startBtn.disabled = true; stopBtn.disabled = true; cycleBtn.disabled = true; return; }
     if (monitoringActive) {
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        cycleBtn.disabled = true;
+        startBtn.disabled = true; stopBtn.disabled = false; cycleBtn.disabled = true;
     } else {
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        cycleBtn.disabled = false;
+        startBtn.disabled = false; stopBtn.disabled = true; cycleBtn.disabled = false;
     }
 }
 
-// Démarrer la surveillance
 function startMonitoring() {
-    const interval = parseInt(document.getElementById('monitoring-interval').value) || 300;
-    
-    apiCall('/api/arr/monitor/start', {
-        method: 'POST',
-        body: JSON.stringify({ interval: interval })
-    })
-    .then(response => {
-        if (response.success) {
-            addLogMessage('success', response.message);
-            updateMonitorStatus();
-        } else {
-            addLogMessage('error', response.error);
-        }
-    })
-    .catch(error => {
-        addLogMessage('error', 'Erreur lors du démarrage: ' + error.message);
-    });
+    const btn = document.getElementById('btn-start-monitor');
+    const interval = parseInt(document.getElementById('monitoring-interval').value) || 30;
+    if (btn) btn.disabled = true;
+    apiCall('/api/arr/monitor/start', { method: 'POST', body: JSON.stringify({ interval }) })
+        .then(r => { if (r.success) { addLogMessage('success', r.message || 'Surveillance démarrée'); updateMonitorStatus(); showToast('Surveillance démarrée', 'success'); } else { addLogMessage('error', r.error || 'échec'); showToast(r.error||'Échec', 'error'); } })
+        .catch(e => { addLogMessage('error', 'Erreur démarrage: '+e.message); showToast('Erreur démarrage', 'error'); })
+        .finally(() => updateButtonStates());
 }
 
-// Arrêter la surveillance
+// Save interval button handler: persist the chosen interval by calling start endpoint
+document.addEventListener('DOMContentLoaded', () => {
+    const saveBtn = document.getElementById('btn-save-interval');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const num = document.getElementById('monitoring-interval');
+            if (!num) return;
+            let val = parseInt(num.value, 10) || 30;
+            val = Math.max(30, Math.min(3600, val));
+            // Call start endpoint to persist and (re)start monitor with new interval
+            saveBtn.disabled = true;
+            apiCall('/api/arr/monitor/start', { method: 'POST', body: JSON.stringify({ interval: val, persist: true }) })
+                .then(r => {
+                    if (r && r.success) {
+                        showToast('Intervalle enregistré', 'success');
+                        addLogMessage('info', `Intervalle surveillance réglé à ${val}s`);
+                        // Visual feedback: highlight the input briefly
+                        try {
+                            num.classList.add('input-saved');
+                            // change save button icon to check
+                            const orig = saveBtn.innerHTML;
+                            saveBtn.innerHTML = '✓';
+                            setTimeout(() => { num.classList.remove('input-saved'); saveBtn.innerHTML = orig; }, 1200);
+                        } catch (e) { /* ignore visuals failing */ }
+                    } else {
+                        showToast((r && (r.error||r.message)) || 'Échec sauvegarde', 'error');
+                    }
+                })
+                .catch(e => { showToast('Erreur sauvegarde', 'error'); addLogMessage('error', 'Erreur sauvegarde intervalle: '+(e.message||e)); })
+                .finally(() => { saveBtn.disabled = false; });
+        });
+    }
+});
+
 function stopMonitoring() {
+    const btn = document.getElementById('btn-stop-monitor');
+    if (btn) btn.disabled = true;
     apiCall('/api/arr/monitor/stop', { method: 'POST' })
-    .then(response => {
-        if (response.success) {
-            addLogMessage('success', response.message);
-            updateMonitorStatus();
+        .then(r => { if (r.success) { addLogMessage('success', r.message || 'Surveillance arrêtée'); updateMonitorStatus(); showToast('Surveillance arrêtée', 'success'); } else { addLogMessage('error', r.error||'échec'); showToast(r.error||'Échec', 'error'); } })
+        .catch(e => { addLogMessage('error', 'Erreur arrêt: '+e.message); showToast('Erreur arrêt', 'error'); })
+        .finally(() => updateButtonStates());
+}
+
+// override runManualCycle: use background job API and show job toast
+async function runManualCycle() {
+    try {
+        const resp = await fetch('/api/arr/run', { method: 'POST' });
+        const data = await resp.json().catch(()=>({}));
+        if (resp.status === 202 && data.job_id) {
+            addLogMessage('info', `Cycle manuel demarré (job ${data.job_id})`);
+            showJobToast(data.job_id);
+        } else if (data && data.success) {
+            addLogMessage('success', 'Cycle manuel terminé');
+            displayResults(data.results || {});
+            showToast('Cycle manuel terminé', 'success');
         } else {
-            addLogMessage('error', response.error);
+            addLogMessage('error', (data && (data.message || data.error)) || 'Erreur lancement cycle');
+            showToast((data && (data.message || data.error)) || 'Erreur lancement cycle', 'error');
         }
-    })
-    .catch(error => {
-        addLogMessage('error', 'Erreur lors de l\'arrêt: ' + error.message);
+    } catch (e) {
+        addLogMessage('error', 'Erreur lors du cycle: '+(e && e.message?e.message:String(e)));
+        showToast('Erreur réseau', 'error');
+    } finally {
+        updateMonitorStatus(); updateButtonStates();
+    }
+}
+
+// Settings: load request_timeout on page load
+async function loadArrSettings() {
+    try {
+        const r = await fetch('/api/arr/settings');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data && data.request_timeout) document.getElementById('request-timeout').value = data.request_timeout;
+    } catch (e) { console.warn('load settings failed', e); }
+}
+
+document.getElementById('btn-save-timeout').addEventListener('click', async ()=>{
+    const val = parseInt(document.getElementById('request-timeout').value,10);
+    try {
+        const r = await fetch('/api/arr/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_timeout:val,persist:true})});
+        const data = await r.json();
+        if (data && data.success) { showToast('Timeout enregistré','success'); document.getElementById('request-timeout').classList.add('input-saved'); setTimeout(()=>document.getElementById('request-timeout').classList.remove('input-saved'),1200); }
+        else showToast('Erreur enregistrement','error');
+    } catch (e) { showToast('Erreur réseau','error'); }
+});
+
+// helper to show small toast messages
+function showToast(message, type='info'){
+    const t = document.createElement('div'); t.className = `toast ${type} show`; t.style.minWidth='220px'; t.innerHTML = `<div style="font-weight:700">${message}</div>`;
+    document.getElementById('toast-container').appendChild(t);
+    setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); }, 2400);
+}
+
+// job toast implemented elsewhere (showJobToast)
+loadArrSettings();
+
+// show job toast and wire the 'Voir logs' button
+function showJobToast(job_id){
+    const tpl = document.getElementById('job-toast-template');
+    const node = tpl.content.cloneNode(true);
+    const toast = node.querySelector('.toast');
+    toast.querySelector('#job-id').textContent = job_id;
+    document.getElementById('toast-container').appendChild(toast);
+    setTimeout(()=>toast.classList.add('show'), 60);
+
+    const viewBtn = toast.querySelector('#view-logs-btn');
+    viewBtn.addEventListener('click', ()=>{
+        filterLogsByJob(job_id);
+    });
+
+    toast.querySelector('#toast-close').addEventListener('click', ()=>{
+        toast.classList.remove('show'); setTimeout(()=>toast.remove(),300);
     });
 }
 
-// Lancer un cycle manuel
-function runManualCycle() {
-    addLogMessage('info', 'Démarrage du cycle manuel...');
-    
-    apiCall('/api/arr/monitor/cycle', { method: 'POST' })
-    .then(response => {
-        if (response.success) {
-            addLogMessage('success', `${response.message} - ${response.total_corrections} corrections appliquées`);
-            displayResults(response.results);
-        } else {
-            addLogMessage('error', response.error);
+function filterLogsByJob(job_id){
+    // Try to find log entries in DOM
+    const entries = document.querySelectorAll('.log-entry');
+    let found = false;
+    for (const e of entries){
+        if (e.textContent && e.textContent.includes(job_id)){
+            e.scrollIntoView({behavior:'smooth', block:'center'});
+            e.style.background = 'rgba(33,150,243,0.06)';
+            setTimeout(()=>e.style.background='transparent', 3000);
+            found = true; break;
         }
-    })
-    .catch(error => {
-        addLogMessage('error', 'Erreur lors du cycle: ' + error.message);
-    });
+    }
+    if (!found){
+        // refresh logs to fetch new entries
+        refreshLogs();
+    }
 }
 
-// Diagnostiquer une application
+
+// Diagnostic / actions (conservés, légèrement nettoyés)
+function escapeHtml(str) { if (!str) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function itemAction(app, item) {
+    showToast('Exécution action...', 'info');
+    apiCall('/api/arr/item_action', { method: 'POST', body: JSON.stringify({ app, item }) })
+        .then(r => { if (r.success) { showToast('Action exécutée', 'success'); setTimeout(()=>diagnoseApp(app), 700); } else { showToast(r.message||'Échec action', 'error'); } })
+        .catch(e => showToast('Erreur réseau', 'error'));
+}
+
 function diagnoseApp(appName) {
     addLogMessage('info', `Diagnostic ${appName} en cours...`);
-    
+    const container = document.getElementById('results-container');
+    const content = document.getElementById('results-content');
+    if (content) content.innerHTML = '<em>Chargement...</em>';
+    if (container) container.style.display = 'block';
+    // Fallback timeout: si l'API met trop de temps ou ne renvoie rien de pertinent,
+    // afficher un message clair au lieu de rester bloqué sur 'Chargement...'
+    const timeoutMs = 8000;
+    let finished = false;
+    const loadTimer = setTimeout(() => {
+        if (finished) return;
+        try {
+            addLogMessage('info', `${appName}: Aucun résultat (timeout)`);
+            if (content) content.innerHTML = '<div style="color:var(--text-muted);">Aucun résultat</div>';
+        } catch (e) { console.error('diagnoseApp timeout fallback error', e); }
+    }, timeoutMs);
+
     apiCall(`/api/arr/monitor/diagnose/${appName}`)
-    .then(response => {
-        if (response.success) {
-            const diag = response.diagnostic;
-            
-            if (diag.error) {
-                addLogMessage('error', `${appName}: ${diag.error}`);
-            } else {
-                addLogMessage('success', `${appName}: ${diag.total_items} éléments, ${diag.errors_detected} erreurs détectées`);
-                displayDiagnostic(appName, diag);
+        .then(response => {
+            finished = true;
+            clearTimeout(loadTimer);
+            try {
+                if (!response || !response.success) {
+                    addLogMessage('error', (response && response.error) || 'Erreur');
+                    if (content) content.innerHTML = '<div class="text-danger">Erreur</div>';
+                    return;
+                }
+                const diag = response.diagnostic || response.diagnose || {};
+                // If diagnostic is empty-ish, show friendly 'Aucun résultat'
+                if (!diag || (typeof diag === 'object' && Object.keys(diag).length === 0)) {
+                    addLogMessage('info', `${appName}: Aucun résultat`);
+                    if (content) content.innerHTML = '<div style="color:var(--text-muted);">Aucun résultat</div>';
+                    return;
+                }
+                if (diag.error) {
+                    addLogMessage('error', `${appName}: ${diag.error}`);
+                    if (content) content.innerHTML = '<div class="text-danger">Erreur diagnostique</div>';
+                    return;
+                }
+                addLogMessage('success', `${appName}: ${diag.total_items||0} éléments, ${diag.errors_detected||0} erreurs détectées`);
+                // displayDiagnostic can throw; guard it
+                try {
+                    displayDiagnostic(appName, diag);
+                } catch (e) {
+                    console.error('displayDiagnostic error', e);
+                    if (content) content.innerHTML = '<div class="text-danger">Erreur affichage diagnostic</div>';
+                }
+            } catch (e) {
+                console.error('diagnoseApp processing error', e);
+                if (content) content.innerHTML = '<div class="text-danger">Erreur interne</div>';
             }
-        } else {
-            addLogMessage('error', `Erreur diagnostic ${appName}: ${response.error}`);
-        }
-    })
-    .catch(error => {
-        addLogMessage('error', `Erreur diagnostic ${appName}: ` + error.message);
-    });
+        })
+        .catch(e => { finished = true; clearTimeout(loadTimer); addLogMessage('error', 'Erreur diagnostic: '+(e && e.message ? e.message : String(e))); if (content) content.innerHTML = '<div class="text-danger">Erreur réseau</div>'; });
 }
 
-// Afficher les résultats dans la zone dédiée
 function displayResults(results) {
     const container = document.getElementById('results-container');
     const content = document.getElementById('results-content');
-    
-    let html = '<h6>Résultats du cycle :</h6><div class="row">';
-    
-    for (const [app, corrections] of Object.entries(results)) {
-        const badgeClass = corrections > 0 ? 'badge-warning' : 'badge-success';
-        html += `
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="d-flex justify-content-between">
-                        <span style="text-transform: capitalize;">${app}</span>
-                        <span class="badge ${badgeClass}">${corrections} corrections</span>
-                    </div>
-                </div>
-            </div>
-        `;
+    if (!content) return;
+    // If results is empty or has no meaningful entries, show 'Aucun résultat'
+    const hasEntries = results && Object.keys(results).length > 0;
+    if (!hasEntries) {
+        content.innerHTML = '<h6>Résultats du cycle :</h6><div style="color:var(--text-muted);">Aucun résultat</div>';
+        if (container) container.style.display = 'block';
+        return;
     }
-    
+
+    let html = '<h6>Résultats du cycle :</h6><div class="row">';
+    for (const [app, corrections] of Object.entries(results || {})) {
+        const badgeClass = corrections > 0 ? 'badge-warning' : 'badge-success';
+        html += `<div class="col-md-6"><div class="card"><div class="d-flex justify-content-between"><span style="text-transform:capitalize">${escapeHtml(app)}</span><span class="badge ${badgeClass}">${corrections} corrections</span></div></div></div>`;
+    }
     html += '</div>';
     content.innerHTML = html;
-    container.style.display = 'block';
+    if (container) container.style.display = 'block';
 }
 
-// Afficher le diagnostic détaillé
 function displayDiagnostic(appName, diagnostic) {
     const container = document.getElementById('results-container');
     const content = document.getElementById('results-content');
-    
-    let html = `<h6>Diagnostic ${appName} :</h6>`;
-    html += `<p><strong>Total :</strong> ${diagnostic.total_items} éléments</p>`;
-    html += `<p><strong>Erreurs :</strong> ${diagnostic.errors_detected}</p>`;
-    
-    if (diagnostic.status_breakdown) {
-        html += '<h6>Répartition par statut :</h6><ul>';
-        for (const [status, count] of Object.entries(diagnostic.status_breakdown)) {
-            html += `<li>${status}: ${count}</li>`;
+    if (!content) return;
+    // Clear
+    content.innerHTML = '';
+
+    // Banner with basic stats
+    const banner = document.createElement('div'); banner.className = 'diag-banner';
+    const title = document.createElement('div'); title.className = 'diag-title'; title.textContent = `Diagnostic ${appName}`;
+    const stats = document.createElement('div'); stats.className = 'diag-stats';
+    const total = document.createElement('div'); total.innerHTML = `<strong>Total :</strong> ${diagnostic.total_items||0} éléments`;
+    const errors = document.createElement('div'); errors.innerHTML = `<strong>Erreurs :</strong> ${diagnostic.errors_detected||0}`;
+    stats.appendChild(total); stats.appendChild(errors);
+
+    // breakdown
+    const breakdown = document.createElement('div'); breakdown.className = 'diag-breakdown';
+    breakdown.innerHTML = '<strong>Répartition par statut :</strong>';
+    const list = document.createElement('ul');
+    if (diagnostic.status_breakdown && Object.keys(diagnostic.status_breakdown).length) {
+        for (const [k,v] of Object.entries(diagnostic.status_breakdown)) {
+            const li = document.createElement('li'); li.textContent = `${k}: ${v}`; list.appendChild(li);
         }
-        html += '</ul>';
-    }
-    
-        if (diagnostic.error_items && diagnostic.error_items.length > 0) {
-            html += '<h6>Éléments en erreur :</h6>';
-
-            // Exposer temporairement la liste des items pour les callbacks HTML sans injecter du JSON brut
-            window._diag_items = diagnostic.error_items;
-
-            // Barre d'actions pour la sélection multiple
-            html += '' +
-                '<div id="selection-actions" style="display:none; margin-bottom:8px; gap:8px; align-items:center; display:flex;">' +
-                    '<label style="display:inline-flex; align-items:center; gap:6px; font-size:13px;">' +
-                        '<input id="header-select-checkbox" type="checkbox" onchange="toggleSelectAll(this.checked)"> Tout sélectionner' +
-                    '</label>' +
-                    '<div id="selection-info" style="font-size:13px;color:var(--text-muted);"></div>' +
-                    '<button id="btn-batch-action" class="btn btn-danger" style="display:none;" onclick="performBatchAction(\'' + appName + '\')">Supprimer sélection + Blocklist + Recherche</button>' +
-                '</div>';
-
-            html += '<div style="overflow-x: auto;"><table id="diag-table" style="width: 100%; border-collapse: collapse;">';
-            html += '<thead><tr>' +
-                        '<th style="padding: 8px; border-bottom: 1px solid #ddd; width:40px;"><input id="header-select" type="checkbox" onchange="toggleSelectAll(this.checked)"></th>' +
-                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Titre</th>' +
-                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Statut</th>' +
-                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Erreur</th>' +
-                        '<th style="padding: 8px; border-bottom: 1px solid #ddd;">Action</th>' +
-                    '</tr></thead><tbody>';
-
-            diagnostic.error_items.forEach((item, idx) => {
-                html += '<tr id="diag-row-' + idx + '">';
-                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200); text-align:center;">' +
-                            '<input type="checkbox" id="diag-select-' + idx + '" onchange="toggleRowSelect(' + idx + ', window._diag_items[' + idx + '], this.checked)">' +
-                        '</td>';
-                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200);">' + escapeHtml(item.title) + '</td>';
-                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200);">' + escapeHtml(item.status) + '</td>';
-                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200); color: var(--error-color);">' + escapeHtml(item.errorMessage) + '</td>';
-                html += '<td style="padding:8px; border-bottom:1px solid var(--muted-200);">' +
-                            '<button class="btn btn-outline-primary" onclick="itemAction(\'' + appName + '\', window._diag_items[' + idx + '])">Supprimer + Blocklist + Recherche</button>' +
-                        '</td>';
-                html += '</tr>';
-            });
-
-            html += '</tbody></table></div>';
-        }
-    
-    content.innerHTML = html;
-    container.style.display = 'block';
-}
-
-// === Sélection multiple & actions groupées ===
-window._selected_diag = {}; // map idx -> item
-
-function toggleRowSelect(idx, item, checked) {
-    if (checked) {
-        window._selected_diag[idx] = item;
     } else {
-        delete window._selected_diag[idx];
+        const li = document.createElement('li'); li.textContent = '—'; list.appendChild(li);
     }
-    updateSelectionUI();
+    breakdown.appendChild(list);
+
+    banner.appendChild(title);
+    banner.appendChild(stats);
+    banner.appendChild(breakdown);
+    content.appendChild(banner);
+
+    // remember current app for batch actions
+    window._current_diag_app = appName;
+
+    // Table of items
+    if (diagnostic.error_items && diagnostic.error_items.length) {
+        window._diag_items = diagnostic.error_items;
+        const wrap = document.createElement('div'); wrap.className = 'diag-table-wrap';
+        const table = document.createElement('table'); table.id = 'diag-table';
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr><th style="width:40px;"><input id="header-select" type="checkbox" onchange="toggleSelectAll(this.checked)"></th><th>Titre</th><th>Statut</th><th>Erreur</th><th>Action</th></tr>`;
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+
+        diagnostic.error_items.forEach((item, idx) => {
+            const tr = document.createElement('tr'); tr.id = `diag-row-${idx}`;
+            const tdSel = document.createElement('td'); tdSel.style.textAlign = 'center'; tdSel.innerHTML = `<input type="checkbox" id="diag-select-${idx}" onchange="toggleRowSelect(${idx}, window._diag_items[${idx}], this.checked)">`;
+            const tdTitle = document.createElement('td'); tdTitle.innerHTML = escapeHtml(item.title || '—');
+            const tdStatus = document.createElement('td'); tdStatus.innerHTML = escapeHtml(item.status || '—');
+            const tdError = document.createElement('td'); tdError.style.color = 'var(--error-color)'; tdError.innerHTML = escapeHtml(item.errorMessage || '');
+            const tdAction = document.createElement('td');
+            const actionBtn = document.createElement('button'); actionBtn.className = 'diag-action-icon'; actionBtn.title = 'Supprimer'; actionBtn.setAttribute('aria-label','Supprimer');
+            actionBtn.innerHTML = '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9 3v1H4v2h16V4h-5V3H9zm1 5v9h2V8h-2zm4 0v9h2V8h-2zM7 8v9h2V8H7z"/></svg>';
+            actionBtn.onclick = function(){ if (confirm('Confirmer suppression de cet élément ?')) itemAction(appName, window._diag_items[idx]); };
+            tdAction.appendChild(actionBtn);
+
+            tr.appendChild(tdSel); tr.appendChild(tdTitle); tr.appendChild(tdStatus); tr.appendChild(tdError); tr.appendChild(tdAction);
+            tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        content.appendChild(wrap);
+    } else {
+        addLogMessage('info', `${appName}: Aucun élément à afficher`);
+        const nodata = document.createElement('div'); nodata.style.color = 'var(--text-muted)'; nodata.textContent = 'Aucun élément à afficher'; content.appendChild(nodata);
+    }
+
+    if (container) container.style.display = 'block';
 }
 
-function toggleSelectAll(checked) {
-    const table = document.getElementById('diag-table');
-    if (!table) return;
-    const checkboxes = table.querySelectorAll('tbody input[type="checkbox"]');
-    checkboxes.forEach((cb, i) => {
-        cb.checked = checked;
-        const idx = parseInt(cb.id.replace('diag-select-',''), 10);
-        if (checked) {
-            window._selected_diag[idx] = window._diag_items[idx];
-        } else {
-            delete window._selected_diag[idx];
-        }
+window._selected_diag = {};
+function toggleRowSelect(idx, item, checked) { if (checked) window._selected_diag[idx]=item; else delete window._selected_diag[idx]; updateSelectionUI(); try { updateSelectionBannerArr(); } catch(e){} }
+function toggleSelectAll(checked) { const table = document.getElementById('diag-table'); if (!table) return; const cbs = table.querySelectorAll('tbody input[type="checkbox"]'); cbs.forEach(cb=>{ cb.checked=checked; const idx=parseInt(cb.id.replace('diag-select-',''),10); if (checked) window._selected_diag[idx]=window._diag_items[idx]; else delete window._selected_diag[idx]; }); updateSelectionUI(); try { updateSelectionBannerArr(); } catch(e){} }
+function updateSelectionUI() { const count = Object.keys(window._selected_diag||{}).length; const selActions=document.getElementById('selection-actions'); const selInfo=document.getElementById('selection-info'); const btn=document.getElementById('btn-batch-action'); if (!selActions||!selInfo||!btn) return; if (count>0) { selActions.style.display='flex'; selInfo.textContent=`${count} sélectionné(s)`; btn.style.display='inline-flex'; } else { selActions.style.display='none'; selInfo.textContent=''; btn.style.display='none'; } }
+
+// Update Arr monitor selection banner
+function updateSelectionBannerArr() {
+    const count = Object.keys(window._selected_diag||{}).length;
+    const banner = document.getElementById('selectionActionsArr');
+    const counter = document.getElementById('selectionCountArr');
+    if (!banner || !counter) return;
+    if (count > 0) { banner.style.display = 'block'; counter.textContent = count; }
+    else { banner.style.display = 'none'; counter.textContent = '0'; }
+}
+
+// Clear selection in diagnostic list
+document.addEventListener('DOMContentLoaded', () => {
+    const clearBtn = document.getElementById('btn-clear-selection-arr');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+        // Clear internal selection
+        window._selected_diag = {};
+        // Uncheck all checkboxes in the diag table
+        try {
+            const table = document.getElementById('diag-table');
+            if (table) {
+                const cbs = table.querySelectorAll('tbody input[type="checkbox"]');
+                cbs.forEach(cb=>{ cb.checked = false; });
+                const header = document.getElementById('header-select'); if (header) header.checked = false;
+            }
+        } catch(e) { }
+        updateSelectionUI(); updateSelectionBannerArr(); showToast('Sélection effacée', 'info');
     });
-    updateSelectionUI();
-}
 
-function updateSelectionUI() {
-    const count = Object.keys(window._selected_diag || {}).length;
-    const selActions = document.getElementById('selection-actions');
-    const selInfo = document.getElementById('selection-info');
-    const btn = document.getElementById('btn-batch-action');
-    if (!selActions || !selInfo || !btn) return;
-    if (count > 0) {
-        selActions.style.display = 'flex';
-        selInfo.textContent = `${count} sélectionné(s)`;
-        btn.style.display = 'inline-flex';
-    } else {
-        // cacher si aucun
-        selActions.style.display = 'none';
-        selInfo.textContent = '';
-        btn.style.display = 'none';
-    }
-}
+    const delBtn = document.getElementById('btn-batch-delete-arr');
+    if (delBtn) delBtn.addEventListener('click', () => {
+        const items = Object.values(window._selected_diag||{});
+        if (!items.length) { showToast('Aucun élément sélectionné','warning'); return; }
+        if (!confirm(`Supprimer ${items.length} élément(s) ?`)) return;
+        // perform batch deletions sequentially
+        const runNext = i => { if (i>=items.length) { showToast('Actions terminées', 'info'); window._selected_diag = {}; updateSelectionUI(); updateSelectionBannerArr(); return; } const it = items[i]; apiCall('/api/arr/item_action', { method: 'POST', body: JSON.stringify({ app: window._current_diag_app || 'radarr', item: it }) }).then(j=>{ runNext(i+1); }).catch(e=>{ runNext(i+1); }); };
+        runNext(0);
+    });
+
+    // Selection toggle button removed - selection banner is controlled by selection actions only
+});
 
 function performBatchAction(appName) {
-    const items = Object.values(window._selected_diag || {});
-    if (!items.length) {
-        showToast('Aucun élément sélectionné', 'warning');
-        return;
-    }
-
+    const items = Object.values(window._selected_diag||{});
+    if (!items.length) { showToast('Aucun élément sélectionné','warning'); return; }
     if (!confirm(`Confirmer suppression de ${items.length} élément(s) ?`)) return;
-
-    // Exécuter séquentiellement pour éviter surcharge
     const results = [];
-    const runNext = (i) => {
-        if (i >= items.length) {
-            // tous faits
-            showToast(`Actions terminées: ${results.filter(r=>r.success).length}/${results.length} réussies`, 'info');
-            // Rafraîchir le diagnostic
-            setTimeout(() => diagnoseApp(appName), 600);
-            window._selected_diag = {};
-            updateSelectionUI();
-            return;
-        }
-        const it = items[i];
-        fetch('/api/arr/item_action', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({app: appName, item: it})
-        }).then(r => r.json())
-          .then(j => {
-              results.push({item: it, success: !!j.success, message: j.message});
-              runNext(i+1);
-          }).catch(e => {
-              results.push({item: it, success: false, message: String(e)});
-              runNext(i+1);
-          });
-    };
-
-    // démarrer
+    const runNext = i => { if (i>=items.length) { showToast(`Actions terminées: ${results.filter(r=>r.success).length}/${results.length} réussies`,'info'); setTimeout(()=>diagnoseApp(appName),600); window._selected_diag={}; updateSelectionUI(); return; } const it=items[i]; apiCall('/api/arr/item_action',{ method:'POST', body: JSON.stringify({ app: appName, item: it }) }).then(j=>{ results.push({item:it, success: !!j.success, message: j.message}); runNext(i+1); }).catch(e=>{ results.push({item:it, success:false, message:String(e)}); runNext(i+1); }); };
     runNext(0);
 }
 
-// Ajouter un message dans les logs
-function addLogMessage(type, message) {
-    const logs = document.getElementById('activity-logs');
-    const timestamp = new Date().toLocaleTimeString();
-    const icons = {
-        'success': '✅',
-        'error': '❌',
-        'warning': '⚠️',
-        'info': 'ℹ️'
-    };
-    
-    const logEntry = document.createElement('div');
-    logEntry.className = 'log-entry';
-    logEntry.style.color = type === 'error' ? 'var(--error-color)' : 
-                          type === 'success' ? 'var(--success-color)' : 
-                          type === 'warning' ? 'var(--warning-color)' : 
-                          'var(--primary-color)';
-    logEntry.innerHTML = `[${timestamp}] ${icons[type] || 'ℹ️'} ${message}`;
-    
-    logs.insertBefore(logEntry, logs.firstChild);
-    
-    // Garder seulement les 50 dernières entrées
-    const entries = logs.querySelectorAll('.log-entry');
-    if (entries.length > 50) {
-        for (let i = 50; i < entries.length; i++) {
-            entries[i].remove();
-        }
+function refreshLogs() { addLogMessage('info','Logs actualisés'); fetchLogs(); }
+
+// --- Log height control (persisted in localStorage) ---
+function applyLogHeight(px) {
+    const container = document.getElementById('activity-logs');
+    if (!container) return;
+    container.style.height = (px || 300) + 'px';
+}
+
+function loadLogHeight() {
+    try {
+        const v = localStorage.getItem('arr_log_height');
+        const n = v ? parseInt(v, 10) : null;
+        return (n && !isNaN(n)) ? n : 300;
+    } catch(e) { return 300; }
+}
+
+function saveLogHeight(px) {
+    try { localStorage.setItem('arr_log_height', String(px)); } catch(e){}
+}
+
+function bindLogHeightControls() {
+    const range = document.getElementById('log-height-range');
+    const num = document.getElementById('log-height-number');
+    if (!range || !num) return;
+
+    const initial = loadLogHeight();
+    range.value = initial; num.value = initial;
+    applyLogHeight(initial);
+
+    const onChange = (v) => { const val = Math.max(120, Math.min(800, Number(v)||300)); range.value = val; num.value = val; applyLogHeight(val); saveLogHeight(val); };
+
+    range.addEventListener('input', (e) => onChange(e.target.value));
+    num.addEventListener('change', (e) => onChange(e.target.value));
+}
+
+function renderLogsStructured(entries) {
+    const container = document.getElementById('activity-logs');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!entries || entries.length === 0) {
+        const el = document.createElement('div'); el.style.color = 'var(--text-muted)'; el.textContent = 'Aucune activité récente...'; container.appendChild(el); return;
     }
+
+    entries.forEach(e => {
+        const row = document.createElement('div'); row.className = 'log-entry';
+        const lvl = (e.level||'INFO').toUpperCase();
+
+        // format timestamp to strict YYYY-MM-DD HH:MM:SS
+        let t = e.timestamp || '';
+        try {
+            const d = new Date(t);
+            if (!isNaN(d.getTime())) {
+                const pad = (n) => String(n).padStart(2,'0');
+                t = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            }
+        } catch(err) {}
+
+    const ts = document.createElement('div'); ts.className = 'log-ts'; ts.textContent = t;
+
+    const dot = document.createElement('div'); dot.className = 'log-dot';
+    if (lvl === 'ERROR' || lvl === 'CRITICAL') dot.style.background = 'var(--error-color)';
+    else if (lvl === 'WARNING') dot.style.background = 'var(--warning-color)';
+    else dot.style.background = 'var(--success-color)';
+
+    const levelText = document.createElement('div'); levelText.className = 'logger-name'; levelText.style.fontWeight='700'; levelText.textContent = lvl;
+
+    const body = document.createElement('div'); body.className = 'log-body';
+    const msg = document.createElement('div'); msg.className = 'log-message'; msg.title = e.message || e.raw || ''; msg.textContent = e.message || e.raw || '';
+    body.appendChild(msg);
+
+    const copyBtn = document.createElement('button'); copyBtn.className = 'log-copy-btn'; copyBtn.title = 'Copier le message'; copyBtn.innerHTML = '📋';
+    copyBtn.addEventListener('click', (ev) => { ev.stopPropagation(); try { navigator.clipboard.writeText(msg.title || msg.textContent); showToast('Message copié', 'success'); } catch(e) { showToast('Impossible de copier', 'error'); } });
+
+    // append in requested order: dot, LEVEL, TIMESTAMP, MESSAGE, COPY
+    row.appendChild(dot);
+    row.appendChild(levelText);
+    row.appendChild(ts);
+    row.appendChild(body);
+    row.appendChild(copyBtn);
+    container.appendChild(row);
+    });
 }
 
-// Actualiser les logs
-function refreshLogs() {
-    addLogMessage('info', 'Logs actualisés');
+function renderLogs(lines) { renderLogsStructured(lines); }
+
+function getSelectedLevel() {
+    const levelSel = document.getElementById('log-level-filter');
+    return (levelSel && levelSel.value && levelSel.value !== 'ALL') ? levelSel.value : null;
 }
 
-function loadErrorTypes() {
-    apiCall('/api/arr/error-types')
-        .then(response => {
-            if (response.success) {
-                displayErrorTypes(response.error_types);
+function getSelectedLogger() {
+    const sel = document.getElementById('log-logger-filter');
+    if (!sel) return 'arr_monitor';
+    const v = sel.value || 'arr_monitor';
+    return v === 'ALL' ? null : v;
+}
+
+function fetchLogs() {
+    // Request structured logs, using selected logger and level filters
+    const level = getSelectedLevel();
+    const logger = getSelectedLogger();
+    const params = new URLSearchParams({ lines: 200 });
+    if (logger) params.set('logger', logger); else params.set('logger', 'arr_monitor');
+    if (level) params.set('level', level);
+
+    apiCall('/api/arr/logs?' + params.toString())
+        .then(r => {
+            if (r && r.success) {
+                const entries = r.logs || [];
+                const jsonStr = JSON.stringify(entries);
+                if (jsonStr !== JSON.stringify(lastLogs)) {
+                    lastLogs = entries;
+                    renderLogsStructured(lastLogs);
+                }
             } else {
-                document.getElementById('error-types-list').innerHTML = 
-                    '<div style="color: var(--error-color);">Erreur lors du chargement: ' + (response.error || 'Erreur inconnue') + '</div>';
+                const el = document.getElementById('activity-logs'); if (el) el.innerHTML = '<div style="color: var(--error-color);">Erreur chargement logs</div>';
             }
         })
-        .catch(error => {
-            console.error('Erreur chargement types d\'erreurs:', error);
-            document.getElementById('error-types-list').innerHTML = 
-                '<div style="color: var(--error-color);">Erreur de connexion: ' + error.message + '</div>';
-        });
+        .catch(e => { const el = document.getElementById('activity-logs'); if (el) el.innerHTML = '<div style="color: var(--error-color);">Erreur de connexion logs</div>'; });
 }
 
-function displayErrorTypes(errorTypes) {
-    const container = document.getElementById('error-types-list');
-    
-    if (!errorTypes || Object.keys(errorTypes).length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted);">Aucun type d\'erreur configuré</div>';
+function startSSE() {
+    if (sseActive) return;
+    const logger = getSelectedLogger();
+    const url = logger ? `/api/arr/logs/stream?logger=${encodeURIComponent(logger)}` : '/api/arr/logs/stream';
+    try {
+        sseSource = new EventSource(url);
+    } catch (e) {
+        showToast('Impossible d\'établir la connexion temps réel', 'error');
         return;
     }
+    sseActive = true;
+    // stop polling
+    stopLogsUpdates();
 
-    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px;">';
-    
-    for (const [errorTypeName, config] of Object.entries(errorTypes)) {
-        const isEnabled = config.enabled !== false;
-        const badgeClass = isEnabled ? 'badge-success' : 'badge-secondary';
-        const statusText = isEnabled ? 'Activé' : 'Désactivé';
-        
-        html += `
-            <div class="card" style="padding: 12px; border-left: 4px solid ${isEnabled ? 'var(--success-color)' : 'var(--text-muted)'};">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <strong style="font-size: 14px;">${errorTypeName}</strong>
-                    <span class="badge ${badgeClass}" style="font-size: 10px;">${statusText}</span>
-                </div>
-                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-                    ${config.description || 'Aucune description'}
-                </div>
-                <div style="font-size: 11px; color: var(--text-muted);">
-                    Actions: ${config.actions ? config.actions.length : 0} configurées
-                </div>
-            </div>
-        `;
-    }
-    
-    html += '</div>';
-    container.innerHTML = html;
+    sseSource.onmessage = function(evt) {
+        try {
+            const data = JSON.parse(evt.data || '{}');
+            // Prefer structured 'entry' from server, fallback to raw
+            const entry = data.entry || null;
+            if (entry) {
+                // client-side level filter
+                const levelFilter = getSelectedLevel();
+                if (levelFilter && levelFilter !== entry.level) return;
+                // append to the top
+                lastLogs = [entry].concat(lastLogs).slice(0, 200);
+                renderLogsStructured(lastLogs);
+                return;
+            }
+            const raw = data.raw || '';
+            if (raw) {
+                const m = raw.match(/^(\d{4}-\d{2}-\d{2} [0-9:,]+)\s+([A-Z]+)\s+([\w_.-]+):\s*(.*)$/);
+                if (m) {
+                    const parsed = { timestamp: m[1], level: m[2], logger: m[3], message: m[4] };
+                    // if logger filter set, respect it
+                    const loggerFilter = getSelectedLogger();
+                    if (!loggerFilter || parsed.logger === loggerFilter) {
+                        const levelFilter = getSelectedLevel();
+                        if (!levelFilter || levelFilter === parsed.level) {
+                            lastLogs = [parsed].concat(lastLogs).slice(0, 200);
+                            renderLogsStructured(lastLogs);
+                        }
+                    }
+                }
+            }
+        } catch (e) { console.error('SSE parse', e); }
+    };
+
+    sseSource.onerror = function(e) {
+        console.error('sse error', e);
+        showToast('Connexion temps réel interrompue', 'warning');
+        stopSSE();
+    };
+
+    showToast('Connexion temps réel activée', 'success');
 }
 
-// Démarrer les mises à jour automatiques du statut
+function stopSSE() {
+    if (!sseActive) return;
+    try { if (sseSource) sseSource.close(); } catch(e){}
+    sseSource = null; sseActive = false;
+    showToast('Connexion temps réel désactivée', 'info');
+    // resume polling
+    startLogsUpdates();
+}
+
+// Listen to level filter changes
+document.addEventListener('DOMContentLoaded', () => {
+    const levelSel = document.getElementById('log-level-filter');
+    if (levelSel) {
+        levelSel.addEventListener('change', () => {
+            // immediate refresh on change
+            fetchLogs();
+        });
+    }
+});
+
+function loadErrorTypes() { apiCall('/api/arr/error-types').then(r=>{ if (r.success) displayErrorTypes(r.error_types); else document.getElementById('error-types-list').innerHTML = '<div style="color: var(--error-color);">Erreur lors du chargement</div>'; }).catch(e=>{ document.getElementById('error-types-list').innerHTML = '<div style="color: var(--error-color);">Erreur de connexion</div>'; }); }
+function displayErrorTypes(errorTypes) { const container = document.getElementById('error-types-list'); if (!container) return; if (!errorTypes || Object.keys(errorTypes).length===0) { container.innerHTML = '<div style="color: var(--text-muted);">Aucun type d\'erreur configuré</div>'; return; } let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;">'; for (const [k,cfg] of Object.entries(errorTypes)) { const enabled = cfg.enabled!==false; html+=`<div class="card" style="padding:12px; border-left:4px solid ${enabled?'var(--success-color)':'var(--text-muted)'};"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong style="font-size:14px;">${escapeHtml(k)}</strong><span class="badge ${enabled?'badge-success':'badge-secondary'}" style="font-size:10px;">${enabled?'Activé':'Désactivé'}</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">${escapeHtml(cfg.description||'Aucune description')}</div><div style="font-size:11px;color:var(--text-muted);">Actions: ${Array.isArray(cfg.actions)?cfg.actions.length:0} configurées</div></div>`; } html+='</div>'; container.innerHTML=html; }
+
+// Start status updates with conservative polling and visibility awareness.
 function startStatusUpdates() {
-    statusUpdateInterval = setInterval(updateMonitorStatus, 10000); // Toutes les 10 secondes
+    if (statusUpdateInterval) clearInterval(statusUpdateInterval);
+    // initial immediate fetch
+    updateMonitorStatus();
+    // Use a much larger interval to reduce log noise (60s)
+    statusUpdateInterval = setInterval(() => {
+        // don't poll when tab is hidden
+        if (document.hidden) return;
+        updateMonitorStatus();
+    }, 60000);
 }
 
-// Arrêter les mises à jour automatiques
-function stopStatusUpdates() {
-    if (statusUpdateInterval) {
-        clearInterval(statusUpdateInterval);
+function stopStatusUpdates() { if (statusUpdateInterval) clearInterval(statusUpdateInterval); statusUpdateInterval = null; }
+
+function startLogsUpdates() { if (logsUpdateInterval) clearInterval(logsUpdateInterval); fetchLogs(); logsUpdateInterval = setInterval(fetchLogs, 8000); }
+function stopLogsUpdates() { if (logsUpdateInterval) clearInterval(logsUpdateInterval); logsUpdateInterval = null; }
+
+window.addEventListener('beforeunload', () => stopStatusUpdates());
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Bind toggles
+    const toggleResults = document.getElementById('toggle-results-btn');
+    const resultsContainer = document.getElementById('results-container');
+    if (toggleResults && resultsContainer) toggleResults.addEventListener('click', ()=>{ const open = resultsContainer.style.display==='block'; resultsContainer.style.display = open ? 'none' : 'block'; toggleResults.textContent = open ? 'Afficher résultats' : 'Masquer résultats'; });
+    const toggleLogs = document.getElementById('toggle-logs-btn');
+    const logs = document.getElementById('activity-logs');
+    if (toggleLogs && logs) {
+        // Initialize label based on computed visibility (logs visible by default)
+        try {
+            const comp = window.getComputedStyle(logs);
+            const isVisible = comp && comp.display !== 'none' && comp.visibility !== 'hidden' && logs.offsetParent !== null;
+            toggleLogs.textContent = isVisible ? 'Masquer logs' : 'Afficher logs';
+        } catch(e) { /* ignore */ }
+
+        toggleLogs.addEventListener('click', ()=>{
+            try {
+                const comp = window.getComputedStyle(logs);
+                const currentlyVisible = comp && comp.display !== 'none' && comp.visibility !== 'hidden' && logs.offsetParent !== null;
+                if (currentlyVisible) { logs.style.display = 'none'; toggleLogs.textContent = 'Afficher logs'; }
+                else { logs.style.display = 'block'; toggleLogs.textContent = 'Masquer logs'; }
+            } catch(e) {
+                // fallback simple toggle
+                const visible = logs.style.display==='block'; logs.style.display = visible ? 'none' : 'block'; toggleLogs.textContent = visible ? 'Afficher logs' : 'Masquer logs';
+            }
+        });
     }
-}
 
-// Nettoyage à la fermeture de la page
-window.addEventListener('beforeunload', function() {
-    stopStatusUpdates();
+    // Initial load
+    loadErrorTypes();
+    // Start status updates conservatively (SSE is used for logs)
+    startStatusUpdates();
+    // Try to start SSE (realtime) first; if it fails/doesn't become active start polling
+    try { startSSE(); } catch(e) { console.warn('startSSE failed on init', e); }
+    // If SSE doesn't become active shortly, fall back to polling
+    setTimeout(() => { if (!sseActive) startLogsUpdates(); }, 800);
+    // Init height controls
+    try { bindLogHeightControls(); } catch(e) { console.error('bindLogHeightControls', e); }
+
+    // Realtime toggle
+    const rtBtn = document.getElementById('realtime-toggle');
+    if (rtBtn) {
+        rtBtn.addEventListener('click', () => {
+            if (!sseActive) { startSSE(); rtBtn.textContent = '⏸️ Temps réel'; rtBtn.classList.remove('btn-outline-primary'); rtBtn.classList.add('btn-danger'); }
+            else { stopSSE(); rtBtn.textContent = '▶ Temps réel'; rtBtn.classList.remove('btn-danger'); rtBtn.classList.add('btn-outline-primary'); }
+        });
+    }
+
+    // Attempt to enable realtime logs by default on page load
+    try {
+        if (!sseActive) {
+            startSSE();
+            const rt = document.getElementById('realtime-toggle');
+            if (rt) { rt.textContent = '⏸️ Temps réel'; rt.classList.remove('btn-outline-primary'); rt.classList.add('btn-danger'); }
+        }
+    } catch (e) { console.warn('Unable to start SSE automatically', e); }
+
+    // Pause polling when page hidden to reduce background requests and log noise
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopStatusUpdates();
+            stopLogsUpdates();
+            // keep SSE closed while hidden to avoid creating connections
+            if (sseActive) stopSSE();
+        } else {
+            // resume status polling and logs (prefer SSE)
+            startStatusUpdates();
+            if (!sseActive) {
+                // try to restart SSE, otherwise resume polling for logs
+                try { startSSE(); } catch(e) { startLogsUpdates(); }
+            }
+        }
+    });
+
+    // Logger select change: refresh and restart SSE if active
+    const loggerSel = document.getElementById('log-logger-filter');
+    if (loggerSel) {
+        loggerSel.addEventListener('change', () => {
+            fetchLogs();
+            if (sseActive) {
+                stopSSE();
+                setTimeout(() => startSSE(), 200);
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

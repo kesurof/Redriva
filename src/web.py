@@ -4,7 +4,7 @@ Redriva Web Interface - Interface web simple pour Redriva
 Maintenu via Claude/Copilot - Architecture Flask minimaliste
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, Response, stream_with_context
 import sqlite3
 import asyncio
 import threading
@@ -27,8 +27,102 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Configuration basique du logging et logger global
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+base_dir = os.path.join(os.path.dirname(__file__), '..')
+log_dir = os.path.join(base_dir, 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+# Try to disable werkzeug access logging as early as possible to avoid handlers
+try:
+    _wk = logging.getLogger('werkzeug')
+    _wk.disabled = True
+    _wk.propagate = False
+    _wk.handlers = [logging.NullHandler()]
+except Exception:
+    pass
+
+class _WerkzeugAccessFilter(logging.Filter):
+    """Filter out typical HTTP access log lines (GET/POST/PUT/DELETE) regardless of logger name.
+
+    Some servers or libraries may emit access lines under different logger names or even
+    write to stderr/stdout. This filter only affects Python logging handlers.
+    """
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+            if isinstance(msg, str) and ("\"GET " in msg or "\"POST " in msg or "\"PUT " in msg or "\"DELETE " in msg):
+                return False
+        except Exception:
+            return True
+        return True
+
+# Remove existing root handlers and attach a FileHandler with our filter so the file
+# doesn't get flooded by werkzeug access logs. We keep a StreamHandler for console
+# but the main log file will be filtered.
+for h in list(logging.root.handlers):
+    try:
+        logging.root.removeHandler(h)
+    except Exception:
+        pass
+
+logfile = os.path.join(log_dir, 'dev.log')
+file_handler = logging.FileHandler(logfile, encoding='utf-8')
+file_handler.setLevel(logging.INFO)
+file_formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s')
+file_handler.setFormatter(file_formatter)
+filter_instance = _WerkzeugAccessFilter()
+file_handler.addFilter(filter_instance)
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(file_formatter)
+
+logging.root.addHandler(file_handler)
+logging.root.addHandler(stream_handler)
+logging.root.setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
+
+# Reduce verbosity of the Flask/Werkzeug access logs (they flood the log file at INFO)
+try:
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.setLevel(logging.WARNING)
+    # Prevent propagation to root handlers which can still output access logs
+    werkzeug_logger.propagate = False
+    # Attach a NullHandler to silence werkzeug if it has its own handlers
+    werkzeug_logger.handlers = [logging.NullHandler()]
+    # Fully disable werkzeug logger to avoid noisy access logs in the file
+    try:
+        werkzeug_logger.disabled = True
+    except Exception:
+        pass
+except Exception:
+    # Best-effort: don't fail application startup if logging config can't be modified
+    pass
+
+# Filter to drop noisy werkzeug access log lines (GET/POST requests) from root handlers
+class _WerkzeugAccessFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if record.name == 'werkzeug':
+                msg = record.getMessage()
+                # Typical access logs contain: 127.0.0.1 - - [date] "GET /..." 200 -
+                if isinstance(msg, str) and ('"GET ' in msg or '"POST ' in msg or '"PUT ' in msg or '"DELETE ' in msg):
+                    return False
+        except Exception:
+            return True
+        return True
+
+try:
+    # Also add the same filter to all existing root handlers to be extra sure
+    root_logger = logging.getLogger()
+    root_logger.addFilter(filter_instance)
+    for h in list(root_logger.handlers):
+        try:
+            h.addFilter(filter_instance)
+        except Exception:
+            pass
+except Exception:
+    pass
 
 # Import du gestionnaire de configuration
 from config_manager import get_config, load_token, get_database_path
@@ -149,6 +243,9 @@ except ImportError as e:
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# In-memory job store for manual cycles (simple, ephemeral)
+jobs_store = {}
+
 # Initialisation du moniteur Arr en arrière-plan
 if ARR_MONITOR_AVAILABLE:
     try:
@@ -157,8 +254,8 @@ if ARR_MONITOR_AVAILABLE:
         
         # Démarrer automatiquement si des applications Arr sont configurées
         if config_manager.get('sonarr.enabled', False) or config_manager.get('radarr.enabled', False):
-            # Démarrer avec un intervalle par défaut de 5 minutes
-            auto_start_interval = config_manager.get('arr_monitor.interval', 300)
+            # Démarrer avec un intervalle par défaut de 30 secondes
+            auto_start_interval = config_manager.get('arr_monitor.interval', 30)
             if arr_monitor.start_monitoring(auto_start_interval):
                 print(f"🔧 Surveillance Arr démarrée automatiquement (intervalle: {auto_start_interval}s)")
             else:
@@ -178,19 +275,94 @@ else:
 def api_arr_run():
     if not ARR_MONITOR_AVAILABLE:
         return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
-
     try:
-        # Obtenir une instance via get_arr_monitor (déjà initialisée plus haut)
-        # arr_monitor variable a été créée lors de l'initialisation globale
-        res = arr_monitor.run_cycle()
-        # Construire des messages sommaires pour le frontend
-        messages = []
-        for app_name, count in res.items():
-            messages.append({'app': app_name, 'actions': count, 'message': f'{count} actions exécutées sur {app_name}'})
+        # Lancer le cycle en arrière-plan pour éviter de bloquer l'API
+        job_id = str(uuid.uuid4())
 
-        return jsonify({'success': True, 'results': res, 'messages': messages})
+        def _background_cycle(jid):
+            jobs_store[jid] = {'status': 'running', 'started_at': datetime.utcnow().isoformat(), 'result': None, 'error': None}
+            try:
+                logging.getLogger('arr_monitor').info(f"[manual-job:{jid}] Démarrage du cycle manuel en arrière-plan")
+                res = arr_monitor.run_cycle()
+                logging.getLogger('arr_monitor').info(f"[manual-job:{jid}] Cycle manuel terminé: {res}")
+                jobs_store[jid]['status'] = 'finished'
+                jobs_store[jid]['finished_at'] = datetime.utcnow().isoformat()
+                jobs_store[jid]['result'] = res
+            except Exception as exc:
+                logging.getLogger('arr_monitor').exception(f"[manual-job:{jid}] Erreur pendant cycle manuel: {exc}")
+                jobs_store[jid]['status'] = 'error'
+                jobs_store[jid]['error'] = str(exc)
+                jobs_store[jid]['finished_at'] = datetime.utcnow().isoformat()
+
+        t = threading.Thread(target=_background_cycle, args=(job_id,), daemon=True)
+        t.start()
+
+        return jsonify({'success': True, 'job_id': job_id, 'message': 'Cycle manuel démarré en arrière-plan'}), 202
     except Exception as e:
         logger.exception(f"API arr run failed: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/jobs/<job_id>', methods=['GET'])
+def api_get_job(job_id: str):
+    """Retourne le statut d'un job manuel en mémoire."""
+    job = jobs_store.get(job_id)
+    if not job:
+        return jsonify({'success': False, 'message': 'job not found'}), 404
+    return jsonify({'success': True, 'job': job})
+
+
+@app.route('/api/arr/settings', methods=['GET', 'POST'])
+def api_arr_settings():
+    """GET: renvoie settings arr (request_timeout). POST: met à jour request_timeout (persist si demandé).
+
+    Body JSON: { 'request_timeout': 12, 'persist': true }
+    """
+    if not ARR_MONITOR_AVAILABLE:
+        return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
+
+    if request.method == 'GET':
+        return jsonify({'success': True, 'request_timeout': arr_monitor.request_timeout})
+
+    try:
+        data = request.get_json() or {}
+        val = data.get('request_timeout')
+        persist = bool(data.get('persist', False))
+        if val is None:
+            return jsonify({'success': False, 'message': 'request_timeout missing'}), 400
+        try:
+            val_int = int(val)
+        except Exception:
+            return jsonify({'success': False, 'message': 'request_timeout must be integer'}), 400
+
+        if val_int < 1 or val_int > 120:
+            return jsonify({'success': False, 'message': 'request_timeout out of range (1-120)'}), 400
+
+        arr_monitor.request_timeout = val_int
+
+        if persist:
+            # try to update central config
+            try:
+                cfg = get_config()
+                cfg['arr_monitor.request_timeout'] = val_int
+                # best-effort persistence via config_manager API if available
+                try:
+                    from config_manager import update_config
+                    update_config('arr_monitor.request_timeout', val_int)
+                except Exception:
+                    # fallback: write to config file via get_config object
+                    try:
+                        cfg_obj = cfg
+                        if hasattr(cfg_obj, 'save'):
+                            cfg_obj.save()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        return jsonify({'success': True, 'request_timeout': arr_monitor.request_timeout})
+    except Exception as e:
+        logger.exception(f"API arr settings failed: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -200,7 +372,12 @@ def api_arr_start():
         return jsonify({'success': False, 'message': 'Arr monitor not available'}), 503
     try:
         data = request.get_json() or {}
-        interval = int(data.get('interval', 300))
+        try:
+            interval = int(data.get('interval', 30))
+        except Exception:
+            return jsonify({'success': False, 'message': 'Intervalle invalide (doit être un entier)'}), 400
+        if interval < 30 or interval > 3600:
+            return jsonify({'success': False, 'message': f'Intervalle hors bornes: {interval} (doit être entre 30 et 3600 secondes)'}), 400
         started = arr_monitor.start_monitoring(interval)
         return jsonify({'success': bool(started), 'started': bool(started), 'interval': interval})
     except Exception as e:
@@ -257,16 +434,9 @@ def api_arr_item_action():
         if not download_id:
             return jsonify({'success': False, 'message': 'download id not found in item'}), 400
 
-        result = arr_monitor.blocklist_and_search(app_name, cfg['url'], cfg['api_key'], download_id)
-        # Normalize response
-        if isinstance(result, dict):
-            success = result.get('status') == 'ok'
-            message = result.get('message')
-        else:
-            success = bool(result)
-            message = None
-
-        return jsonify({'success': success, 'message': message or ('action executed' if success else 'action failed'), 'raw': result})
+        # Use central helper so manual UI and automatic handlers behave the same
+        res = arr_monitor.perform_item_action(app_name, item)
+        return jsonify(res)
     except Exception as e:
         logger.exception(f"API arr item_action failed: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -3162,6 +3332,199 @@ def arr_monitor_status():
             'error': str(e)
         }), 500
 
+
+@app.route('/api/arr/logs')
+def arr_monitor_logs():
+    """Retourne les dernières lignes du fichier de logs pour l'affichage côté UI.
+
+    Query params:
+      - lines: nombre de lignes à retourner (par défaut 200)
+      - filter: optionnel, filtre texte (insensible à la casse)
+    """
+    try:
+        # Détecter le chemin de logs le plus probable (logs/dev.log au root du projet)
+        base_dir = os.path.join(os.path.dirname(__file__), '..')
+        candidate_paths = [
+            os.path.join(base_dir, 'logs', 'dev.log'),
+            os.path.join(base_dir, 'logs', 'redriva.log'),
+            os.path.join(base_dir, 'dev.log'),
+        ]
+
+        log_path = None
+        for p in candidate_paths:
+            if os.path.exists(p):
+                log_path = p
+                break
+
+        if not log_path:
+            return jsonify({'success': False, 'error': 'Fichier de logs introuvable', 'paths_checked': candidate_paths}), 404
+
+        lines = int(request.args.get('lines', 200))
+        # Par défaut ne montrer que les logs du logger "arr_monitor"
+        logger_filter = (request.args.get('logger') or 'arr_monitor').strip()
+        level_filter = (request.args.get('level') or '').strip().upper()
+
+        # Read a reasonable chunk from the end of the file and split into lines
+        def read_tail(path, max_lines):
+            import io
+            # read last N bytes (safe small window) to avoid heavy IO
+            read_bytes = 64 * 1024  # 64KB
+            with open(path, 'rb') as fh:
+                fh.seek(0, io.SEEK_END)
+                file_size = fh.tell()
+                start = max(0, file_size - read_bytes)
+                fh.seek(start, io.SEEK_SET)
+                data = fh.read()
+                try:
+                    text = data.decode('utf-8', errors='replace')
+                except Exception:
+                    text = data.decode('latin-1', errors='replace')
+                lines_all = text.splitlines()
+                return lines_all
+
+        all_lines = read_tail(log_path, lines)
+
+        import re
+        pattern = re.compile(r'^(?P<ts>\d{4}-\d{2}-\d{2} [0-9:,]+)\s+(?P<level>[A-Z]+)\s+(?P<logger>[\w_.-]+):\s*(?P<message>.*)$')
+
+        parsed = []
+        # Examine a window from the end of the file and parse candidates
+        tail = all_lines[-(lines * 8):] if len(all_lines) > lines * 8 else all_lines
+        for raw in tail:
+            m = pattern.match(raw)
+            if not m:
+                # Include raw lines only when no logger_filter is set (as before)
+                if not logger_filter:
+                    parsed.append({'raw': raw, '_ts_dt': None})
+                continue
+
+            entry = {
+                'timestamp': m.group('ts'),
+                'level': m.group('level'),
+                'logger': m.group('logger'),
+                'message': m.group('message')
+            }
+
+            # Apply logger filter
+            if logger_filter and logger_filter.lower() not in entry['logger'].lower():
+                continue
+
+            # Apply level filter if present
+            if level_filter and entry['level'] != level_filter:
+                continue
+
+            # Parse timestamp to datetime for robust sorting; keep original string for display
+            ts_str = entry.get('timestamp')
+            ts_dt = None
+            try:
+                from datetime import datetime as _dt
+                ts_dt = _dt.strptime(ts_str, "%Y-%m-%d %H:%M:%S,%f")
+            except Exception:
+                try:
+                    ts_dt = _dt.fromisoformat(ts_str)
+                except Exception:
+                    ts_dt = None
+
+            entry['_ts_dt'] = ts_dt
+            parsed.append(entry)
+
+        # Sort parsed entries by timestamp descending (newest first). Entries without a
+        # parsed timestamp will be placed at the end.
+        def _sort_key(e):
+            t = e.get('_ts_dt')
+            # Use minimal datetime for missing timestamps so they sink to the end
+            if t is None:
+                return datetime.min
+            return t
+
+        parsed.sort(key=_sort_key, reverse=True)
+
+        # Trim to requested number of lines and remove internal sort key before returning
+        trimmed = []
+        for e in parsed[:lines]:
+            if '_ts_dt' in e:
+                del e['_ts_dt']
+            trimmed.append(e)
+
+        return jsonify({'success': True, 'logs': trimmed, 'source': os.path.relpath(log_path, start=base_dir)})
+    except Exception as e:
+        logging.exception('Erreur récupération logs arr')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/arr/logs/stream')
+def arr_monitor_logs_stream():
+    """SSE stream des nouvelles lignes de logs (filtrées côté client si besoin).
+
+    Ce endpoint fait un tail -f basique et émet chaque ligne sous forme d'événement SSE
+    avec data = JSON string contenant {'raw': line}.
+    """
+    # Detect same log path as arr_monitor_logs
+    base_dir = os.path.join(os.path.dirname(__file__), '..')
+    candidate_paths = [
+        os.path.join(base_dir, 'logs', 'dev.log'),
+        os.path.join(base_dir, 'logs', 'redriva.log'),
+        os.path.join(base_dir, 'dev.log'),
+    ]
+    log_path = None
+    for p in candidate_paths:
+        if os.path.exists(p):
+            log_path = p
+            break
+    if not log_path:
+        return jsonify({'success': False, 'error': 'Fichier de logs introuvable'}), 404
+
+    def generate():
+        import re
+        line_pattern = re.compile(r'^(?P<ts>\d{4}-\d{2}-\d{2} [0-9:,]+)\s+(?P<level>[A-Z]+)\s+(?P<logger>[\w_.-]+):\s*(?P<message>.*)$')
+        # Robust tail: reopen on rotation/truncation by checking inode and file size
+        import stat
+        fh = open(log_path, 'r', encoding='utf-8', errors='replace')
+        try:
+            fh.seek(0, os.SEEK_END)
+            current_inode = os.fstat(fh.fileno()).st_ino
+            while True:
+                line = fh.readline()
+                if not line:
+                    # check for rotation/truncation
+                    try:
+                        st = os.stat(log_path)
+                        if st.st_ino != current_inode:
+                            # file rotated; reopen
+                            try:
+                                fh.close()
+                            except Exception:
+                                pass
+                            fh = open(log_path, 'r', encoding='utf-8', errors='replace')
+                            current_inode = os.fstat(fh.fileno()).st_ino
+                            fh.seek(0, os.SEEK_END)
+                    except FileNotFoundError:
+                        # if file temporarily missing, wait
+                        pass
+                    time.sleep(0.5)
+                    continue
+
+                raw = line.rstrip('\n')
+                m = line_pattern.match(raw)
+                if m:
+                    entry = {
+                        'timestamp': m.group('ts'),
+                        'level': m.group('level'),
+                        'logger': m.group('logger'),
+                        'message': m.group('message')
+                    }
+                    payload = json.dumps({'entry': entry})
+                else:
+                    payload = json.dumps({'raw': raw})
+                yield f'data: {payload}\n\n'
+        finally:
+            try:
+                fh.close()
+            except Exception:
+                pass
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+
 @app.route('/api/arr/monitor/start', methods=['POST'])
 def arr_monitor_start():
     """API pour démarrer la surveillance Arr"""
@@ -3172,13 +3535,48 @@ def arr_monitor_start():
         }), 503
     
     try:
-        data = request.get_json() or {}
-        interval = data.get('interval', 300)  # 5 minutes par défaut
-        
+        # Accept JSON or form data; be defensive about types
+        data = request.get_json(silent=True) or {}
+        if not data:
+            # fallback to form or query string
+            data = request.form.to_dict() or request.args.to_dict() or {}
+
+        raw_interval = data.get('interval', data.get('value') or request.args.get('interval') or 30)
+        try:
+            interval = int(raw_interval)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Intervalle invalide (doit être un entier)'}), 400
+
+        # Validate bounds
+        if interval < 30 or interval > 3600:
+            return jsonify({'success': False, 'error': f'Intervalle hors bornes: {interval} (doit être entre 30 et 3600 secondes)'}), 400
+
         config_manager = get_config()
         monitor = get_arr_monitor(config_manager)
-        
-        if monitor.start_monitoring(interval):
+
+        # If client asks to persist the interval, save it to config
+        if str(data.get('persist')).lower() in ['1', 'true', 'yes'] or data.get('persist') is True:
+            try:
+                config_manager.update_config('arr_monitor.interval', interval)
+            except Exception:
+                logger.warning('Impossible de persister arr_monitor.interval dans la config')
+
+        # If monitor already running, restart it with the new interval so change applies immediately
+        if getattr(monitor, 'is_running', False):
+            try:
+                monitor.stop_monitoring()
+                time.sleep(0.1)
+            except Exception:
+                logger.warning('Impossible d\'arrêter le monitor existant avant redémarrage')
+
+        started = False
+        try:
+            started = bool(monitor.start_monitoring(interval))
+        except Exception as start_exc:
+            logging.error(f"Erreur lors du démarrage du monitor avec interval={interval}: {start_exc}")
+            return jsonify({'success': False, 'error': str(start_exc)}), 500
+
+        if started:
             return jsonify({
                 'success': True,
                 'message': f'Surveillance Arr démarrée (intervalle: {interval}s)'
@@ -3186,7 +3584,7 @@ def arr_monitor_start():
         else:
             return jsonify({
                 'success': False,
-                'error': 'Surveillance déjà en cours'
+                'error': 'Impossible de démarrer la surveillance'
             })
     except Exception as e:
         logging.error(f"Erreur démarrage arr monitor: {e}")

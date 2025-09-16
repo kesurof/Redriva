@@ -521,7 +521,7 @@ class ErrorTypesManager:
         except (ValueError, TypeError):
             return False
     
-    def process_error(self, error_type_name: str, item: Dict[str, Any], arr_monitor) -> Dict[str, Any]:
+    def process_error(self, error_type_name: str, item: Dict[str, Any], arr_monitor, skip_action_delays: bool = False) -> Dict[str, Any]:
         """
         Traite une erreur selon sa configuration
         
@@ -550,12 +550,17 @@ class ErrorTypesManager:
                 continue
             
             try:
-                # Attendre le délai spécifié
-                if action.delay_seconds > 0:
+                # Attendre le délai spécifié (sauf si skip_action_delays demandé)
+                if not skip_action_delays and action.delay_seconds > 0:
                     logger.info(f"⏳ Attente {action.delay_seconds}s avant action: {action.name}")
                     time.sleep(action.delay_seconds)
-                
+
                 # Exécuter l'action
+                # Log context for debugging automatic corrections
+                try:
+                    logger.debug(f"_action_remove_and_blocklist: executing action '{action.name}' for item id={item.get('id')} app={item.get('app_name')}")
+                except Exception:
+                    pass
                 action_result = self._execute_action(action, item, arr_monitor)
                 results.append({
                     "action": action.name,
@@ -575,11 +580,13 @@ class ErrorTypesManager:
                     "message": error_msg
                 })
         
+        # Overall success: true if at least one action succeeded
+        overall_success = any(r.get("success") for r in results)
         return {
-            "success": True,
+            "success": overall_success,
             "error_type": error_type_name,
             "item_id": item.get('id'),
-            "actions_executed": len([r for r in results if r["success"]]),
+            "actions_executed": len([r for r in results if r.get("success")]),
             "results": results
         }
     
@@ -620,7 +627,17 @@ class ErrorTypesManager:
     def _action_remove_and_blocklist(self, action: ErrorAction, item: Dict[str, Any], arr_monitor) -> Dict[str, Any]:
         """Supprime de la queue et ajoute à la blocklist"""
         try:
-            download_id = item.get('id')
+            # Log full item for debugging when automatic corrections are applied
+            try:
+                logger.debug(f"_action_remove_and_blocklist: item content: {item}")
+            except Exception:
+                pass
+
+            # Determine best download id candidate from common fields
+            download_id = item.get('id') or item.get('downloadId') or item.get('releaseId') or item.get('downloadId')
+            # last resort: some APIs use 'DownloadId' capitalization
+            if not download_id:
+                download_id = item.get('DownloadId') or item.get('downloadID')
             if not download_id:
                 return {"success": False, "message": "ID de téléchargement manquant"}
             
@@ -641,12 +658,12 @@ class ErrorTypesManager:
             if not config:
                 return {"success": False, "message": "Configuration Arr non disponible"}
             
-            # Exécuter l'action
-            result = arr_monitor.blocklist_and_search(app_name, config['url'], config['api_key'], download_id)
+            # Exécuter l'action en réutilisant le helper centralisé (même comportement que l'UI)
+            result = arr_monitor.perform_item_action(app_name, {'id': download_id, 'app_name': app_name})
             # Supporter deux types de retours: bool ou dict {status: 'ok'|'error', message:...}
             if isinstance(result, dict):
-                success = result.get('status') == 'ok'
-                message = result.get('message')
+                success = result.get('success', False)
+                message = result.get('message') or (result.get('raw', {}).get('message') if isinstance(result.get('raw'), dict) else None)
             else:
                 success = bool(result)
                 message = None

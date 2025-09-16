@@ -43,10 +43,14 @@ class ArrMonitor:
         # État du moniteur
         self.is_running = False
         self.monitor_thread = None
+        # Prevent concurrent run_cycle executions
+        self._run_lock = threading.Lock()
         # Background monitoring internals
         self._monitor_thread = None
-        self._monitor_interval = 300
+        self._monitor_interval = 30
         self._stop_event = threading.Event()
+        # Default per-request timeout (seconds) to avoid blocking the cycle
+        self.request_timeout = 12
 
         logger.info("🔧 Arr Monitor initialisé pour Redriva avec gestion multi-erreurs")
     
@@ -54,10 +58,10 @@ class ArrMonitor:
         """Configure la session HTTP avec optimisations"""
         # Timeout adaptatif selon l'architecture
         if platform.machine() in ['aarch64', 'arm64']:
-            self.session.timeout = 15
+            self.request_timeout = 15
             logger.info("🔧 Optimisations ARM64 activées")
         else:
-            self.session.timeout = 10
+            self.request_timeout = 10
         
         # Headers optimisés
         self.session.headers.update({
@@ -97,7 +101,8 @@ class ArrMonitor:
         try:
             response = self.session.get(
                 f"{url}/api/v3/system/status",
-                headers={'X-Api-Key': api_key}
+                headers={'X-Api-Key': api_key},
+                timeout=self.request_timeout
             )
             
             if response.status_code == 200:
@@ -126,7 +131,8 @@ class ArrMonitor:
                         'page': page,
                         'pageSize': page_size,
                         'includeUnknownSeriesItems': 'true' if app_name.lower() == 'sonarr' else None
-                    }
+                    },
+                    timeout=self.request_timeout
                 )
                 
                 if response.status_code != 200:
@@ -167,7 +173,7 @@ class ArrMonitor:
                     'pageSize': 100,
                     'since': since_date.isoformat()
                 }
-            )
+            , timeout=self.request_timeout)
             
             if response.status_code == 200:
                 data = response.json()
@@ -189,19 +195,117 @@ class ArrMonitor:
             headers = {'X-Api-Key': api_key}
 
             # Supprimer en demandant la blocklist côté serveur (beaucoup d'API supportent ce paramètre)
-            delete_resp = self.session.delete(
-                f"{url}/api/v3/queue/{download_id}",
-                headers=headers,
-                params={'removeFromClient': 'true', 'blocklist': 'true'},
-                timeout=15
-            )
+            # Attempt DELETE with retries/backoff to handle transient network issues
+            delete_resp = None
+            last_exc = None
+            for attempt in range(1, 4):
+                try:
+                    delete_resp = self.session.delete(
+                        f"{url}/api/v3/queue/{download_id}",
+                        headers=headers,
+                        params={'removeFromClient': 'true', 'blocklist': 'true'},
+                        timeout=self.request_timeout
+                    )
+                    break
+                except requests.exceptions.RequestException as e:
+                    last_exc = e
+                    wait = attempt * 2
+                    logger.warning(f"Tentative {attempt} échec DELETE download_id={download_id}: {e} - retrying in {wait}s")
+                    time.sleep(wait)
+
+            if delete_resp is None and last_exc is not None:
+                # All retries failed
+                msg = f"{app_name} blocklist+delete failed after retries: {last_exc}"
+                logger.error(msg)
+                return {'status': 'error', 'message': msg}
 
             if delete_resp.status_code not in [200, 204]:
                 msg = f"{app_name} blocklist+delete failed ({delete_resp.status_code})"
-                logger.error(msg + f" body:{getattr(delete_resp,'text',None)}")
+                body = None
+                try:
+                    body = delete_resp.text
+                except Exception:
+                    try:
+                        body = delete_resp.content.decode('utf-8', errors='replace')
+                    except Exception:
+                        body = '<unreadable body>'
+                logger.error(msg + f" body:{body}")
+
+                # Fallback: if 404 or not found, try to locate matching queue entry by downloadId/title
+                try:
+                    logger.info(f"🔎 Tentative fallback: recherche dans la queue pour download_id={download_id}")
+                    queue_items = self.get_queue(app_name, url, api_key)
+                    cand = str(download_id).lower() if download_id is not None else None
+                    matches = []
+                    for qi in queue_items:
+                        try:
+                            qid = str(qi.get('id')) if qi.get('id') is not None else ''
+                            qdid = str(qi.get('downloadId') or qi.get('downloadid') or '')
+                            title = str(qi.get('title') or '')
+                            if cand and (qid.lower() == cand or qdid.lower() == cand or cand in title.lower()):
+                                matches.append(qi)
+                        except Exception:
+                            continue
+
+                    if matches:
+                        logger.info(f"🔎 Fallback: trouvé {len(matches)} matching queue entries, tentative suppression via queue id")
+                        for m in matches:
+                            mid = m.get('id')
+                            try:
+                                logger.info(f"🔁 Fallback DELETE attempt for queue id={mid}")
+                                resp2 = self.session.delete(f"{url}/api/v3/queue/{mid}", headers=headers, params={'removeFromClient': 'true', 'blocklist': 'true'}, timeout=self.request_timeout)
+                                logger.info(f"🔁 Fallback DELETE status for {mid}: {getattr(resp2,'status_code',None)}")
+                                if getattr(resp2, 'status_code', None) in [200,204]:
+                                    logger.info(f"✅ Fallback suppression réussie pour queue id={mid}")
+                                    # proceed to trigger search
+                                    try:
+                                        success = self.trigger_missing_search(app_name, url, api_key)
+                                    except Exception:
+                                        success = False
+                                    return {'status': 'ok', 'message': 'fallback deleted', 'details': {'queue_id': mid, 'triggered_search': success}}
+                            except Exception as e:
+                                logger.warning(f"⚠️ Fallback DELETE failed for queue id={mid}: {e}")
+
+                    # If no matches or fallback failed, return original error
+                except Exception as e:
+                    logger.warning(f"⚠️ Erreur lors du fallback de recherche dans la queue: {e}")
+
                 return {'status': 'error', 'message': msg}
 
             logger.info(f"🚫 {app_name} release {download_id} blocklisted and removed")
+
+            # Verify removal by re-querying the queue for the given download_id
+            try:
+                queue_after = self.get_queue(app_name, url, api_key)
+                logger.debug(f"Vérification suppression: queue_after length={len(queue_after)}")
+
+                def _matches(x):
+                    try:
+                        xid = x.get('id')
+                        xdid = x.get('downloadId') or x.get('downloadid') or x.get('DownloadId')
+                        # Normalize to strings lower-case for robust compare
+                        cand = str(download_id).lower() if download_id is not None else None
+                        if xid is not None and cand is not None and str(xid).lower() == cand:
+                            return True
+                        if xdid is not None and cand is not None and str(xdid).lower() == cand:
+                            return True
+                        return False
+                    except Exception:
+                        return False
+
+                matching = [x for x in queue_after if _matches(x)]
+                if matching:
+                    logger.warning(f"⚠️ Vérification suppression: download_id={download_id} toujours présent dans la queue après suppression - matches={len(matching)}")
+                    # Log minimal info about matches to help debugging
+                    for m in matching[:5]:
+                        try:
+                            logger.warning(f"   match: id={m.get('id')} downloadId={m.get('downloadId')} title={m.get('title')}")
+                        except Exception:
+                            pass
+                else:
+                    logger.info(f"✅ Vérification suppression: download_id={download_id} absent de la queue")
+            except Exception as e:
+                logger.warning(f"⚠️ Impossible vérifier suppression pour download_id={download_id}: {e}")
 
             # Lancer une recherche pour les manqués (hook ou fallback)
             try:
@@ -226,19 +330,38 @@ class ArrMonitor:
         """Lance une recherche pour les éléments manqués"""
         try:
             endpoint = "wantedmissing" if app_name.lower() == "sonarr" else "wanted/missing"
-            
-            response = self.session.post(
-                f"{url}/api/v3/command",
-                headers={'X-Api-Key': api_key},
-                json={'name': 'MissingEpisodeSearch' if app_name.lower() == 'sonarr' else 'MissingMovieSearch'}
-            )
-            
-            if response.status_code in [200, 201]:
-                logger.info(f"✅ {app_name} recherche manqués lancée")
-                return True
-            else:
-                logger.error(f"❌ {app_name} erreur recherche manqués: {response.status_code}")
-                return False
+
+            cmd_names = ['MissingEpisodeSearch'] if app_name.lower() == 'sonarr' else ['MissingMovieSearch', 'MissingMoviesSearch']
+
+            for cmd in cmd_names:
+                try:
+                    response = self.session.post(
+                        f"{url}/api/v3/command",
+                        headers={'X-Api-Key': api_key},
+                        json={'name': cmd},
+                        timeout=self.request_timeout
+                    )
+
+                    # Log body for diagnostics on non-success
+                    if response.status_code in [200, 201]:
+                        logger.info(f"✅ {app_name} recherche manqués lancée (command={cmd})")
+                        return True
+                    else:
+                        body = None
+                        try:
+                            body = response.text
+                        except Exception:
+                            try:
+                                body = response.content.decode('utf-8', errors='replace')
+                            except Exception:
+                                body = '<unreadable body>'
+                        logger.error(f"❌ {app_name} erreur recherche manqués (command={cmd}): {response.status_code} body:{body}")
+                        # try next candidate
+                except requests.exceptions.RequestException as e:
+                    logger.warning(f"⚠️ {app_name} exception lors trigger_missing_search (command={cmd}): {e}")
+
+            # All candidates failed
+            return False
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ {app_name} exception recherche manqués: {e}")
@@ -250,7 +373,8 @@ class ArrMonitor:
             response = self.session.delete(
                 f"{url}/api/v3/queue/{download_id}",
                 headers={'X-Api-Key': api_key},
-                params={'removeFromClient': 'true', 'blocklist': 'false'}
+                params={'removeFromClient': 'true', 'blocklist': 'false'},
+                timeout=self.request_timeout
             )
             
             if response.status_code in [200, 204]:
@@ -263,6 +387,41 @@ class ArrMonitor:
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ {app_name} exception suppression: {e}")
             return False
+
+    def perform_item_action(self, app_name: str, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper to perform the same item action used by the web UI.
+
+        This centralizes the logic so both the API endpoint and automatic
+        handlers use identical behaviour (download id extraction, config lookup,
+        call to blocklist_and_search, normalized return shape).
+        """
+        try:
+            # Determine config
+            if app_name.lower().startswith('sonarr'):
+                cfg = self.get_sonarr_config()
+            else:
+                cfg = self.get_radarr_config()
+
+            if not cfg:
+                return {'success': False, 'message': 'configuration missing'}
+
+            download_id = item.get('id') or item.get('downloadId') or item.get('releaseId') or item.get('DownloadId')
+            if not download_id:
+                return {'success': False, 'message': 'download id not found in item'}
+
+            result = self.blocklist_and_search(app_name, cfg['url'], cfg['api_key'], download_id)
+            if isinstance(result, dict):
+                success = result.get('status') == 'ok'
+                message = result.get('message')
+            else:
+                success = bool(result)
+                message = None
+
+            return {'success': success, 'message': message or ('action executed' if success else 'action failed'), 'raw': result}
+
+        except Exception as e:
+            logger.exception(f"perform_item_action failed: {e}")
+            return {'success': False, 'message': str(e)}
     
     def is_download_failed(self, item: Dict[str, Any]) -> bool:
         """
@@ -345,7 +504,16 @@ class ArrMonitor:
         logger.info(f"� {app_name} analyse de {len(queue)} éléments")
         
         # Analyser chaque élément de la queue
+        # Injecter le nom de l'application dans chaque item pour que les handlers
+        # d'actions sachent sur quelle application (Sonarr/Radarr) opérer.
         for item in queue:
+            try:
+                # Préserver si déjà présent
+                if not item.get('app_name'):
+                    item['app_name'] = app_name
+            except Exception:
+                # Si item n'est pas un dict modifiable, continuer
+                pass
             # Détecter le type d'erreur
             error_type = self.error_types_manager.detect_error_type(item)
             
@@ -358,7 +526,8 @@ class ArrMonitor:
                     logger.warning(f"� {app_name} erreur détectée [{error_type}]: {title}")
                     
                     # Traiter l'erreur selon sa configuration
-                    result = self.error_types_manager.process_error(error_type, item, self)
+                    # For automatic processing, skip action delays so behavior matches manual trigger
+                    result = self.error_types_manager.process_error(error_type, item, self, skip_action_delays=True)
                     
                     if result.get("success", False):
                         processed_items += 1
@@ -394,6 +563,12 @@ class ArrMonitor:
         Returns:
             Dict[str, int]: Statistiques du cycle (app_name -> nb_corrections)
         """
+        # Prevent concurrent run_cycle executions
+        acquired = self._run_lock.acquire(blocking=False)
+        if not acquired:
+            logger.info("⚠️ Un autre cycle est en cours, cycle actuel ignoré")
+            return {}
+
         logger.info("🚀 Début du cycle de surveillance Arr")
         
         results = {}
@@ -418,10 +593,16 @@ class ArrMonitor:
         
         total_corrections = sum(results.values())
         logger.info(f"✅ Cycle terminé - {total_corrections} corrections appliquées")
-        
-        return results
+        # release lock
+        try:
+            return results
+        finally:
+            try:
+                self._run_lock.release()
+            except RuntimeError:
+                pass
     
-    def start_monitoring(self, interval: int = 300) -> bool:
+    def start_monitoring(self, interval: int = 30) -> bool:
         """
         Démarre la surveillance continue en arrière-plan
         
@@ -438,21 +619,22 @@ class ArrMonitor:
         def monitor_loop():
             """Boucle de surveillance"""
             logger.info(f"🔄 Surveillance Arr démarrée (intervalle: {interval}s)")
-            
+
             while self.is_running:
                 try:
                     self.run_cycle()
-                    
+
                     # Attente avec vérification d'arrêt
                     for _ in range(interval):
                         if not self.is_running:
                             break
                         time.sleep(1)
-                        
+
                 except Exception as e:
                     logger.error(f"❌ Erreur cycle surveillance: {e}")
-                    time.sleep(30)  # Attente plus courte en cas d'erreur
-            
+                    # attendre un peu avant de reprendre en cas d'erreur
+                    time.sleep(30)
+
             logger.info("🛑 Surveillance Arr arrêtée")
         
         self.is_running = True
