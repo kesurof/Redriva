@@ -523,7 +523,7 @@ async def fetch_all_torrents(token):
     """
     Récupère tous les torrents depuis l'API Real-Debrid avec temporisation adaptative
     
-    Utilise la pagination pour récupérer tous les torrents par batches de 2500.
+    Utilise la pagination pour récupérer tous les torrents par batches de 5000.
     Sauvegarde directement en base pour éviter la surcharge mémoire.
     Temporisation adaptative selon les erreurs détectées.
     

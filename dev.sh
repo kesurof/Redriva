@@ -15,7 +15,63 @@ LOG_DIR="logs"
 LOG_FILE="$LOG_DIR/dev.log"
 APP="src/web.py"
 
+RECREATE_VENV=0
+
 mkdir -p "$PID_DIR" "$LOG_DIR"
+
+## Parse global flags (support --recreate-venv / -r anywhere, and -h/--help)
+PARSED_ARGS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --recreate-venv|-r)
+      RECREATE_VENV=1
+      shift
+      ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: ./dev.sh [--recreate-venv|-r] <command>
+
+Commands:
+  start-foreground   Start the app in foreground (isolated venv)
+  start | start-bg   Start the app in background (isolated venv)
+  stop               Stop the running background process
+  restart            Stop then start in background
+  status             Show service status (PID)
+
+Global flags:
+  --recreate-venv, -r  Recreate the ./redriva virtualenv before installing deps
+  -h, --help            Show this help message
+
+This script ensures full isolation by creating (or reusing) a local virtualenv
+at ./redriva and launching the application using the venv's Python. The runtime
+is executed with a cleaned environment (env -i) and only essential variables are
+passed: RD_TOKEN, TZ, HOME. This avoids accidental usage of other venvs on the host.
+
+Examples:
+  ./dev.sh start-foreground          # starts app in isolated venv (foreground)
+  ./dev.sh -r start-bg              # recreate venv then start in background
+  ./dev.sh --recreate-venv status   # recreate venv (no effect on status) then show status
+EOF
+      exit 0
+      ;;
+    --)
+      shift
+      while [ "$#" -gt 0 ]; do PARSED_ARGS+=("$1"); shift; done
+      ;;
+    -* )
+      # Unknown option, keep it for later handling or pass-through
+      PARSED_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      PARSED_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Rebuild positional parameters from parsed args (flags removed)
+set -- "${PARSED_ARGS[@]:-}"
 
 function ensure_python() {
   if ! command -v "$PY_BIN" >/dev/null 2>&1; then
@@ -25,6 +81,11 @@ function ensure_python() {
 }
 
 function create_venv() {
+  if [ "$RECREATE_VENV" = "1" ] && [ -d "$VENV_DIR" ]; then
+    echo "♻️  Recréation du virtualenv $VENV_DIR (option demandée)..."
+    rm -rf "$VENV_DIR"
+  fi
+
   if [ ! -d "$VENV_DIR" ]; then
     echo "📦 Création du virtualenv dans ./$VENV_DIR ..."
     "$PY_BIN" -m venv "$VENV_DIR"
@@ -32,24 +93,41 @@ function create_venv() {
 }
 
 function activate_venv() {
+  # kept for compatibility but avoided in isolated flows
   # shellcheck disable=SC1090
-  source "$VENV_DIR/bin/activate"
+  if [ -f "$VENV_DIR/bin/activate" ]; then
+    source "$VENV_DIR/bin/activate"
+  fi
 }
 
 function venv_python() {
   if [ -x "$VENV_DIR/bin/python" ]; then
-    echo "$VENV_DIR/bin/python"
+    # Return absolute path to avoid ambiguity with other venvs
+    echo "$(pwd)/$VENV_DIR/bin/python"
   else
     echo "$PY_BIN"
   fi
 }
 
 function install_deps() {
-  activate_venv
+  # Install strictly into the project venv using its python (no sourcing)
+  PYEXEC="$(venv_python)"
+  if [ -z "$PYEXEC" ]; then
+    echo "❌ Aucun interpréteur Python trouvé pour installer les dépendances"
+    exit 1
+  fi
+
+  VENV_ABS="$(pwd)/$VENV_DIR"
+
   if [ -f "requirements.txt" ]; then
-    echo "📥 Installation des dépendances depuis requirements.txt..."
-    python -m pip install --upgrade pip setuptools wheel
-    pip install -r requirements.txt
+    echo "📥 Installation des dépendances dans $VENV_DIR via $PYEXEC (installation isolée)..."
+    # Run pip upgrade in a clean environment so external site-packages are not visible
+    env -i PATH="$VENV_ABS/bin" VIRTUAL_ENV="$VENV_ABS" PYTHONNOUSERSITE=1 HOME="$HOME" \
+      "$PYEXEC" -m pip install --upgrade pip setuptools wheel
+
+    # Install requirements forcing reinstall and ignoring installations detected elsewhere
+    env -i PATH="$VENV_ABS/bin" VIRTUAL_ENV="$VENV_ABS" PYTHONNOUSERSITE=1 HOME="$HOME" \
+      "$PYEXEC" -m pip install --no-cache-dir --ignore-installed -r requirements.txt
   else
     echo "⚠️ requirements.txt introuvable — passez si inutilisé."
   fi
@@ -59,23 +137,51 @@ function start_foreground() {
   ensure_python
   create_venv
   install_deps
-  echo "🚀 Démarrage en premier plan de $APP (Ctrl+C pour arrêter)..."
-  activate_venv
-  exec python "$APP"
+  echo "🚀 Démarrage en premier plan de $APP dans le venv ./$VENV_DIR (Ctrl+C pour arrêter)..."
+
+  PYEXEC="$(venv_python)"
+  VENV_ABS="$(pwd)/$VENV_DIR"
+
+  # Clean potentially inherited Python env vars
+  unset PYTHONHOME PYENV_VIRTUALENV PYENV_VERSION
+
+  # Launch in a clean environment: only expose necessary vars
+  exec env -i \
+    PATH="$VENV_ABS/bin" \
+    VIRTUAL_ENV="$VENV_ABS" \
+    PYTHONNOUSERSITE=1 \
+    PYTHONPATH="$(pwd)/src" \
+    RD_TOKEN="${RD_TOKEN:-}" \
+    TZ="${TZ:-}" \
+    HOME="${HOME:-/root}" \
+    "$PYEXEC" "$APP"
 }
 
 function start_bg() {
   ensure_python
   create_venv
   install_deps
-  activate_venv
-  echo "🚀 Démarrage en arrière-plan, logs -> $LOG_FILE"
-  PYEXEC=$(venv_python)
-  # Redirect stdout to dev.log and stderr to dev.err.log to avoid mixing access logs
-  nohup "$PYEXEC" "$APP" >> "$LOG_FILE" 2>> "$LOG_DIR/dev.err.log" &
+
+  echo "🚀 Démarrage en arrière-plan de $APP dans le venv ./$VENV_DIR, logs -> $LOG_FILE"
+
+  PYEXEC="$(venv_python)"
+  VENV_ABS="$(pwd)/$VENV_DIR"
+
+  # Start nohup in a fully isolated environment (env -i)
+  nohup env -i \
+    PATH="$VENV_ABS/bin" \
+    VIRTUAL_ENV="$VENV_ABS" \
+    PYTHONNOUSERSITE=1 \
+    PYTHONPATH="$(pwd)/src" \
+    RD_TOKEN="${RD_TOKEN:-}" \
+    TZ="${TZ:-}" \
+    HOME="${HOME:-/root}" \
+    "$PYEXEC" "$APP" >> "$LOG_FILE" 2>> "$LOG_DIR/dev.err.log" &
+
   PID=$!
   echo "$PID" > "$PID_FILE"
   echo "PID $PID enregistré dans $PID_FILE"
+
   # small sanity check: ensure the PID exists
   sleep 0.4
   if kill -0 "$PID" >/dev/null 2>&1; then
