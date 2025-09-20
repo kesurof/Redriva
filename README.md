@@ -1,398 +1,117 @@
-# 🚀 Redriva - Gestionnaire Real-Debrid Avancé
+# Redriva — Gestionnaire Real‑Debrid (SSDV2 & développement)
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://docker.com)
-[![Python](https://img.shields.io/badge/Python-3.11+-green?logo=python)](https://python.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Security](https://img.shields.io/badge/Security-Validated-green?logo=security)](DEPLOYMENT_REPORT.md)
+Un petit service web pour gérer et synchroniser vos téléchargements Real‑Debrid.
+Ce dépôt contient une application Python (Flask) légère, prête à être déployée en
+mode local (venv), en conteneur Docker ou intégrée dans SSDV2.
 
-# 🚀 Redriva - Gestionnaire Real-Debrid Simplifié
+## Points clés
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://docker.com)
-[![Python](https://img.shields.io/badge/Python-3.11+-green?logo=python)](https://python.org)
-[![SSDV2](https://img.shields.io/badge/SSDV2-Compatible-orange)](https://github.com/projetssd/ssdv2)
+- Backend : Python 3.11+ (Flask)
+- Base de données : SQLite (fichier local dans `./data`)
+- Virtualenv de développement : `./redriva/` (généré par `./dev.sh`)
+- Entrée application : `src/web.py`
+- Script d'aide local : `./dev.sh` (démarrage foreground / background)
+- Docker : `Dockerfile` + `docker-compose.yml`
+- SSDV2 : configuration de déploiement dans `ssdv2/redriva.yml`
 
-> **Interface web simple et efficace pour Real-Debrid avec support SSDV2**
+## Table des matières
 
-## ✨ Fonctionnalités
+- Présentation
+- Installation rapide
+  - SSDV2
+  - Docker Compose
+  - Développement local
+- Configuration
+  - Token Real‑Debrid
+  - Sonarr / Radarr
+- Utilisation
+  - Commandes `dev.sh`
+  - Vérifications et logs
+- Fichiers importants
+- Dépannage rapide
+- Contribution
+- Licence
 
-- 📥 **Gestion des téléchargements Real-Debrid**
-- 🔄 **Synchronisation automatique**
-- 📊 **Interface web moderne**
-- 🔗 **Gestion des symlinks**
-- 🐳 **Compatible Docker & SSDV2**
+## Présentation
 
----
+Redriva centralise et synchronise vos torrents/URLs Real‑Debrid dans une base
+SQLite locale et expose une interface web simple pour consulter et gérer
+les éléments synchronisés. Le projet inclut des intégrations optionnelles pour
+Sonarr et Radarr, et un gestionnaire de symlinks.
 
-## 🚀 Installation
+Le dépôt est pensé pour être utilisé :
+- en local via un virtualenv isolé (script `dev.sh`),
+- en Docker (image `ghcr.io/kesurof/redriva:ssdv2` ou build local),
+- intégré dans SSDV2 via `ssdv2/redriva.yml`.
 
-### Mode Développement/Local
+## Installation et déploiement
+
+Remarque : les instructions ci‑dessous partent du principe que vous avez cloné
+le dépôt et que vous êtes à la racine du projet.
 
 ```bash
-# 1. Clone
-git clone https://github.com/kesurof/redriva.git
-cd redriva
-
-# 2. Configuration du token
-echo "VOTRE_TOKEN_RD" > data/token
-
-# 3. Démarrage
-python src/web.py
+git clone https://github.com/kesurof/Redriva.git
+cd Redriva
 ```
 
-### Mode Docker
+### 1) Déploiement SSDV2 (recommandé pour seedboxes)
+
+Ce projet contient un fichier `ssdv2/redriva.yml` prêt à être inclus dans
+votre configuration SSDV2. Les points importants :
+
+- Image Docker recommandée : `ghcr.io/kesurof/redriva:ssdv2`
+- Ports : 5000 (interne) -> mappez selon votre configuration SSDV2
+- Volumes recommandés (extrait) :
+  - `/app/config` → configuration (mappez vers `{{ settings.storage }}/.../config`)
+  - `/app/data` → données SQLite et tokens
+  - `/app/medias` → répertoire média (optionnel)
+  - `/var/run/docker.sock` en lecture seule (optionnel)
+  - `/etc/localtime:/etc/localtime:ro`
+- Variables d'environnement utiles : `PUID`, `PGID`, `TZ`, `RD_TOKEN`, `SONARR_URL`, `SONARR_API_KEY`, `RADARR_URL`, `RADARR_API_KEY`
+
+Procédure générale :
+1. Ajoutez `ssdv2/redriva.yml` à votre configuration SSDV2.
+2. Définissez les variables (PUID/PGID/TZ) et, si souhaité, `RD_TOKEN`.
+3. Déployez via SSDV2 (Ansible / playbook fourni par votre infra).
+
+Note : SSDV2 peut gérer automatiquement les tokens et secrets via son système
+de variables — privilégiez cette méthode plutôt que d'insérer des tokens en clair.
+
+### 2) Docker Compose (local)
+
+1. Construisez et lancez le service :
 
 ```bash
-# Option 1: Variables d'environnement (recommandé)
-docker run -p 5000:5000 \
-  -e RD_TOKEN="votre_token_real_debrid" \
-  -e SONARR_URL="http://localhost:8989" \
-  -e SONARR_API_KEY="votre_clé_sonarr" \
-  -e RADARR_URL="http://localhost:7878" \
-  -e RADARR_API_KEY="votre_clé_radarr" \
-  ghcr.io/kesurof/redriva:ssdv2
-
-# Option 2: Docker Compose
 docker-compose up -d
 ```
 
-### Mode SSDV2
+2. Par défaut, le service expose le port `5000`.
+3. Les volumes montés localement sont : `./data` (données), `./config` (config).
 
-```bash
-# 1. Setup initial
-./ssdv2-setup.sh
+Astuce : pour le développement rapide, vous pouvez décommenter ou ajouter un
+service `redriva-dev` dans `docker-compose.yml` pour monter `./src` en lecture
+écrite et activer `FLASK_DEBUG=1`.
 
-# 2. Configuration token
+### 3) Développement local (venv isolé)
 
-# 3. Déploiement via SSDV2
-# Ajoutez redriva à votre configuration SSDV2
-```
+Le script `dev.sh` automatise la création d'un virtualenv local `./redriva/`,
+installe les dépendances depuis `requirements.txt` et démarre l'application.
 
----
+Commandes utiles :
 
-## 🔧 Configuration
-
-### Variables d'environnement (Docker/SSDV2)
-- `RD_TOKEN` : Token Real-Debrid (obligatoire)
-- `SONARR_URL` : URL de Sonarr (optionnel)
-- `SONARR_API_KEY` : Clé API Sonarr (optionnel)
-- `RADARR_URL` : URL de Radarr (optionnel)
-- `RADARR_API_KEY` : Clé API Radarr (optionnel)
-- `PUID/PGID` : ID utilisateur (SSDV2)
-- `TZ` : Fuseau horaire
-
-### Fichiers locaux (Développement)
-- `data/token` : Token Real-Debrid
-- `config/config.json` : Configuration générale
-
----
-
-## 📁 Structure Simplifiée
-
-```
-redriva/
-├── src/
-│   ├── web.py              # Application Flask
-│   ├── main.py             # Logique Real-Debrid
-│   ├── config_manager.py   # Configuration
-│   └── templates/          # Interface web
-├── config/
-│   └── config.json         # Configuration
-├── Dockerfile              # Image Docker
-├── docker-compose.yml      # Compose local
-└── ssdv2-setup.sh         # Setup SSDV2
-```
-
----
-
-## 🌐 Accès
-
-- **Local** : http://localhost:5000
-- **Docker** : http://localhost:5000
-- **SSDV2** : https://redriva.votre-domaine.com
-
----
-
-## 📖 Documentation
-
-- **Configuration** : Interface web > Paramètres
-- **API Health** : `/api/health`
-- **Logs** : `docker logs redriva`
-
----
-
-## 🎯 Prochaines Étapes
-
-1. **Configurez votre token Real-Debrid**
-2. **Accédez à l'interface web**
-3. **Configurez vos paramètres**
-4. **Profitez !**
-
-## ✨ Fonctionnalités Principales
-
-### 🎯 Gestion des Téléchargements
-- � **Interface web intuitive** - Gestion complète de vos téléchargements Real-Debrid
-- 🔄 **Synchronisation automatique** - Import et suivi des torrents
-- � **Tableau de bord** - Vue d'ensemble avec statistiques en temps réel
-- 🔍 **Recherche avancée** - Filtrage et recherche dans vos téléchargements
-- � **Mode sombre** - Interface moderne et responsive
-
-### 🔗 Intégration Sonarr/Radarr
-- � **Sonarr** - Gestion automatique des séries TV
-- � **Radarr** - Gestion automatique des films
-- � **Symlinks automatiques** - Création de liens symboliques vers vos médias
-- ⚙️ **Configuration centralisée** - Paramètres unifiés dans l'interface web
-
-### 🛡️ Sécurité et Configuration
-- 🔧 **Configuration centralisée** - Système JSON unifié avec templates
-- 🔐 **Sécurité Docker avancée** - Conteneurs non-root, volumes read-only
-- 🌐 **Support proxy reverse** - Traefik, Nginx, Apache
-- 📁 **Gestion automatique des chemins** - Adaptation Docker/développement
-
-### 📊 Monitoring et Maintenance
-- 💚 **Healthcheck intégré** - Surveillance automatique de l'état
-- 📝 **Logs structurés** - Debugging et monitoring facilités
-- 🔄 **Déploiement automatisé** - Scripts de déploiement complets
-- 📋 **Validation automatique** - Tests de configuration et persistance
-
-## 🛠️ Installation
-
-### Développement (Python)
-
-Pour développer et tester localement :
-
-```bash
-# 1. Cloner le projet
-git clone https://github.com/kesurof/Redriva.git
-cd Redriva
-
-# 2. Configuration initiale
-./setup.sh
-
-# 3. Configurer votre token Real-Debrid
-# Option A: Via fichier de configuration (recommandé)
-cp config/conf.example.json config/conf.json
-nano config/conf.json
-# Modifiez la section "tokens" > "real_debrid"
-
-# Option B: Via variable d'environnement
-# Remplacez 'votre_token_ici' par votre vrai token
-
-# 4. Lancer en mode développement
-./dev.sh
-```
-
-L'application sera accessible sur `http://localhost:5000` 🎉
-
-### Production (Docker)
-
-Pour déployer en production :
-
-```bash
-# 1. Cloner le projet
-git clone https://github.com/kesurof/Redriva.git
-cd Redriva
-
-# 2. Configuration initiale
-./setup.sh
-
-# 3. Configurer votre token Real-Debrid
-# Option A: Via fichier de configuration
-cp config/conf.example.json config/conf.json
-nano config/conf.json
-# Modifiez la section "tokens" > "real_debrid"
-
-# Option B: Via variable d'environnement Docker
-# Remplacez 'votre_token_ici' par votre vrai token
-
-# 4. Lancer avec Docker
-docker-compose up -d
-
-# Commandes utiles
-docker-compose logs -f    # Voir les logs
-docker-compose down       # Arrêter
-docker-compose pull       # Mettre à jour
-```
-
-L'image Docker est automatiquement construite et disponible sur `ghcr.io/kesurof/redriva:latest`.
-
-## ⚙️ Configuration
-
-### 🔧 Configuration centralisée
-
-Redriva utilise maintenant un système de configuration centralisé basé sur le fichier `config/conf.json`. Ce fichier unifie tous les paramètres de l'application :
-
-```json
-{
-  "tokens": {
-    "real_debrid": "VOTRE_TOKEN_ICI"
-  },
-  "sonarr": {
-    "enabled": true,
-    "url": "http://localhost:8989",
-    "api_key": "VOTRE_CLE_API_SONARR"
-  },
-  "radarr": {
-    "enabled": false,
-    "url": "http://localhost:7878", 
-    "api_key": "VOTRE_CLE_API_RADARR"
-  },
-  "paths": {
-    "media": "/app/medias",
-    "media_dev": "/home/user/Medias/"
-  }
-}
-```
-
-### 🔑 Token Real-Debrid
-
-1. Connectez-vous sur [Real-Debrid](https://real-debrid.com)
-2. Allez dans **Mon compte** → **Clé API**
-3. Copiez votre token
-4. **Option A** - Configuration centralisée (recommandé) :
-   ```bash
-   nano config/conf.json
-   # Modifiez "tokens" > "real_debrid"
-   ```
-5. **Option B** - Variable d'environnement :
-   ```bash
-   # Modifiez RD_TOKEN=votre_token_ici
-   ```
-
-### � Configuration Sonarr/Radarr
-
-Pour l'intégration avec vos services *Arr :
-
-1. **Via l'interface web** : Allez dans Paramètres → *Arrs
-2. **Via le fichier de configuration** :
-   ```json
-   {
-     "sonarr": {
-       "enabled": true,
-       "url": "http://localhost:8989",
-       "api_key": "votre_cle_api_sonarr"
-     },
-     "radarr": {
-       "enabled": true,
-       "url": "http://localhost:7878",
-       "api_key": "votre_cle_api_radarr"
-     }
-   }
-   ```
-
-### 🔗 Symlink Manager
-
-Le gestionnaire de liens symboliques utilise automatiquement la configuration Sonarr/Radarr définie dans `conf.json`. Configurez vos services *Arr une seule fois et ils seront disponibles partout !
-
-### 🌍 Détection d'environnement
-
-Redriva détecte automatiquement votre environnement :
-- **Docker** : Utilise les chemins `/app/*`
-- **Développement local** : Utilise les chemins relatifs `./data/*`
-- **Personnalisé** : Configurez `paths.media_dev` pour le développement
-
-## �📖 Utilisation
-
-1. **Ajout de torrents/magnets** : Collez vos liens dans l'interface
-2. **Navigation** : Parcourez vos fichiers par dossiers
-3. **Téléchargement** : Clic droit → "Enregistrer sous" ou clic direct
-4. **Gestion** : Organisez et supprimez vos téléchargements
-5. **Symlinks** : Créez automatiquement des liens vers vos médias
-6. **Configuration** : Gérez tous vos paramètres depuis l'interface web
-
-## 🔄 Migration depuis l'ancienne version
-
-Si vous utilisez une version antérieure de Redriva :
-
-1. **Migration automatique** : Au premier démarrage, Redriva migre automatiquement votre configuration depuis `data/settings.json`
-2. **Vérification** : Exécutez `python test_config.py` pour valider la migration
-3. **Sauvegarde** : Vos anciens fichiers sont conservés comme sauvegarde
-
-## 🏗️ Architecture
-
-- **Backend** : Python Flask avec Real-Debrid API
-- **Frontend** : HTML/CSS/JavaScript moderne
-- **Base de données** : SQLite pour la synchronisation
-- **Configuration** : JSON centralisé avec détection d'environnement
-- **Déploiement** : Docker avec GitHub Actions CI/CD
-
-## 🧪 Tests et validation
-
-Pour valider votre installation :
-
-```bash
-# Test de la configuration
-python test_config.py
-
-# Vérification des modules
-python -c "import src.config_manager; print('✅ Configuration OK')"
-
-# Test de l'interface web
-python src/web.py
-# Ouvrez http://localhost:5000
-```
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! N'hésitez pas à :
-
-1. Fork le projet
-2. Créer une branche (`git checkout -b feature/AmazingFeature`)
-3. Commit vos changements (`git commit -m 'Add AmazingFeature'`)
-4. Push la branche (`git push origin feature/AmazingFeature`)
-5. Ouvrir une Pull Request
-
-## 📄 Licence
-
-Ce projet est sous licence MIT - voir le fichier [LICENSE](LICENSE) pour plus de détails.
-
-## 🙏 Remerciements
-
-- [Real-Debrid](https://real-debrid.com) pour leur excellente API
-- La communauté open source pour l'inspiration
-
----
-
-## 🧑‍💻 Développement (local)
-
-Cette section détaille les commandes et bonnes pratiques pour développer et lancer Redriva en local. Le projet inclut un script d'aide `./dev.sh` qui crée et utilise un virtualenv local nommé `redriva/` et permet de démarrer l'application au premier plan ou en arrière-plan.
-
-1) Pré-requis
-
-  - Python 3.11+ installé
-  - `git` disponible
-  - (optionnel) Docker si vous testez via Docker
-
-2) Préparation rapide
-
-```bash
-# cloner le dépôt
-git clone https://github.com/kesurof/Redriva.git
-cd Redriva
-
-# rendre le script exécutable (si nécessaire)
-chmod +x ./dev.sh
-
-# créer et activer le venv + installer les dépendances (automatique via dev.sh)
-./dev.sh start-foreground
-```
-
-3) Utilisation de `./dev.sh`
-
-Le script `dev.sh` fournit des commandes pratiques pour le développement local. Le venv utilisé s'appelle `redriva/` et **n'est pas** commité grâce à `.gitignore`.
-
-- Lancer en premier plan (utile pour le debug) :
+- Démarrer au premier plan (debug) :
 
 ```bash
 ./dev.sh start-foreground
 ```
 
-- Lancer en arrière-plan (détaché) :
+- Démarrer en arrière‑plan (logs -> `logs/dev.log`) :
 
 ```bash
 ./dev.sh start-bg
 ```
 
-- Arrêter l'instance en arrière-plan :
+- Arrêter l'instance background :
 
 ```bash
 ./dev.sh stop
@@ -404,114 +123,95 @@ Le script `dev.sh` fournit des commandes pratiques pour le développement local.
 ./dev.sh restart
 ```
 
-- Vérifier le statut (PID) :
+- Statut (vérifie PID enregistré) :
 
 ```bash
 ./dev.sh status
 ```
 
-4) Emplacements utiles
+Options :
+- `--recreate-venv` ou `-r` : recrée le venv avant d'installer les dépendances.
+- `-h` / `--help` : affiche l'aide du script.
 
-- Virtualenv : `./redriva/` (ignoré par `.gitignore`)
-- Fichiers de log en développement : `./logs/dev.log`
-- PID file (processus background) : `./.run/redriva.pid`
-- Token Real‑Debrid (dev) : `./data/token` (ignoré par `.gitignore`)
+Remarques techniques :
+- Le script lance Python dans un environnement nettoyé (`env -i`) pour éviter
+  les interférences avec d'autres venvs.
+- Le PID de l'instance background est stocké dans `./.run/redriva.pid`.
+- Les logs sont écrits dans `./logs/dev.log` et `./logs/dev.err.log`.
 
-5) Commandes utiles supplémentaires
+## Configuration
 
-- Lancer l'application sans le script (exécutable direct) :
+Le projet supporte deux modes de configuration :
 
-```bash
-python src/web.py
-```
+1. Variables d'environnement (pratique en Docker/SSDV2) :
+   - RD_TOKEN : token Real‑Debrid (recommandé éviter l'exposition en clair)
+   - SONARR_URL, SONARR_API_KEY
+   - RADARR_URL, RADARR_API_KEY
+   - PUID, PGID, TZ
 
-- Voir les logs en temps réel (si lancé via dev.sh en background) :
+2. Fichiers locaux (développement) :
+   - `data/token` : token Real‑Debrid (si présent, utilisé en priorité en dev)
+   - `config/config.json` (ou `config/conf.json` selon version) : configuration centralisée
 
-```bash
-tail -f logs/dev.log
-```
+Important : protégez `data/token` et `config/conf.json` — le dépôt `.gitignore`
+exclut ces fichiers pour éviter d'exposer vos secrets.
 
-- Tester l'API health :
+## Utilisation
 
-```bash
-curl -s http://localhost:5000/api/health | jq .
-```
+- Accès web local : http://localhost:5000
+- Endpoint healthcheck : `/api/health`
 
-6) Notes de sécurité / .gitignore
+Fonctionnalités exposées par l'interface :
+- Visualiser la liste des torrents synchronisés
+- Lancer manuellement un cycle Arr (Sonarr/Radarr)
+- Gérer les symlinks (si `symlink_tool` disponible)
+- Consulter les logs et statistiques
 
-Le dépôt contient une règle `.gitignore` qui exclut les éléments locaux suivants :
+## Fichiers importants
 
-- `redriva/` (virtualenv local)
-- `logs/` (logs locaux)
-- `.run/` (fichiers PID / runtime)
-- `data/token` (token Real‑Debrid)
-- `config/conf.json` (configuration locale)
+- `src/web.py` : point d'entrée Flask (application)
+- `src/main.py` : logique métier (synchronisation Real‑Debrid)
+- `src/config_manager.py` : gestion de la configuration
+- `src/symlink_tool.py` : création & gestion des symlinks (optionnel)
+- `dev.sh` : script de développement (venv, start/stop)
+- `docker-compose.yml`, `Dockerfile` : déploiement Docker
+- `ssdv2/redriva.yml` : configuration SSDV2
+- `data/` : données runtime (token, DB)
+- `logs/` : logs de développement
 
-Conservez vos tokens et configurations sensibles hors du dépôt.
+## Dépannage rapide
 
-7) Débogage rapide
+- L'application ne démarre pas :
+  - Vérifiez `logs/dev.err.log` et `logs/dev.log`.
+  - Si en background, vérifiez `./.run/redriva.pid` et utilisez `./dev.sh status`.
+  - Assurez‑vous que le token RD est fourni (variable d'env `RD_TOKEN` ou `data/token`).
 
-- Si vous rencontrez des erreurs d'import : assurez-vous d'avoir installé les dépendances :
+- Erreur de dépendances :
+  - Supprimez `redriva/` puis lancez `./dev.sh -r start-foreground`.
 
-```bash
-./dev.sh start-foreground
-# (ou) python -m pip install -r requirements.txt
-```
+- Problèmes SSDV2 :
+  - Vérifiez vos variables `PUID`/`PGID` et les chemins montés dans `redriva.yml`.
 
-- Pour forcer la recréation du venv (supprimez d'abord `./redriva/`) :
+## Contribution
 
-```bash
-rm -rf redriva/
-./dev.sh start-foreground
-```
+Les contributions sont bienvenues :
 
----
+1. Fork du projet
+2. Créer une branche : `git checkout -b feature/ma-fonctionnalite`
+3. Commit & push
+4. Ouvrir une Pull Request
 
-## 🚀 Déploiement SSDV2
+Veuillez garder les tokens et fichiers sensibles hors des commits.
 
-### Installation automatique
+## Licence
 
-```bash
-# Installation dans SSDV2
-git clone https://github.com/kesurof/redriva.git
-cd redriva
-./install-ssdv2.sh
-
-# Configuration du token
-# Modifier: RD_TOKEN=votre_token_real_debrid
-
-# Déploiement avec Ansible
-cd /opt/seedbox
-ansible-playbook site.yml -t redriva
-```
-
-### Configuration manuelle
-
-1. **Fichiers de configuration SSDV2** (voir documentation projetssd)
-  - `pretask.yml` - Création des répertoires (configuration via interface web)
-   - `posttask.yml` - Vérification santé et configuration token
-   - `redriva.yml` - Configuration Docker avec volumes SSDV2
-
-2. **Variables d'environnement importantes**
-   ```bash
-   RD_TOKEN=votre_token_real_debrid  # Obligatoire
-   PUID=1000                        # Auto-géré par SSDV2
-   PGID=1000                        # Auto-géré par SSDV2  
-   TZ=Europe/Paris                  # Fuseau horaire
-   ```
-
-3. **Volumes SSDV2 intégrés**
-   - `/zurg/data/info` - Informations Zurg (lecture seule)
-   - `/app/medias` - Répertoire média principal
-   - `/home/USER` - Répertoire utilisateur
-   - Docker socket pour gestion containers
-
-### Interface Web
-
-- **URL**: `https://redriva.votre-domaine.com` (géré par Traefik/SSDV2)
-- **Healthcheck**: `http://localhost:5000/api/health`
-- **Logs**: `docker logs redriva`
+Ce projet est distribué sous licence MIT — voir le fichier `LICENSE`.
 
 ---
 
-**⚡ Redriva - Votre passerelle vers Real-Debrid !**
+Si vous voulez, je peux :
+- ajouter des exemples de `config/conf.json` ou `data/token` à inclure dans le README,
+- créer un fichier `docs/SSDV2.md` détaillant l'intégration Ansible/SSDV2,
+- générer une version anglaise.
+
+Dites-moi ce que vous préférez comme suite.
