@@ -2550,6 +2550,26 @@ function showErrorConfigModal(config, typeName) {
     
     modalTitle.textContent = typeName ? `Modifier: ${config.name}` : 'Nouveau Type d\'Erreur';
     modalBody.innerHTML = generateErrorConfigForm(config, typeName);
+    // Pré-remplir les actions dans le container
+    if (config.actions && Array.isArray(config.actions)) {
+        try {
+            // petites protections: normaliser les propriétés
+            const actions = config.actions.map(a => ({
+                name: a.name || a["name"] || '',
+                enabled: (typeof a.enabled === 'boolean') ? a.enabled : true,
+                priority: a.priority || 1,
+                delay_seconds: a.delay_seconds || a.delay_seconds === 0 ? a.delay_seconds : (a.delay || 0),
+                max_retries: a.max_retries || 3,
+                parameters: a.parameters || a.params || {}
+            }));
+            // vider container (au cas où)
+            const container = document.getElementById('actions-container');
+            if (container) container.innerHTML = '';
+            actions.forEach(act => addActionRow(act));
+        } catch (e) {
+            console.warn('Erreur pré-remplissage actions:', e);
+        }
+    }
     modal.classList.add('show');
 }
 
@@ -2617,6 +2637,17 @@ function generateErrorConfigForm(config, typeName) {
                 <input type="text" class="form-control" id="config-status-filters" value="${config.status_filters.join(', ')}" placeholder="downloading, queued, failed">
             </div>
             
+            <div class="mb-3">
+                <label class="form-label">Actions:</label>
+                <div id="actions-container" style="margin-bottom:8px;">
+                    <!-- action rows seront ajoutées dynamiquement -->
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn btn-secondary" onclick="addActionRow()">➕ Ajouter une action</button>
+                    <small style="align-self:center; color:var(--text-muted);">Réordonner et modifier priorité, délai, paramètres JSON</small>
+                </div>
+            </div>
+            
             <div class="d-flex justify-content-between">
                 <button type="button" class="btn btn-secondary" onclick="closeErrorConfigModal()">Annuler</button>
                 <div>
@@ -2626,6 +2657,81 @@ function generateErrorConfigForm(config, typeName) {
             </div>
         </form>
     `;
+}
+
+// === ACTIONS EDITOR HELPERS ===
+function addActionRow(action) {
+    const container = document.getElementById('actions-container');
+    if (!container) return;
+
+    const idx = container.children.length;
+    const a = action || {name: '', enabled: true, priority: 1, delay_seconds: 0, max_retries: 3, parameters: {}};
+
+    const row = document.createElement('div');
+    row.className = 'action-editor-row';
+    row.dataset.idx = idx;
+    row.innerHTML = `
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+            <input type="text" class="form-control action-name" placeholder="action name" value="${a.name}">
+            <label style="display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" class="action-enabled" ${a.enabled ? 'checked' : ''}> Activé
+            </label>
+            <input type="number" class="form-control action-priority" style="width:90px;" min="0" value="${a.priority}" title="Priorité">
+            <input type="number" class="form-control action-delay" style="width:120px;" min="0" value="${a.delay_seconds}" title="Délai (s)">
+            <button type="button" class="btn btn-secondary" onclick="moveActionUp(this)">↑</button>
+            <button type="button" class="btn btn-secondary" onclick="moveActionDown(this)">↓</button>
+            <button type="button" class="btn btn-danger" onclick="removeActionRow(this)">✖</button>
+        </div>
+        <div>
+            <label class="form-label">Paramètres (JSON) :</label>
+            <textarea class="form-control action-params" rows="2">${JSON.stringify(a.parameters || {})}</textarea>
+        </div>
+    `;
+
+    container.appendChild(row);
+}
+
+function removeActionRow(btn) {
+    const row = btn.closest('.action-editor-row');
+    if (row) row.parentNode.removeChild(row);
+}
+
+function moveActionUp(btn) {
+    const row = btn.closest('.action-editor-row');
+    if (!row) return;
+    const prev = row.previousElementSibling;
+    if (prev) row.parentNode.insertBefore(row, prev);
+}
+
+function moveActionDown(btn) {
+    const row = btn.closest('.action-editor-row');
+    if (!row) return;
+    const next = row.nextElementSibling;
+    if (next) row.parentNode.insertBefore(next, row);
+}
+
+function collectActionsFromForm() {
+    const container = document.getElementById('actions-container');
+    if (!container) return [];
+    const actions = [];
+    container.querySelectorAll('.action-editor-row').forEach(row => {
+        const name = row.querySelector('.action-name').value.trim();
+        if (!name) return; // skip empty names
+        const enabled = !!row.querySelector('.action-enabled').checked;
+        const priority = parseInt(row.querySelector('.action-priority').value) || 1;
+        const delay_seconds = parseInt(row.querySelector('.action-delay').value) || 0;
+        let params = {};
+        try {
+            const p = row.querySelector('.action-params').value.trim();
+            params = p ? JSON.parse(p) : {};
+        } catch (e) {
+            // invalid JSON - ignore and set empty
+            params = {};
+        }
+
+        actions.push({name, enabled, priority, delay_seconds, max_retries: 3, parameters: params});
+    });
+    return actions;
 }
 
 function saveErrorType() {
@@ -2648,7 +2754,7 @@ function saveErrorType() {
             .map(s => s.trim())
             .filter(s => s.length > 0),
         conditions: {},
-        actions: editingErrorType ? currentErrorTypes[editingErrorType].actions : []
+        actions: collectActionsFromForm()
     };
     
     if (!config.name) {

@@ -83,191 +83,37 @@ class ErrorTypesManager:
     
     def _init_default_error_types(self):
         """Initialise les types d'erreurs par défaut pour Sonarr/Radarr/Reel"""
-        
-        # Erreurs qBittorrent/Transmission
+        # Ne conserver que les types d'erreurs qBittorrent demandés par l'utilisateur
         if "qbittorrent_stalled" not in self.error_types:
             self.error_types["qbittorrent_stalled"] = ErrorTypeConfig(
-            name="qBittorrent Stalled",
-            description="Téléchargements bloqués dans qBittorrent",
-            detection_patterns=[
-                r"The download is stalled",
-                r"Stalled.*downloading",
-                r"qBittorrent.*stalled"
-            ],
-            status_filters=["downloading", "queued"],
-            severity="high",
-            actions=[
-                ErrorAction("remove_and_blocklist", priority=1, delay_seconds=300),
-                ErrorAction("trigger_search", priority=2, delay_seconds=600)
-            ]
-            )
-        
-        if "qbittorrent_no_space" not in self.error_types:
-            self.error_types["qbittorrent_no_space"] = ErrorTypeConfig(
-            name="qBittorrent No Space",
-            description="Espace disque insuffisant",
-            detection_patterns=[
-                r"No space left on device",
-                r"Disk full",
-                r"Not enough space"
-            ],
-            severity="critical",
-            auto_correct=False,  # Nécessite intervention manuelle
-            actions=[
-                ErrorAction("pause_download", priority=1),
-                ErrorAction("send_notification", priority=2, parameters={"type": "critical"})
-            ]
-            )
-        
-        # Erreurs Sonarr spécifiques
-        if "sonarr_no_files" not in self.error_types:
-            self.error_types["sonarr_no_files"] = ErrorTypeConfig(
-            name="Sonarr No Files",
-            description="Aucun fichier trouvé dans l'archive",
-            detection_patterns=[
-                r"No files found are eligible for import",
-                r"Unable to process.*no files",
-                r"Import failed.*no eligible files"
-            ],
-            status_filters=["failed", "warning"],
-            severity="medium",
-            actions=[
-                ErrorAction("remove_and_blocklist", priority=1),
-                ErrorAction("search_alternative", priority=2, delay_seconds=1800)
-            ]
-            )
-        
-        if "sonarr_quality_mismatch" not in self.error_types:
-            self.error_types["sonarr_quality_mismatch"] = ErrorTypeConfig(
-            name="Sonarr Quality Mismatch",
-            description="Qualité du fichier ne correspond pas aux attentes",
-            detection_patterns=[
-                r"Quality.*does not match",
-                r"Expected quality.*got",
-                r"Quality cutoff not met"
-            ],
-            severity="low",
-            actions=[
-                ErrorAction("remove_and_blocklist", priority=1),
-                ErrorAction("search_better_quality", priority=2, delay_seconds=3600)
-            ]
-            )
-        
-        # Erreurs Radarr spécifiques
-        if "radarr_upgrade_rejected" not in self.error_types:
-            self.error_types["radarr_upgrade_rejected"] = ErrorTypeConfig(
-            name="Radarr Upgrade Rejected",
-            description="Mise à niveau de qualité rejetée",
-            detection_patterns=[
-                r"Upgrade rejected",
-                r"Quality upgrade.*not allowed",
-                r"Custom format.*not met"
-            ],
-            severity="low",
-            auto_correct=False,
-            actions=[
-                ErrorAction("log_only", priority=1)
-            ]
-            )
-        
-        if "radarr_import_failed" not in self.error_types:
-            self.error_types["radarr_import_failed"] = ErrorTypeConfig(
-            name="Radarr Import Failed",
-            description="Échec d'import du fichier",
-            detection_patterns=[
-                r"Import failed",
-                r"Unable to import",
-                r"Import.*error"
-            ],
-            severity="high",
-            actions=[
-                ErrorAction("retry_import", priority=1, delay_seconds=600),
-                ErrorAction("remove_and_search", priority=2, delay_seconds=1800)
-            ]
-            )
-        
-        # Erreurs de réseau/connectivité
-        if "network_timeout" not in self.error_types:
-            self.error_types["network_timeout"] = ErrorTypeConfig(
-            name="Network Timeout",
-            description="Timeout de connexion réseau",
-            detection_patterns=[
-                r"Connection.*timeout",
-                r"Request.*timeout",
-                r"Timed out.*waiting"
-            ],
-            severity="medium",
-            actions=[
-                ErrorAction("retry_download", priority=1, delay_seconds=900),
-                ErrorAction("remove_and_search", priority=2, delay_seconds=3600)
-            ]
-            )
-        
-        # Erreurs indexer
-        if "indexer_unavailable" not in self.error_types:
-            self.error_types["indexer_unavailable"] = ErrorTypeConfig(
-            name="Indexer Unavailable",
-            description="Indexer temporairement indisponible",
-            detection_patterns=[
-                r"Indexer.*unavailable",
-                r"Indexer.*down",
-                r"Unable to connect.*indexer"
-            ],
-            severity="medium",
-            auto_correct=False,
-            actions=[
-                ErrorAction("wait_and_retry", priority=1, delay_seconds=1800),
-                ErrorAction("try_other_indexers", priority=2, delay_seconds=3600)
-            ]
-            )
-        
-        # Erreurs Reel spécifiques
-        if "reel_symlink_failed" not in self.error_types:
-            self.error_types["reel_symlink_failed"] = ErrorTypeConfig(
-            name="Reel Symlink Failed",
-            description="Échec de création de lien symbolique",
-            detection_patterns=[
-                r"Symlink.*failed",
-                r"Unable to create.*symlink",
-                r"Link creation.*error"
-            ],
-            severity="high",
-            actions=[
-                ErrorAction("recreate_symlink", priority=1, delay_seconds=60),
-                ErrorAction("check_permissions", priority=2)
-            ]
+                name="qBittorrent Stalled",
+                description="Téléchargements bloqués dans qBittorrent",
+                detection_patterns=[
+                    r"The download is stalled",
+                    r"Stalled.*downloading",
+                    r"qBittorrent.*stalled"
+                ],
+                status_filters=["downloading", "queued"],
+                severity="high",
+                actions=[
+                    ErrorAction("remove_and_blocklist", priority=1, delay_seconds=300),
+                    ErrorAction("trigger_search", priority=2, delay_seconds=600)
+                ]
             )
 
-        # Erreur qBittorrent explicitement signalée par Sonarr/Radarr
         if "qbittorrent_error_reported" not in self.error_types:
             self.error_types["qbittorrent_error_reported"] = ErrorTypeConfig(
-            name="qBittorrent Error Reported",
-            description="qBittorrent is reporting an error - capture explicite du message",
-            detection_patterns=[
-                r"qBittorrent is reporting an error",
-                r"qBittorrent .* reporting an error",
-            ],
-            severity="high",
-            actions=[
-                ErrorAction("remove_and_blocklist", priority=1, delay_seconds=10),
-                ErrorAction("trigger_search", priority=2, delay_seconds=30)
-            ]
-            )
-        
-        if "reel_path_not_found" not in self.error_types:
-            self.error_types["reel_path_not_found"] = ErrorTypeConfig(
-            name="Reel Path Not Found",
-            description="Chemin source ou destination introuvable",
-            detection_patterns=[
-                r"Path.*not found",
-                r"Source.*does not exist",
-                r"Destination.*invalid"
-            ],
-            severity="critical",
-            actions=[
-                ErrorAction("verify_paths", priority=1),
-                ErrorAction("send_notification", priority=2, parameters={"type": "critical"})
-            ]
+                name="qBittorrent Error Reported",
+                description="qBittorrent is reporting an error - capture explicite du message",
+                detection_patterns=[
+                    r"qBittorrent is reporting an error",
+                    r"qBittorrent .* reporting an error",
+                ],
+                severity="high",
+                actions=[
+                    ErrorAction("remove_and_blocklist", priority=1, delay_seconds=10),
+                    ErrorAction("trigger_search", priority=2, delay_seconds=30)
+                ]
             )
     
     def _register_default_actions(self):
